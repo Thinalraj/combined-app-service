@@ -19,6 +19,8 @@ On Windows, install Windows Terminal, then run `start_all.bat`. It opens one
 Windows Terminal window with one tab per service and launches Chrome in kiosk
 full-screen mode at `http://127.0.0.1:8080`.
 
+To launch only the backend services, run `start_backend_services.bat`.
+
 To open the HMI on another host, pass its IP address:
 
 ```bat
