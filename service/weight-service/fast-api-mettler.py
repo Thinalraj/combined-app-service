@@ -21,7 +21,7 @@ NUM_READINGS = 30
 SAMPLE_INTERVAL = 0.1
 SERIAL_TIMEOUT = 2
 
-API_PORT = 8001
+API_PORT = 8002
 
 
 # ============================================================

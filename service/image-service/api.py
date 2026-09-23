@@ -1,6 +1,6 @@
 """FastAPI interface for one-shot RealSense image and size measurements.
 
-Run with: uvicorn api:app --host 0.0.0.0 --port 8000
+Run with: uvicorn api:app --host 0.0.0.0 --port 8003
 """
 from contextlib import asynccontextmanager
 from pathlib import Path

@@ -24,7 +24,7 @@ python .\rest_service.py --simulate
 For hardware, omit `--simulate`. Endpoints are `GET /status`, `POST
 /sine/start`, `POST /sine/stop`, `POST /measurement`, and `POST
 /measurements/sample`. Interactive API documentation is available at
-`http://127.0.0.1:8000/docs`.
+`http://127.0.0.1:8001/docs`.
 
 Direct frequency readings are also available:
 

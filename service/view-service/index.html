@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Metal Purity Detector HMI</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell" aria-live="polite">
+      <header class="top-bar">
+        <div>
+          <p class="brand-name">DanFishel AFiS</p>
+          <h1 id="screenTitle">Precious Metal Verification System</h1>
+        </div>
+        <div class="top-actions">
+          <time class="system-clock" id="systemClock" datetime="">
+            <span id="systemDate">Sat, 09 May 2026</span>
+            <strong id="systemTime">17:42</strong>
+          </time>
+          <button class="menu-button" id="menuButton" type="button" aria-label="Open menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="menu-panel" id="menuPanel" aria-label="Main menu">
+        <button type="button" id="menuEngineeringButton">Engineering</button>
+        <button type="button" id="menuHistoryButton">History</button>
+      </nav>
+
+      <section class="screen active" id="homeScreen">
+        <div class="showcase" aria-hidden="true">
+          <div class="carousel-stage">
+            <div class="orbit">
+              <div class="sample-card gold active" data-rate-label="Gold 999" data-rate-price="RM 580.65/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
+                <div class="object gold-stack bars-3">
+                  <img src="assets/gold-24k-display.png" alt="">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div class="sample-card gold" data-rate-label="Gold 916" data-rate-price="RM 530.54/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
+                <div class="object gold-stack bars-2">
+                  <img src="assets/gold-22k-display.png" alt="">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div class="sample-card gold" data-rate-label="Gold 750" data-rate-price="RM 424.42/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
+                <div class="object gold-stack bars-1">
+                  <img src="assets/gold-18k-display.png" alt="">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div class="sample-card silver" data-rate-label="Silver 999" data-rate-price="RM 9.62/g" data-rate-move="▲ 2.30%" data-rate-trend="up" data-rate-source="WorldForexRates">
+                <div class="object silver-stack bars-3">
+                  <img src="assets/silver-999-display.png" alt="">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div class="sample-card silver" data-rate-label="Silver 925" data-rate-price="RM 8.91/g" data-rate-move="▲ 2.30%" data-rate-trend="up" data-rate-source="WorldForexRates">
+                <div class="object silver-stack bars-2">
+                  <img src="assets/silver-925-display.png" alt="">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div class="sample-card palladium" data-rate-label="Palladium" data-rate-price="RM 452.00/g" data-rate-move="— 0.00%" data-rate-trend="flat" data-rate-source="Configured source">
+                <div class="object palladium-stack bars-1">
+                  <img src="assets/palladium-display.png" alt="">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="rates-panel" aria-label="Reference metal rates">
+          <div class="rates-head">
+            <p class="eyebrow">Reference Metal Rates</p>
+          </div>
+          <div class="active-rate-card" id="activeRateCard">
+            <span id="activeRateLabel">Gold 999</span>
+            <strong id="activeRatePrice">RM 580.65/g</strong>
+            <em class="down" id="activeRateMove">▼ 0.02%</em>
+          </div>
+          <p class="source-line">
+            <span id="activeRateSource">GoldBullion Malaysia</span>
+            <span>Updated 09 May 2026 15:41 MYT</span>
+            <span>Indicative only</span>
+          </p>
+        </section>
+
+        <button class="primary-action" id="startButton" type="button">
+          Start Verification
+        </button>
+
+        <footer class="status-strip">
+          <span class="dot ready"></span>
+          <span>System Ready</span>
+          <span class="divider"></span>
+          <span id="bottomMessage">Verify your sample now</span>
+        </footer>
+      </section>
+
+      <section class="screen" id="placeScreen">
+        <div class="instruction-panel">
+          <div class="placement-stage" aria-hidden="true">
+            <div class="target-graphic">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="sample-guide">
+              <span class="guide-bar"></span>
+            </div>
+            <div class="guide-arrow"></div>
+          </div>
+          <h2>Place Object</h2>
+          <p>Place the object at the center of the sensing area.</p>
+        </div>
+        <div class="button-row">
+          <button class="secondary" data-back-home type="button">Cancel</button>
+          <button class="primary" id="placeContinueButton" type="button">Continue</button>
+        </div>
+      </section>
+
+      <section class="screen" id="weightScreen">
+        <div class="weight-layout">
+          <div class="value-panel">
+            <p class="label">Measured Weight</p>
+            <output id="weightDisplay">0</output>
+            <span>grams</span>
+            <div class="dimension-meta">
+              <span id="measurementWeightStatus">Scale ready</span>
+              <span id="measurementWeightRaw">10 sample average</span>
+            </div>
+          </div>
+          <div class="selection-panel compact-panel" id="measurementScalePanel">
+            <p class="eyebrow">Automatic Scale</p>
+            <h2>Average 10 Readings</h2>
+            <p>The measured weight is taken from the load cell and saved with the verification record.</p>
+            <div class="scale-progress" id="measurementWeightProgress" aria-live="polite">
+              <div class="scale-progress-header">
+                <span id="measurementWeightProgressLabel">Waiting to sample</span>
+                <strong id="measurementWeightProgressCount">0 / 10</strong>
+              </div>
+              <div class="scale-progress-bar">
+                <span id="measurementWeightProgressBar"></span>
+              </div>
+            </div>
+            <button class="primary" id="measurementWeightSampleButton" type="button">Sample Again</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="weightBackButton" type="button">Back</button>
+          <button class="primary" id="weightNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="dimensionScreen">
+        <div class="weight-layout">
+          <div class="value-panel dimension-panel">
+            <p class="label">Sample Dimensions</p>
+            <div class="dimension-field-row">
+              <button class="dimension-field-button selected" id="widthFieldButton" type="button">
+                <span id="widthLabel">Width</span>
+                <strong id="widthDisplay">0</strong>
+                <em>mm</em>
+              </button>
+              <button class="dimension-field-button" id="lengthFieldButton" type="button">
+                <span id="lengthLabel">Length</span>
+                <strong id="lengthDisplay">0</strong>
+                <em>mm</em>
+              </button>
+              <button class="dimension-field-button" id="thicknessFieldButton" type="button">
+                <span>Thickness</span>
+                <strong id="thicknessDisplay">0</strong>
+                <em>mm</em>
+              </button>
+            </div>
+            <div class="dimension-meta">
+              <span>Sample area <strong id="sampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Contact ratio <strong id="contactRatioDisplay">0.00%</strong></span>
+            </div>
+          </div>
+          <div class="keypad" id="dimensionKeypad">
+            <button type="button" data-dimension-key="1">1</button>
+            <button type="button" data-dimension-key="2">2</button>
+            <button type="button" data-dimension-key="3">3</button>
+            <button type="button" data-dimension-key="4">4</button>
+            <button type="button" data-dimension-key="5">5</button>
+            <button type="button" data-dimension-key="6">6</button>
+            <button type="button" data-dimension-key="7">7</button>
+            <button type="button" data-dimension-key="8">8</button>
+            <button type="button" data-dimension-key="9">9</button>
+            <button type="button" data-dimension-key=".">.</button>
+            <button type="button" data-dimension-key="0">0</button>
+            <button type="button" data-dimension-key="clear">Clear</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="dimensionBackButton" type="button">Back</button>
+          <button class="primary" id="dimensionNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="shapeScreen">
+        <div class="shape-grid" id="shapeGrid">
+          <button class="shape-option" type="button" data-shape="Ring">
+            <span class="ring-icon"></span>
+            Ring
+          </button>
+          <button class="shape-option" type="button" data-shape="Coin">
+            <span class="coin-icon"></span>
+            Coin
+          </button>
+          <button class="shape-option" type="button" data-shape="Chain">
+            <span class="chain-icon"></span>
+            Chain
+          </button>
+          <button class="shape-option" type="button" data-shape="Bar">
+            <span class="bar-icon"></span>
+            Bar
+          </button>
+          <button class="shape-option" type="button" data-shape="Bangle">
+            <span class="bangle-icon"></span>
+            Bangle
+          </button>
+          <button class="shape-option" type="button" data-shape="Other">
+            <span class="other-icon"></span>
+            Other
+          </button>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="shapeBackButton" type="button">Back</button>
+          <button class="primary" id="measureButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="otherShapeScreen">
+        <div class="selection-panel">
+          <p class="eyebrow">Other Shape</p>
+          <div class="material-grid shape-select-grid" id="otherShapeGrid">
+            <button type="button" data-other-shape="Pendant">Pendant</button>
+            <button type="button" data-other-shape="Bracelet">Bracelet</button>
+            <button type="button" data-other-shape="Bangle">Bangle</button>
+            <button type="button" data-other-shape="Nugget">Nugget</button>
+            <button type="button" data-other-shape="Wire">Wire</button>
+            <button type="button" data-other-shape="Sheet">Sheet</button>
+            <button type="button" data-other-shape="Unknown">Unknown</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="otherShapeBackButton" type="button">Back</button>
+          <button class="primary" id="otherShapeNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="measureScreen">
+        <div class="measure-panel">
+          <div class="progress-ring" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" class="track"></circle>
+              <circle cx="60" cy="60" r="50" class="meter" id="ringMeter"></circle>
+            </svg>
+            <strong id="progressText">0%</strong>
+          </div>
+          <div class="measure-copy">
+            <h2 id="measureStage">Stabilizing</h2>
+            <p id="measureInstruction">Keep the object still on the sensing area.</p>
+            <div class="progress-bar">
+              <span id="progressBar"></span>
+            </div>
+            <div class="summary-row">
+              <span id="weightSummary">0 g</span>
+              <span id="shapeSummary">Ring</span>
+              <span id="dimensionSummary">0 x 0 mm</span>
+              <span class="signal-ok" id="signalSummary">Signal stable</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="resultScreen">
+        <div class="result-panel">
+          <p class="eyebrow">Result</p>
+          <h2 id="resultMaterial">Gold 916</h2>
+          <p class="confidence hidden" id="resultConfidence"></p>
+          <div class="result-details">
+            <span>Weight</span><strong id="resultWeight">0 g</strong>
+            <span>Shape</span><strong id="resultShape">Ring</strong>
+            <span>Status</span><strong class="signal-ok" id="resultStatus">Saved locally</strong>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="detailsButton" type="button">View History</button>
+          <button class="primary" id="newMeasurementButton" type="button">Home</button>
+        </div>
+      </section>
+
+      <section class="screen" id="passwordScreen">
+        <div class="password-layout">
+          <div class="value-panel password-panel">
+            <p class="label">Engineering Password</p>
+            <output id="passwordDisplay">------</output>
+            <span id="passwordMessage">Enter PIN to continue</span>
+          </div>
+          <div class="keypad" id="passwordKeypad">
+            <button type="button" data-pin="1">1</button>
+            <button type="button" data-pin="2">2</button>
+            <button type="button" data-pin="3">3</button>
+            <button type="button" data-pin="4">4</button>
+            <button type="button" data-pin="5">5</button>
+            <button type="button" data-pin="6">6</button>
+            <button type="button" data-pin="7">7</button>
+            <button type="button" data-pin="8">8</button>
+            <button type="button" data-pin="9">9</button>
+            <button type="button" data-pin="clear">Clear</button>
+            <button type="button" data-pin="0">0</button>
+            <button type="button" data-pin="back">Back</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="passwordCancelButton" type="button">Cancel</button>
+          <button class="primary" id="passwordEnterButton" type="button">Enter</button>
+        </div>
+      </section>
+
+      <section class="screen" id="engineeringScreen">
+        <div class="engineering-grid menu-grid">
+          <article class="metric-card orange">
+            <span>Acquisition</span>
+            <strong id="modeValue">Simulator</strong>
+            <button class="mode-toggle" id="modeToggleButton" type="button">Switch to DAQ</button>
+          </article>
+        </div>
+        <div class="engineering-actions">
+          <button type="button" id="engineeringLiveViewButton">Live View</button>
+          <button type="button" id="engineeringFrequencyButton">Frequency Mode</button>
+          <button type="button" id="engineeringCalibrationButton">Calibration</button>
+          <button type="button" id="engineeringTeachingButton">Teaching</button>
+          <button type="button" id="engineeringDaqSettingsButton">DAQ Settings</button>
+          <button type="button" id="engineeringLoadCellButton">Load Cell</button>
+          <button type="button" id="engineeringDetectorSettingsButton">Detector Settings</button>
+          <button type="button" id="engineeringClassifierButton">Classifier</button>
+          <button type="button" id="engineeringHistoryButton">History</button>
+        </div>
+        <div class="button-row">
+          <button class="primary" id="engineeringExitButton" type="button">Exit</button>
+        </div>
+      </section>
+
+      <section class="screen" id="classifierScreen">
+        <div class="history-detail-panel left-scroll-panel">
+          <p class="eyebrow">Classifier</p>
+          <h2>Detector Classifier</h2>
+          <div class="classifier-mode-panel">
+            <label for="classifierAlgorithmSelect">Classifier Method</label>
+            <select id="classifierAlgorithmSelect">
+              <option value="two_pass_frequency_rf">Gold Standard</option>
+              <option value="mahalanobis">Mahalanobis</option>
+              <option value="knn_cluster">KNN Cluster</option>
+              <option value="hybrid_hill_knn">Hill + KNN</option>
+              <option value="two_pass_gold_gate">Two-pass Gold Gate</option>
+              <option value="two_pass_compact_gate">Two-pass Compact Gate</option>
+              <option value="binary_brass_ch1_f1">Binary Brass CH1 F1</option>
+              <option value="binary_brass_ch2_f1_f3">Binary Brass CH2 F1/F3</option>
+            </select>
+          </div>
+          <div class="engineering-grid classifier-grid">
+            <article class="metric-card orange">
+              <span>Teaching Records</span>
+              <strong id="classifierTotalRecords">0</strong>
+            </article>
+            <article class="metric-card green">
+              <span>Eligible Samples</span>
+              <strong id="classifierEligibleRecords">0</strong>
+            </article>
+            <article class="metric-card cyan">
+              <span>Material Classes</span>
+              <strong id="classifierClassCount">0</strong>
+            </article>
+            <article class="metric-card yellow">
+              <span>Model</span>
+              <strong id="classifierModelStatus">Not trained</strong>
+            </article>
+          </div>
+          <div class="detail-grid classifier-detail-grid">
+            <span>Trained At</span><strong id="classifierTrainedAt">--</strong>
+            <span>Calibration</span><strong id="classifierCalibration">--</strong>
+            <span>Excluded Records</span><strong id="classifierExcludedRecords">0</strong>
+            <span>Method</span><strong id="classifierMethod">--</strong>
+            <span>Selected</span><strong id="classifierSelectedMethod">--</strong>
+          </div>
+          <div class="classifier-list-panel">
+            <p class="eyebrow">Class Counts</p>
+            <div id="classifierClassList" class="classifier-list"></div>
+          </div>
+          <div class="classifier-list-panel">
+            <p class="eyebrow">Warnings</p>
+            <div id="classifierWarnings" class="classifier-list"></div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="classifierBackButton" type="button">Back</button>
+          <button class="primary" id="classifierTrainButton" type="button">Compute Model</button>
+        </div>
+      </section>
+
+      <section class="screen" id="liveViewScreen">
+        <div class="live-view-shell">
+          <div class="live-view-toolbar">
+            <article class="metric-card orange compact live-frequency-card">
+              <span>Frequency</span>
+              <strong id="liveFrequency">F1 10.00 kHz</strong>
+            </article>
+            <div class="live-view-tabs" role="tablist" aria-label="Live view mode">
+              <button class="mode-toggle active" id="liveRawTabButton" type="button" role="tab" aria-selected="true">Raw</button>
+              <button class="mode-toggle" id="liveDeltaTabButton" type="button" role="tab" aria-selected="false">Delta</button>
+            </div>
+          </div>
+
+          <div class="live-view-panels">
+            <div class="live-panel active" id="liveRawPanel" role="tabpanel">
+              <div class="engineering-grid live-view-grid compact-live-grid">
+                <article class="metric-card yellow compact">
+                  <span>CH1 RMS</span>
+                  <strong id="primaryRms">0.000 V</strong>
+                </article>
+                <article class="metric-card yellow compact">
+                  <span>CH1 Std</span>
+                  <strong id="primaryStd">0.000000</strong>
+                </article>
+                <article class="metric-card green compact">
+                  <span>CH1 Quality</span>
+                  <strong id="primaryQuality">0%</strong>
+                </article>
+                <article class="metric-card cyan compact">
+                  <span>CH2 RMS</span>
+                  <strong id="secondaryRms">0.000 V</strong>
+                </article>
+                <article class="metric-card cyan compact">
+                  <span>CH2 Std</span>
+                  <strong id="secondaryStd">0.000000</strong>
+                </article>
+                <article class="metric-card green compact">
+                  <span>CH2 Quality</span>
+                  <strong id="secondaryQuality">0%</strong>
+                </article>
+              </div>
+            </div>
+
+            <div class="live-panel" id="liveDeltaPanel" role="tabpanel">
+              <div class="live-delta-panel compact-live-grid">
+                <article class="metric-card cyan compact">
+                  <span>CH1 Delta</span>
+                  <strong id="liveDeltaCh1">--</strong>
+                </article>
+                <article class="metric-card cyan compact">
+                  <span>CH2 Delta</span>
+                  <strong id="liveDeltaCh2">--</strong>
+                </article>
+                <article class="metric-card orange compact">
+                  <span>Delta Ratio</span>
+                  <strong id="liveDeltaRatio">--</strong>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="liveViewBackButton" type="button">Back</button>
+          <button class="primary" id="liveViewHomeButton" type="button">Home</button>
+        </div>
+      </section>
+
+      <section class="screen" id="daqSettingsScreen">
+        <div class="settings-panel">
+          <p class="eyebrow">DAQ Configuration</p>
+          <h2>DAQ Settings</h2>
+          <div class="calibration-note">
+            <span>CH1 /dev/ttyUSB0</span>
+            <span>CH2 /dev/ttyUSB1</span>
+            <span>115200 baud</span>
+            <span>3 frequencies x 5 second settle</span>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="daqSettingsBackButton" type="button">Back</button>
+          <button class="primary" id="daqSettingsDoneButton" type="button">Done</button>
+        </div>
+      </section>
+
+      <section class="screen" id="loadCellScreen">
+        <div class="settings-panel">
+          <p class="eyebrow">Load Cell Settings</p>
+          <h2>Scale Reading</h2>
+          <div class="engineering-grid load-cell-grid">
+            <article class="metric-card yellow">
+              <span>Current Weight</span>
+              <strong id="loadCellWeight">-- g</strong>
+            </article>
+            <article class="metric-card green">
+              <span>Status</span>
+              <strong id="loadCellStatus">--</strong>
+            </article>
+            <article class="metric-card cyan">
+              <span>Port</span>
+              <strong id="loadCellPort">/dev/ttyUSB0</strong>
+            </article>
+          </div>
+          <div class="calibration-note">
+            <span id="loadCellRaw">Raw: --</span>
+            <span id="loadCellUpdated">Updated: --</span>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="loadCellBackButton" type="button">Back</button>
+          <button class="secondary" id="loadCellHoldButton" type="button">Hold</button>
+          <button class="primary" id="loadCellZeroButton" type="button">Zero</button>
+        </div>
+      </section>
+
+      <section class="screen" id="calibrationScreen">
+        <div class="calibration-start-panel">
+          <div class="calibration-empty-icon" aria-hidden="true">
+            <div class="empty-plate"></div>
+            <div class="empty-cross"></div>
+          </div>
+          <div class="calibration-copy">
+            <p class="eyebrow">No Material Condition</p>
+            <h2>Empty Calibration</h2>
+            <p>Remove all materials from the sensing area before starting.</p>
+            <div class="calibration-note">
+              <span>Keep area empty</span>
+              <span>Do not touch sensor</span>
+              <span>Capture duration 15 seconds</span>
+              <span id="calibrationFrequencyTag">Frequency: --</span>
+            </div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="calibrationCancelButton" type="button">Cancel</button>
+          <button class="secondary" id="viewCalibrationButton" type="button">View Record</button>
+          <button class="secondary" id="validateCalibrationButton" type="button">Validate</button>
+          <button class="primary" id="calibrationStartButton" type="button">Start Calibration</button>
+        </div>
+      </section>
+
+      <section class="screen" id="calibrationProgressScreen">
+        <div class="measure-panel">
+          <div class="progress-ring" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" class="track"></circle>
+              <circle cx="60" cy="60" r="50" class="meter" id="calibrationRingMeter"></circle>
+            </svg>
+            <strong id="calibrationProgressText">0%</strong>
+          </div>
+          <div class="measure-copy">
+            <h2 id="calibrationStage">Capturing Air Reading</h2>
+            <p>Do not place any material on the sensing area.</p>
+            <div class="progress-bar">
+              <span id="calibrationProgressBar"></span>
+            </div>
+            <div class="summary-row">
+              <span id="calibrationDurationLabel">3 frequencies</span>
+              <span id="calibrationFrequencyLabel">F1</span>
+              <span id="calibrationSampleLabel">Sample 0 / 30</span>
+              <span class="signal-ok">No material condition</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="calibrationResultScreen">
+        <div class="history-detail-panel left-scroll-panel calibration-result-panel">
+          <p class="eyebrow">Latest Calibration</p>
+          <h2>Air Baseline Saved</h2>
+          <div class="calibration-frequency-list" id="calibrationFrequencyCards">
+            <article class="calibration-frequency-card">
+              <span>F1 Air</span>
+              <strong id="calF1Air">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F2 Air</span>
+              <strong id="calF2Air">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F3 Air</span>
+              <strong id="calF3Air">--</strong>
+            </article>
+          </div>
+          <div class="detail-grid calibration-grid">
+            <span>Calibrated At</span><strong id="calibratedAt">--</strong>
+            <span>Condition</span><strong id="calibrationCondition">No material / air reading</strong>
+            <span>Samples</span><strong id="calibrationSampleCount">--</strong>
+            <span>CH1 Mean</span><strong id="calCh1Mean">--</strong>
+            <span>CH1 Std Dev</span><strong id="calCh1Std">--</strong>
+            <span>CH1 Tolerance</span><strong id="calCh1Tolerance">--</strong>
+            <span>CH2 Mean</span><strong id="calCh2Mean">--</strong>
+            <span>CH2 Std Dev</span><strong id="calCh2Std">--</strong>
+            <span>CH2 Tolerance</span><strong id="calCh2Tolerance">--</strong>
+            <span>Validation</span><strong id="calValidationStatus">Not validated</strong>
+            <span>Max Drift</span><strong id="calValidationDrift">--</strong>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="calibrationAgainButton" type="button">Calibrate Again</button>
+          <button class="primary" id="calibrationDoneButton" type="button">Done</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingScreen">
+        <div class="calibration-start-panel">
+          <div class="calibration-empty-icon teaching-icon" aria-hidden="true">
+            <div class="empty-plate"></div>
+            <div class="teach-dot"></div>
+          </div>
+          <div class="calibration-copy">
+            <p class="eyebrow">Reference Library</p>
+            <h2>Teaching Mode</h2>
+            <p>Capture known samples to build the metal comparison library.</p>
+            <div class="calibration-note">
+              <span>Known material required</span>
+              <span>Shape, weight and area recorded</span>
+              <span>Sensor features saved</span>
+              <span id="teachingFrequencyTag">Frequency: --</span>
+            </div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingCancelButton" type="button">Cancel</button>
+          <button class="secondary" id="teachingViewButton" type="button">View Records</button>
+          <button class="secondary" id="teachingValidateButton" type="button">Validate</button>
+          <button class="primary" id="teachingStartButton" type="button">Start</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingPlaceScreen">
+        <div class="instruction-panel">
+          <div class="placement-stage" aria-hidden="true">
+            <div class="target-graphic">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="sample-guide">
+              <span class="guide-bar"></span>
+            </div>
+            <div class="guide-arrow"></div>
+          </div>
+          <h2>Place Known Sample</h2>
+          <p>The scale has been zeroed. Place the certified object, then continue to capture the measured weight.</p>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingPlaceBackButton" type="button">Back</button>
+          <button class="primary" id="teachingPlaceNextButton" type="button">Continue</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingMaterialScreen">
+        <div class="selection-panel">
+          <p class="eyebrow">Known Material</p>
+          <div class="material-grid" id="teachingMaterialGrid">
+            <button type="button" data-material="Gold 916">Gold 916</button>
+            <button type="button" data-material="Gold 999">Gold 999</button>
+            <button type="button" data-material="Gold 950">Gold 950</button>
+            <button type="button" data-material="Gold 875">Gold 875</button>
+            <button type="button" data-material="Gold 835">Gold 835</button>
+            <button type="button" data-material="Gold 750">Gold 750</button>
+            <button type="button" data-material="Gold 585">Gold 585</button>
+            <button type="button" data-material="Gold 375">Gold 375</button>
+            <button type="button" data-material="Silver 999">Silver 999</button>
+            <button type="button" data-material="Silver 925">Silver 925</button>
+            <button type="button" data-material="Silver 917">Silver 917</button>
+            <button type="button" data-material="Silver 800">Silver 800</button>
+            <button type="button" data-material="Silver 750">Silver 750</button>
+            <button type="button" data-material="Silver 600">Silver 600</button>
+            <button type="button" data-material="Silver 550">Silver 550</button>
+            <button type="button" data-material="Silver 500">Silver 500</button>
+            <button type="button" data-material="Bronze">Bronze</button>
+            <button type="button" data-material="Copper">Copper</button>
+            <button type="button" data-material="Copper Nickel">Copper Nickel</button>
+            <button type="button" data-material="Aluminium">Aluminium</button>
+            <button type="button" data-material="Titanium">Titanium</button>
+            <button type="button" data-material="Steel">Steel</button>
+            <button type="button" data-material="Other">Other</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingMaterialBackButton" type="button">Back</button>
+          <button class="primary" id="teachingMaterialNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingShapeScreen">
+        <div class="selection-panel">
+          <p class="eyebrow">Sample Shape</p>
+          <div class="material-grid shape-select-grid" id="teachingShapeGrid">
+            <button type="button" data-teaching-shape="Ring">Ring</button>
+            <button type="button" data-teaching-shape="Coin">Coin</button>
+            <button type="button" data-teaching-shape="Chain">Chain</button>
+            <button type="button" data-teaching-shape="Bar">Bar</button>
+            <button type="button" data-teaching-shape="Bangle">Bangle</button>
+            <button type="button" data-teaching-shape="Other">Other</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingShapeBackButton" type="button">Back</button>
+          <button class="primary" id="teachingShapeNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingOtherMaterialScreen">
+        <div class="selection-panel">
+          <p class="eyebrow">Other Material</p>
+          <div class="material-grid" id="teachingOtherMaterialGrid">
+            <button type="button" data-other-material="Brass">Brass</button>
+            <button type="button" data-other-material="Bronze">Bronze</button>
+            <button type="button" data-other-material="Tungsten">Tungsten</button>
+            <button type="button" data-other-material="Nickel">Nickel</button>
+            <button type="button" data-other-material="Zinc Alloy">Zinc Alloy</button>
+            <button type="button" data-other-material="Plated">Plated</button>
+            <button type="button" data-other-material="Unknown">Unknown</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingOtherMaterialBackButton" type="button">Back</button>
+          <button class="primary" id="teachingOtherMaterialNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingPurityScreen">
+        <div class="selection-panel">
+          <p class="eyebrow">Purity / Grade</p>
+          <div class="material-grid shape-select-grid" id="teachingPurityGrid">
+            <button type="button" data-purity="Unknown">Unknown</button>
+            <button type="button" data-purity="999">999</button>
+            <button type="button" data-purity="925">925</button>
+            <button type="button" data-purity="916">916</button>
+            <button type="button" data-purity="750">750</button>
+            <button type="button" data-purity="Enter Later">Enter Later</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingPurityBackButton" type="button">Back</button>
+          <button class="primary" id="teachingPurityNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingOtherShapeScreen">
+        <div class="selection-panel">
+          <p class="eyebrow">Other Shape</p>
+          <div class="material-grid shape-select-grid" id="teachingOtherShapeGrid">
+            <button type="button" data-other-shape="Pendant">Pendant</button>
+            <button type="button" data-other-shape="Bracelet">Bracelet</button>
+            <button type="button" data-other-shape="Bangle">Bangle</button>
+            <button type="button" data-other-shape="Nugget">Nugget</button>
+            <button type="button" data-other-shape="Wire">Wire</button>
+            <button type="button" data-other-shape="Sheet">Sheet</button>
+            <button type="button" data-other-shape="Unknown">Unknown</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingOtherShapeBackButton" type="button">Back</button>
+          <button class="primary" id="teachingOtherShapeNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingWeightScreen">
+        <div class="weight-layout">
+          <div class="value-panel">
+            <p class="label">Measured Weight</p>
+            <output id="teachingWeightDisplay">0</output>
+            <span>grams</span>
+            <div class="dimension-meta">
+              <span id="teachingWeightStatus">Scale ready</span>
+              <span id="teachingWeightRaw">10 sample average</span>
+            </div>
+          </div>
+          <div class="selection-panel compact-panel" id="teachingKeypad">
+            <p class="eyebrow">Automatic Scale</p>
+            <h2>Average 10 Readings</h2>
+            <p>The measured weight is taken from the load cell and saved with the teaching record.</p>
+            <div class="scale-progress" id="teachingWeightProgress" aria-live="polite">
+              <div class="scale-progress-header">
+                <span id="teachingWeightProgressLabel">Waiting to sample</span>
+                <strong id="teachingWeightProgressCount">0 / 10</strong>
+              </div>
+              <div class="scale-progress-bar">
+                <span id="teachingWeightProgressBar"></span>
+              </div>
+            </div>
+            <button class="primary" id="teachingWeightSampleButton" type="button">Sample Again</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingWeightBackButton" type="button">Back</button>
+          <button class="primary" id="teachingRecordButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingDimensionScreen">
+        <div class="weight-layout">
+          <div class="value-panel dimension-panel">
+            <p class="label">Sample Dimensions</p>
+            <div class="dimension-field-row">
+              <button class="dimension-field-button selected" id="teachingWidthFieldButton" type="button">
+                <span id="teachingWidthLabel">Width</span>
+                <strong id="teachingWidthDisplay">0</strong>
+                <em>mm</em>
+              </button>
+              <button class="dimension-field-button" id="teachingLengthFieldButton" type="button">
+                <span id="teachingLengthLabel">Length</span>
+                <strong id="teachingLengthDisplay">0</strong>
+                <em>mm</em>
+              </button>
+              <button class="dimension-field-button" id="teachingThicknessFieldButton" type="button">
+                <span id="teachingThicknessLabel">Thickness</span>
+                <strong id="teachingThicknessDisplay">0</strong>
+                <em>mm</em>
+              </button>
+            </div>
+            <div class="dimension-meta">
+              <span>Sample area <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Contact ratio <strong id="teachingContactRatioDisplay">0.00%</strong></span>
+            </div>
+          </div>
+          <div class="keypad" id="teachingDimensionKeypad">
+            <button type="button" data-teaching-dimension-key="1">1</button>
+            <button type="button" data-teaching-dimension-key="2">2</button>
+            <button type="button" data-teaching-dimension-key="3">3</button>
+            <button type="button" data-teaching-dimension-key="4">4</button>
+            <button type="button" data-teaching-dimension-key="5">5</button>
+            <button type="button" data-teaching-dimension-key="6">6</button>
+            <button type="button" data-teaching-dimension-key="7">7</button>
+            <button type="button" data-teaching-dimension-key="8">8</button>
+            <button type="button" data-teaching-dimension-key="9">9</button>
+            <button type="button" data-teaching-dimension-key=".">.</button>
+            <button type="button" data-teaching-dimension-key="0">0</button>
+            <button type="button" data-teaching-dimension-key="clear">Clear</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingDimensionBackButton" type="button">Back</button>
+          <button class="primary" id="teachingDimensionNextButton" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingRecordScreen">
+        <div class="measure-panel">
+          <div class="progress-ring" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" class="track"></circle>
+              <circle cx="60" cy="60" r="50" class="meter" id="teachingRingMeter"></circle>
+            </svg>
+            <strong id="teachingProgressText">0%</strong>
+          </div>
+          <div class="measure-copy">
+            <h2 id="teachingStage">Recording Reference</h2>
+            <p>Keep the known sample still during teaching capture.</p>
+            <div class="progress-bar">
+              <span id="teachingProgressBar"></span>
+            </div>
+            <div class="summary-row">
+              <span id="teachingMaterialSummary">Gold 916</span>
+              <span id="teachingShapeSummary">Bar</span>
+              <span id="teachingWeightSummary">0 g</span>
+              <span id="teachingDimensionSummary">0 x 0 mm</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingRemoveScreen">
+        <div class="instruction-panel">
+          <div class="placement-stage" aria-hidden="true">
+            <div class="target-graphic">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="sample-guide">
+              <span class="guide-bar"></span>
+            </div>
+          </div>
+          <h2>Remove Material</h2>
+          <p>Remove the sample from the sensing area before viewing the result.</p>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingRemoveBackButton" type="button">Back</button>
+          <button class="primary" id="teachingRemoveNextButton" type="button">Item Removed</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingSavedScreen">
+        <div class="history-detail-panel left-scroll-panel">
+          <p class="eyebrow" id="teachingSavedEyebrow">Teaching Record Saved</p>
+          <h2 id="teachingSavedMaterial">Gold 916</h2>
+          <div class="calibration-frequency-list" id="teachingSavedFrequencyCards">
+            <article class="calibration-frequency-card">
+              <span>F1 Reading</span>
+              <strong id="teachingSavedF1">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F2 Reading</span>
+              <strong id="teachingSavedF2">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F3 Reading</span>
+              <strong id="teachingSavedF3">--</strong>
+            </article>
+          </div>
+          <div class="detail-grid">
+            <span>Validation</span><strong id="teachingSavedValidation">--</strong>
+            <span>Confidence</span><strong id="teachingSavedConfidence">--</strong>
+            <span>Shape</span><strong id="teachingSavedShape">Bar</strong>
+            <span>Weight</span><strong id="teachingSavedWeight">0 g</strong>
+            <span>CH1 RMS</span><strong id="teachingSavedCh1">--</strong>
+            <span>CH2 RMS</span><strong id="teachingSavedCh2">--</strong>
+            <span>Ratio</span><strong id="teachingSavedRatio">--</strong>
+            <span>CH1 Δ Cal</span><strong id="teachingSavedCh1Delta">--</strong>
+            <span>CH2 Δ Cal</span><strong id="teachingSavedCh2Delta">--</strong>
+            <span>Purity</span><strong id="teachingSavedPurity">--</strong>
+            <span>Status</span><strong>Reference sample</strong>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingSavedAgainButton" type="button">Run Again</button>
+          <button class="primary" id="teachingSavedDoneButton" type="button">Done</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingRecordsScreen">
+        <div class="history-panel left-scroll-panel">
+          <div class="history-head">
+            <p class="eyebrow">Reference Library</p>
+            <strong>Teaching Records</strong>
+          </div>
+          <div class="teaching-table" id="teachingTable"></div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingRecordsBackButton" type="button">Back</button>
+          <button class="primary" id="teachingRecordsHomeButton" type="button">Home</button>
+        </div>
+      </section>
+
+      <section class="screen" id="teachingDetailScreen">
+        <div class="history-detail-panel left-scroll-panel">
+          <p class="eyebrow">Teaching Detail</p>
+          <h2 id="teachingDetailMaterial">Gold 916</h2>
+          <div class="calibration-frequency-list" id="teachingDetailFrequencyCards">
+            <article class="calibration-frequency-card">
+              <span>F1 Reading</span>
+              <strong id="teachingDetailF1">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F2 Reading</span>
+              <strong id="teachingDetailF2">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F3 Reading</span>
+              <strong id="teachingDetailF3">--</strong>
+            </article>
+          </div>
+          <div class="detail-grid">
+            <span>Date</span><strong id="teachingDetailDate">--</strong>
+            <span>Time</span><strong id="teachingDetailTime">--</strong>
+            <span>Shape</span><strong id="teachingDetailShape">--</strong>
+            <span>Weight</span><strong id="teachingDetailWeight">--</strong>
+            <span>CH1 RMS</span><strong id="teachingDetailCh1">--</strong>
+            <span>CH2 RMS</span><strong id="teachingDetailCh2">--</strong>
+            <span>CH1 Std Dev</span><strong id="teachingDetailCh1Std">--</strong>
+            <span>CH2 Std Dev</span><strong id="teachingDetailCh2Std">--</strong>
+            <span>Ratio</span><strong id="teachingDetailRatio">--</strong>
+            <span>CH1 Δ Cal</span><strong id="teachingDetailCh1Delta">--</strong>
+            <span>CH2 Δ Cal</span><strong id="teachingDetailCh2Delta">--</strong>
+            <span>Calibration</span><strong id="teachingDetailCalibration">--</strong>
+            <span>Purity</span><strong id="teachingDetailPurity">--</strong>
+            <span>Status</span><strong id="teachingDetailStatus">Reference sample</strong>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="teachingDetailBackButton" type="button">Back</button>
+          <button class="secondary danger-button" id="teachingDetailDeleteButton" type="button">Delete</button>
+          <button class="primary" id="teachingDetailHomeButton" type="button">Home</button>
+        </div>
+      </section>
+
+      <section class="screen" id="historyScreen">
+        <div class="history-panel">
+          <div class="history-head">
+            <p class="eyebrow">Measurement Records</p>
+            <strong>Recent History</strong>
+          </div>
+          <div class="history-table" id="historyTable"></div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="historyBackButton" type="button">Back</button>
+          <button class="primary" id="historyHomeButton" type="button">Home</button>
+        </div>
+      </section>
+
+      <section class="screen" id="historyDetailScreen">
+        <div class="history-detail-panel left-scroll-panel">
+          <p class="eyebrow">Measurement Detail</p>
+          <h2 id="detailResult">Gold 916</h2>
+          <div class="calibration-frequency-list" id="detailFrequencyCards">
+            <article class="calibration-frequency-card">
+              <span>F1 Reading</span>
+              <strong id="detailF1">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F2 Reading</span>
+              <strong id="detailF2">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F3 Reading</span>
+              <strong id="detailF3">--</strong>
+            </article>
+          </div>
+          <div class="detail-grid">
+            <span>Date</span><strong id="detailDate">09 May 2026</strong>
+            <span>Time</span><strong id="detailTime">15:42</strong>
+            <span>Weight</span><strong id="detailWeight">12.45 g</strong>
+            <span>Shape</span><strong id="detailShape">Bar</strong>
+            <span>Confidence</span><strong id="detailConfidence">87%</strong>
+            <span>Status</span><strong id="detailStatus">Saved locally</strong>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="detailBackButton" type="button">Back</button>
+          <button class="secondary danger-button" id="detailDeleteButton" type="button">Delete</button>
+          <button class="primary" id="detailHomeButton" type="button">Home</button>
+        </div>
+      </section>
+
+      <section class="screen" id="deletePasswordScreen">
+        <div class="password-layout">
+          <div class="value-panel password-panel">
+            <p class="label">Admin Password</p>
+            <output id="deletePasswordDisplay">------</output>
+            <span id="deletePasswordMessage">Enter PIN to delete record</span>
+          </div>
+          <div class="keypad" id="deletePasswordKeypad">
+            <button type="button" data-delete-pin="1">1</button>
+            <button type="button" data-delete-pin="2">2</button>
+            <button type="button" data-delete-pin="3">3</button>
+            <button type="button" data-delete-pin="4">4</button>
+            <button type="button" data-delete-pin="5">5</button>
+            <button type="button" data-delete-pin="6">6</button>
+            <button type="button" data-delete-pin="7">7</button>
+            <button type="button" data-delete-pin="8">8</button>
+            <button type="button" data-delete-pin="9">9</button>
+            <button type="button" data-delete-pin="clear">Clear</button>
+            <button type="button" data-delete-pin="0">0</button>
+            <button type="button" data-delete-pin="back">Back</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="deleteCancelButton" type="button">Cancel</button>
+          <button class="primary danger-confirm" id="deleteConfirmButton" type="button">Confirm Delete</button>
+        </div>
+      </section>
+
+      <section class="screen" id="detectorSettingsScreen">
+        <div class="weight-layout">
+          <div class="value-panel">
+            <p class="label">Confidence Threshold</p>
+            <output id="detectorConfidenceDisplay">40</output>
+            <span>%</span>
+          </div>
+          <div class="keypad" id="detectorSettingsKeypad">
+            <button type="button" data-detector-key="1">1</button>
+            <button type="button" data-detector-key="2">2</button>
+            <button type="button" data-detector-key="3">3</button>
+            <button type="button" data-detector-key="4">4</button>
+            <button type="button" data-detector-key="5">5</button>
+            <button type="button" data-detector-key="6">6</button>
+            <button type="button" data-detector-key="7">7</button>
+            <button type="button" data-detector-key="8">8</button>
+            <button type="button" data-detector-key="9">9</button>
+            <button type="button" data-detector-key="clear">Clear</button>
+            <button type="button" data-detector-key="0">0</button>
+            <button type="button" data-detector-key="back">Back</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="detectorSettingsCancelButton" type="button">Cancel</button>
+          <button class="primary" id="detectorSettingsSaveButton" type="button">Save</button>
+        </div>
+      </section>
+
+      <section class="screen" id="frequencyModeScreen">
+        <div class="settings-panel">
+          <p class="eyebrow">Acquisition Setting</p>
+          <h2>Frequency Profiles</h2>
+          <div class="calibration-note">
+            <button type="button" id="frequencySlot1Button">Frequency 1</button>
+            <button type="button" id="frequencySlot2Button">Frequency 2</button>
+            <button type="button" id="frequencySlot3Button">Frequency 3</button>
+          </div>
+          <p id="frequencyModeStatus">Current: Frequency 1</p>
+          <button type="button" id="editFrequencyButton">Edit Selected Frequency</button>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="frequencyModeBackButton" type="button">Back</button>
+          <button class="primary" id="frequencyModeSaveButton" type="button">Save</button>
+        </div>
+      </section>
+
+      <section class="screen" id="frequencyEditScreen">
+        <div class="weight-layout">
+          <div class="value-panel">
+            <p class="label" id="selectedFrequencyLabel">Frequency 1</p>
+            <output id="selectedFrequencyDisplay">10</output>
+            <span>kHz</span>
+          </div>
+          <div class="keypad" id="frequencySettingsKeypad">
+            <button type="button" data-frequency-settings-key="1">1</button>
+            <button type="button" data-frequency-settings-key="2">2</button>
+            <button type="button" data-frequency-settings-key="3">3</button>
+            <button type="button" data-frequency-settings-key="4">4</button>
+            <button type="button" data-frequency-settings-key="5">5</button>
+            <button type="button" data-frequency-settings-key="6">6</button>
+            <button type="button" data-frequency-settings-key="7">7</button>
+            <button type="button" data-frequency-settings-key="8">8</button>
+            <button type="button" data-frequency-settings-key="9">9</button>
+            <button type="button" data-frequency-settings-key=".">.</button>
+            <button type="button" data-frequency-settings-key="0">0</button>
+            <button type="button" data-frequency-settings-key="clear">Clear</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="frequencyEditBackButton" type="button">Back</button>
+          <button class="primary" id="frequencyEditSetButton" type="button">Set</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

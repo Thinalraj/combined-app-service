@@ -25,15 +25,15 @@ python diameter.py
 Run the REST API in a separate process:
 
 ```bash
-uvicorn api:app --host 0.0.0.0 --port 8000
+uvicorn api:app --host 0.0.0.0 --port 8003
 ```
 
 On Windows, double-click `launch_image_service.bat` to start the backend on
-port 8002. The Flask application is optional and is only a test client. If
+port 8003. The Flask application is optional and is only a test client. If
 needed, start it with:
 
 ```bat
-set VISION_API_URL=http://127.0.0.1:8002
+set VISION_API_URL=http://127.0.0.1:8003
 python test_flask_app.py
 ```
 
@@ -44,7 +44,7 @@ python test_flask_app.py
 ```
 
 Open `http://localhost:5000`. It proxies `/image` and `/size` to the FastAPI
-service on port 8002. Set `VISION_API_URL` if FastAPI runs on another host.
+service on port 8003. Set `VISION_API_URL` if FastAPI runs on another host.
 
 The service uses the D405 camera and the per-mode colour calibration saved by
 the desktop app. `GET /image` returns the latest camera frame as JPEG. `GET

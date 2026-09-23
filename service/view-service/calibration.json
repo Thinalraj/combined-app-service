@@ -1,0 +1,165 @@
+{
+  "calibrated_at": "23 Jun 2026 14:41",
+  "sample_count": 90,
+  "samples_per_frequency": 30,
+  "duration_seconds": 48,
+  "condition": "No material / air reading",
+  "acquisition_mode": "daq",
+  "frequency_hz": 8.0,
+  "frequency_slot": 1,
+  "frequency_sequence": [
+    {
+      "frequency_command": "f1",
+      "settle_seconds": 5.0,
+      "channels": {
+        "ch1": {
+          "rms": 0.4678,
+          "std": 0.007241,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "/dev/ttyACM0",
+          "command": "",
+          "sample_count": 30
+        },
+        "ch2": {
+          "rms": 0.855133,
+          "std": 0.016291,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "/dev/ttyACM0",
+          "command": "",
+          "sample_count": 30
+        }
+      }
+    },
+    {
+      "frequency_command": "f2",
+      "settle_seconds": 5.0,
+      "channels": {
+        "ch1": {
+          "rms": 0.521467,
+          "std": 0.006791,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "/dev/ttyACM0",
+          "command": "",
+          "sample_count": 30
+        },
+        "ch2": {
+          "rms": 0.9479,
+          "std": 0.012731,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "/dev/ttyACM0",
+          "command": "",
+          "sample_count": 30
+        }
+      }
+    },
+    {
+      "frequency_command": "f3",
+      "settle_seconds": 5.0,
+      "channels": {
+        "ch1": {
+          "rms": 0.570233,
+          "std": 0.003757,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "/dev/ttyACM0",
+          "command": "",
+          "sample_count": 30
+        },
+        "ch2": {
+          "rms": 1.049533,
+          "std": 0.006622,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "/dev/ttyACM0",
+          "command": "",
+          "sample_count": 30
+        }
+      }
+    }
+  ],
+  "frequency_air": {
+    "f1": {
+      "ch1": {
+        "rms": 0.4678,
+        "std": 0.007241,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "/dev/ttyACM0",
+        "command": "",
+        "sample_count": 30
+      },
+      "ch2": {
+        "rms": 0.855133,
+        "std": 0.016291,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "/dev/ttyACM0",
+        "command": "",
+        "sample_count": 30
+      }
+    },
+    "f2": {
+      "ch1": {
+        "rms": 0.521467,
+        "std": 0.006791,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "/dev/ttyACM0",
+        "command": "",
+        "sample_count": 30
+      },
+      "ch2": {
+        "rms": 0.9479,
+        "std": 0.012731,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "/dev/ttyACM0",
+        "command": "",
+        "sample_count": 30
+      }
+    },
+    "f3": {
+      "ch1": {
+        "rms": 0.570233,
+        "std": 0.003757,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "/dev/ttyACM0",
+        "command": "",
+        "sample_count": 30
+      },
+      "ch2": {
+        "rms": 1.049533,
+        "std": 0.006622,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "/dev/ttyACM0",
+        "command": "",
+        "sample_count": 30
+      }
+    }
+  },
+  "ch1": {
+    "mean": 0.519833,
+    "std": 0.042281,
+    "tolerance": 0.126842,
+    "unit": "V RMS",
+    "sample_count": 90,
+    "last_device": "ch1",
+    "source": "/dev/ttyACM0"
+  },
+  "ch2": {
+    "mean": 0.950856,
+    "std": 0.080374,
+    "tolerance": 0.241123,
+    "unit": "V RMS",
+    "sample_count": 90,
+    "last_device": "ch2",
+    "source": "/dev/ttyACM0"
+  },
+  "errors": []
+}

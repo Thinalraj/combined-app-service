@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "version": 1,
+  "description": "DAQ compatibility correction applied after RMS acquisition",
+  "ch1": {
+    "scale": 1.049,
+    "offset": 0.0
+  },
+  "ch2": {
+    "scale": 1.112,
+    "offset": 0.0
+  }
+}

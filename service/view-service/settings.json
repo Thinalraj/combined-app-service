@@ -1,0 +1,15 @@
+{
+  "acquisition_mode": "daq",
+  "confidence_threshold_pct": 40.0,
+  "multi_frequencies_khz": [
+    10.0,
+    20.0,
+    30.0
+  ],
+  "active_frequency_slot": 1,
+  "classifier_algorithm": "two_pass_frequency_rf",
+  "service_mode_enabled": true,
+  "weight_service_url": "http://127.0.0.1:8002",
+  "vision_service_url": "http://127.0.0.1:8003",
+  "signal_service_url": "http://127.0.0.1:8001"
+}
