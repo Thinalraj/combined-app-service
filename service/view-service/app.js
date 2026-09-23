@@ -2191,6 +2191,11 @@ document.getElementById("menuButton").addEventListener("click", () => {
 });
 document.getElementById("menuEngineeringButton").addEventListener("click", showPasswordScreen);
 document.getElementById("menuHistoryButton").addEventListener("click", () => showScreen("history"));
+document.getElementById("menuExitButton").addEventListener("click", () => {
+  if (!window.confirm("Are you sure you want to exit the application?")) return;
+  window.open("", "_self");
+  window.close();
+});
 document.getElementById("modeToggleButton").addEventListener("click", toggleAcquisitionMode);
 document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));
 document.getElementById("engineeringFrequencyButton").addEventListener("click", async () => {

@@ -25,4 +25,13 @@ To open the HMI on another host, pass its IP address:
 start_all.bat 192.168.1.50
 ```
 
+To launch only Chrome against an already-running view service:
+
+```bat
+launch_chrome.bat 192.168.1.50
+```
+
+The hamburger menu includes an Exit button and asks for confirmation before
+attempting to close the kiosk window.
+
 The HMI is available at `http://127.0.0.1:8080`.
