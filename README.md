@@ -15,4 +15,6 @@ Run the complete stack on macOS/Linux with:
 ./start_all.sh
 ```
 
+On Windows, double-click `start_all.bat`.
+
 The HMI is available at `http://127.0.0.1:8080`.
