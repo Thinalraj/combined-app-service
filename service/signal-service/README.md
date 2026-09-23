@@ -46,6 +46,10 @@ python -m pip install -r requirements.txt
 python .\test_flask_server.py
 ```
 
+Open `http://127.0.0.1:5000`. Enter a supported frequency and amplitude, then
+use Start Sine, Get Measurement, and Stop Sine. Get Measurement performs a
+complete single-frequency test: start, stabilize, acquire, and stop.
+
 Test one reading:
 
 ```text
