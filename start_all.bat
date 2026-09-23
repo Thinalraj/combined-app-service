@@ -2,25 +2,28 @@
 setlocal
 
 cd /d "%~dp0"
+set "TARGET_IP=%~1"
+if "%TARGET_IP%"=="" set "TARGET_IP=127.0.0.1"
+set "VIEW_URL=http://%TARGET_IP%:8080"
 
-echo Starting Signal Service on port 8001...
-start "Signal Service" cmd /k "cd /d "%~dp0service\signal-service" && python rest_service.py --simulate"
+where wt.exe >nul 2>&1
+if errorlevel 1 (
+    echo Windows Terminal (wt.exe) is required for the single-window tabbed launcher.
+    echo Install it from the Microsoft Store, then run this file again.
+    pause
+    exit /b 1
+)
 
-echo Starting Weight Service on port 8002...
-start "Weight Service" cmd /k "cd /d "%~dp0service\weight-service" && python fast-api-mettler.py"
+echo Starting all services in one Windows Terminal window...
+wt.exe -w 0 new-tab --title "Signal 8001" cmd /k "cd /d "%~dp0service\signal-service" && python rest_service.py --simulate" ; ^
+    new-tab --title "Weight 8002" cmd /k "cd /d "%~dp0service\weight-service" && python fast-api-mettler.py" ; ^
+    new-tab --title "Image 8003" cmd /k "cd /d "%~dp0service\image-service" && python -m uvicorn api:app --host 0.0.0.0 --port 8003" ; ^
+    new-tab --title "View 8080" cmd /k "cd /d "%~dp0service\view-service" && python app.py"
 
-echo Starting Image Service on port 8003...
-start "Image Service" cmd /k "cd /d "%~dp0service\image-service" && python -m uvicorn api:app --host 0.0.0.0 --port 8003"
+timeout /t 5 /nobreak >nul
 
-timeout /t 3 /nobreak >nul
+echo Opening Chrome kiosk at %VIEW_URL%...
+start "" chrome --kiosk --start-fullscreen "%VIEW_URL%"
 
-echo Starting View Service on port 8080...
-start "View Service" cmd /k "cd /d "%~dp0service\view-service" && python app.py"
-
-echo.
-echo All services started.
-echo View service: http://127.0.0.1:8080
-echo Signal service: http://127.0.0.1:8001
-echo Weight service: http://127.0.0.1:8002
-echo Image service: http://127.0.0.1:8003
-pause
+echo Application launched at %VIEW_URL%.
+exit /b 0
