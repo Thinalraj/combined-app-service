@@ -123,9 +123,9 @@ let selectedTeachingId = null;
 let deletePassword = "";
 let teachingRecords = [];
 const teachingState = {
-  material: "Gold 916",
+  material: "Gold",
   otherMaterial: "Brass",
-  purity: "Unknown",
+  purity: "",
   shape: "Bar",
   otherShape: "Pendant",
   weight: "",
@@ -610,9 +610,9 @@ function resetTeachingWeight() {
 }
 
 function resetTeachingInputs() {
-  teachingState.material = "Gold 916";
+  teachingState.material = "Gold";
   teachingState.otherMaterial = "Brass";
-  teachingState.purity = "Unknown";
+  teachingState.purity = "";
   teachingState.shape = "Bar";
   teachingState.otherShape = "Pendant";
   teachingState.weightStd = "";
@@ -1236,6 +1236,19 @@ function updateTeachingPuritySelection() {
   document.querySelectorAll("#teachingPurityGrid button").forEach((button) => {
     button.classList.toggle("selected", button.dataset.purity === teachingState.purity);
   });
+  const display = document.getElementById("teachingPurityDisplay");
+  if (display) display.textContent = teachingState.purity || "--";
+}
+
+function configureTeachingPurityScreen() {
+  const isGold = teachingState.material === "Gold";
+  const eyebrow = document.getElementById("teachingPurityEyebrow");
+  eyebrow.textContent = isGold ? "Gold purity — select carat / 9xx or enter below" : "Silver purity — select 9xx or enter below";
+  document.querySelectorAll("#teachingPurityGrid button").forEach((button) => {
+    const purity = button.dataset.purity || "";
+    button.hidden = isGold ? purity.includes("/") : !/^\d{3}$/.test(purity);
+  });
+  updateTeachingPuritySelection();
 }
 
 function updateTeachingShapeSelection() {
@@ -1310,7 +1323,7 @@ function buildTeachingDimensionPayload() {
 }
 
 function getTeachingMaterialLabel() {
-  return teachingState.material === "Other" ? teachingState.otherMaterial : teachingState.material;
+  return teachingState.material;
 }
 
 function getTeachingShapeLabel() {
@@ -1381,7 +1394,7 @@ async function runTeachingValidation(options = {}) {
   const dimensionPayload = buildTeachingDimensionPayload();
   const requestBody = {
     material: getTeachingMaterialLabel(),
-    purity: teachingState.material === "Other" ? teachingState.purity : "Known",
+    purity: teachingState.purity || "Not applicable",
     shape: getTeachingShapeLabel(),
     weight: `${teachingState.weight || "0"} g`,
     ...dimensionPayload,
@@ -1425,7 +1438,7 @@ async function saveTeachingRecord(options = {}) {
   const dimensionPayload = buildTeachingDimensionPayload();
   const record = {
     material: getTeachingMaterialLabel(),
-    purity: teachingState.material === "Other" ? teachingState.purity : "Known",
+    purity: teachingState.purity || "Not applicable",
     shape: getTeachingShapeLabel(),
     weight: `${teachingState.weight || "0"} g`,
     ...dimensionPayload,
@@ -2331,14 +2344,24 @@ document.getElementById("teachingRecordButton").addEventListener("click", async 
 });
 document.getElementById("teachingMaterialBackButton").addEventListener("click", () => showScreen("teachingPlace"));
 document.getElementById("teachingMaterialNextButton").addEventListener("click", () => {
-  showScreen(teachingState.material === "Other" ? "teachingOtherMaterial" : "teachingShape");
+  const needsPurity = teachingState.material === "Gold" || teachingState.material === "Silver";
+  if (needsPurity) {
+    configureTeachingPurityScreen();
+    showScreen("teachingPurity");
+  } else {
+    prepareTeachingScale();
+  }
 });
 document.getElementById("teachingOtherMaterialBackButton").addEventListener("click", () => showScreen("teachingMaterial"));
 document.getElementById("teachingOtherMaterialNextButton").addEventListener("click", () => showScreen("teachingPurity"));
-document.getElementById("teachingPurityBackButton").addEventListener("click", () => showScreen("teachingOtherMaterial"));
-document.getElementById("teachingPurityNextButton").addEventListener("click", () => showScreen("teachingShape"));
+document.getElementById("teachingPurityBackButton").addEventListener("click", () => showScreen("teachingMaterial"));
+document.getElementById("teachingPurityNextButton").addEventListener("click", () => {
+  if (!teachingState.purity) return;
+  prepareTeachingScale();
+});
 document.getElementById("teachingShapeBackButton").addEventListener("click", () => {
-  showScreen(teachingState.material === "Other" ? "teachingPurity" : "teachingMaterial");
+  const needsPurity = teachingState.material === "Gold" || teachingState.material === "Silver";
+  showScreen(needsPurity ? "teachingPurity" : "teachingMaterial");
 });
 document.getElementById("teachingShapeNextButton").addEventListener("click", () => {
   if (teachingState.shape === "Other") {
@@ -2500,6 +2523,7 @@ document.getElementById("teachingMaterialGrid").addEventListener("click", (event
   const button = event.target.closest("button");
   if (!button) return;
   teachingState.material = button.dataset.material;
+  teachingState.purity = "";
   updateTeachingMaterialSelection();
 });
 
@@ -2514,6 +2538,14 @@ document.getElementById("teachingPurityGrid").addEventListener("click", (event) 
   const button = event.target.closest("button");
   if (!button) return;
   teachingState.purity = button.dataset.purity;
+  updateTeachingPuritySelection();
+});
+
+document.getElementById("teachingPurityKeypad").addEventListener("click", (event) => {
+  const key = event.target.dataset.teachingPurityKey;
+  if (!key) return;
+  if (key === "clear") teachingState.purity = "";
+  else if (teachingState.purity.length < 4) teachingState.purity += key;
   updateTeachingPuritySelection();
 });
 

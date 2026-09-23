@@ -1056,6 +1056,29 @@ output {
   text-overflow: ellipsis;
 }
 
+.purity-keypad {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(6, 1fr);
+  margin-top: 10px;
+}
+
+.purity-keypad output {
+  color: var(--yellow);
+  font-size: 28px;
+  grid-column: span 6;
+  min-height: 34px;
+  padding: 0;
+  text-align: center;
+}
+
+.purity-keypad button {
+  background: var(--panel-2);
+  font-size: 17px;
+  min-height: 40px;
+}
+
 .value-panel.error {
   border-color: rgba(255, 77, 77, 0.74);
   box-shadow: inset 0 0 0 2px rgba(255, 77, 77, 0.22);

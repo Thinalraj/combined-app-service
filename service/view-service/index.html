@@ -675,30 +675,18 @@
 
       <section class="screen" id="teachingMaterialScreen">
         <div class="selection-panel">
-          <p class="eyebrow">Known Material</p>
+          <p class="eyebrow">First, select the type of metal</p>
           <div class="material-grid" id="teachingMaterialGrid">
-            <button type="button" data-material="Gold 916">Gold 916</button>
-            <button type="button" data-material="Gold 999">Gold 999</button>
-            <button type="button" data-material="Gold 950">Gold 950</button>
-            <button type="button" data-material="Gold 875">Gold 875</button>
-            <button type="button" data-material="Gold 835">Gold 835</button>
-            <button type="button" data-material="Gold 750">Gold 750</button>
-            <button type="button" data-material="Gold 585">Gold 585</button>
-            <button type="button" data-material="Gold 375">Gold 375</button>
-            <button type="button" data-material="Silver 999">Silver 999</button>
-            <button type="button" data-material="Silver 925">Silver 925</button>
-            <button type="button" data-material="Silver 917">Silver 917</button>
-            <button type="button" data-material="Silver 800">Silver 800</button>
-            <button type="button" data-material="Silver 750">Silver 750</button>
-            <button type="button" data-material="Silver 600">Silver 600</button>
-            <button type="button" data-material="Silver 550">Silver 550</button>
-            <button type="button" data-material="Silver 500">Silver 500</button>
-            <button type="button" data-material="Bronze">Bronze</button>
+            <button type="button" data-material="Gold">Gold</button>
+            <button type="button" data-material="Silver">Silver</button>
             <button type="button" data-material="Copper">Copper</button>
-            <button type="button" data-material="Copper Nickel">Copper Nickel</button>
             <button type="button" data-material="Aluminium">Aluminium</button>
-            <button type="button" data-material="Titanium">Titanium</button>
+            <button type="button" data-material="Brass">Brass</button>
+            <button type="button" data-material="Bronze">Bronze</button>
+            <button type="button" data-material="Copper Nickel">Copper Nickel</button>
             <button type="button" data-material="Steel">Steel</button>
+            <button type="button" data-material="Titanium">Titanium</button>
+            <button type="button" data-material="Nickel">Nickel</button>
             <button type="button" data-material="Other">Other</button>
           </div>
         </div>
@@ -747,14 +735,35 @@
 
       <section class="screen" id="teachingPurityScreen">
         <div class="selection-panel">
-          <p class="eyebrow">Purity / Grade</p>
+          <p class="eyebrow" id="teachingPurityEyebrow">Purity / Grade</p>
           <div class="material-grid shape-select-grid" id="teachingPurityGrid">
-            <button type="button" data-purity="Unknown">Unknown</button>
+            <button type="button" data-purity="24K / 999">24K / 999</button>
+            <button type="button" data-purity="22K / 916">22K / 916</button>
+            <button type="button" data-purity="18K / 750">18K / 750</button>
+            <button type="button" data-purity="14K / 585">14K / 585</button>
+            <button type="button" data-purity="9K / 375">9K / 375</button>
             <button type="button" data-purity="999">999</button>
             <button type="button" data-purity="925">925</button>
-            <button type="button" data-purity="916">916</button>
-            <button type="button" data-purity="750">750</button>
-            <button type="button" data-purity="Enter Later">Enter Later</button>
+            <button type="button" data-purity="915">915</button>
+            <button type="button" data-purity="900">900</button>
+            <button type="button" data-purity="800">800</button>
+            <button type="button" data-purity="700">700</button>
+            <button type="button" data-purity="600">600</button>
+            <button type="button" data-purity="500">500</button>
+          </div>
+          <div class="purity-keypad" id="teachingPurityKeypad">
+            <output id="teachingPurityDisplay">--</output>
+            <button type="button" data-teaching-purity-key="1">1</button>
+            <button type="button" data-teaching-purity-key="2">2</button>
+            <button type="button" data-teaching-purity-key="3">3</button>
+            <button type="button" data-teaching-purity-key="4">4</button>
+            <button type="button" data-teaching-purity-key="5">5</button>
+            <button type="button" data-teaching-purity-key="6">6</button>
+            <button type="button" data-teaching-purity-key="7">7</button>
+            <button type="button" data-teaching-purity-key="8">8</button>
+            <button type="button" data-teaching-purity-key="9">9</button>
+            <button type="button" data-teaching-purity-key="0">0</button>
+            <button type="button" data-teaching-purity-key="clear">Clear</button>
           </div>
         </div>
         <div class="button-row">
