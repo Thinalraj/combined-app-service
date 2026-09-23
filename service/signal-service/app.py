@@ -1,0 +1,462 @@
+"""ADP2230 sine sweep GUI.
+
+Run with ``python3 app.py --simulate`` without WaveForms installed.
+For hardware, install Digilent WaveForms SDK and its WF_SDK Python package,
+then run ``python3 app.py``.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import threading
+import time
+import tkinter as tk
+from tkinter import ttk
+from pathlib import Path
+
+CALIBRATION_FILE = Path(__file__).with_name("calibration_data.json")
+
+
+def configure_waveforms_sdk() -> None:
+    """Make the WaveForms SDK package and native library importable."""
+    import os
+    import sys
+
+    sdk_root = os.environ.get("WAVEFORMS_SDK_ROOT")
+    if not sdk_root and os.name == "nt":
+        sdk_root = r"C:\Program Files\Digilent\WaveFormsSDK"
+    if not sdk_root:
+        return
+
+    sdk_python = os.path.join(sdk_root, "samples", "py")
+    sdk_lib = os.path.join(sdk_root, "lib", "x64")
+    if not os.path.isdir(sdk_lib):
+        sdk_lib = os.path.join(sdk_root, "lib")
+    if sdk_python not in sys.path:
+        sys.path.insert(0, sdk_python)
+    if os.path.isdir(sdk_lib):
+        if hasattr(os, "add_dll_directory"):
+            os.add_dll_directory(sdk_lib)
+        else:
+            os.environ["PATH"] = sdk_lib + os.pathsep + os.environ.get("PATH", "")
+
+
+def measure(samples: list[float], sample_rate: float) -> dict[str, float]:
+    if not samples:
+        raise ValueError("No samples acquired")
+    dc = sum(samples) / len(samples)
+    ac = [v - dc for v in samples]
+    rms = math.sqrt(sum(v * v for v in ac) / len(ac))
+    p2p = max(samples) - min(samples)
+    # Match AnalogIn_Frequency.py: estimate frequency from the FFT, then use
+    # parabolic interpolation around the strongest bin.
+    import numpy as np
+    spectrum = np.abs(np.fft.rfft(np.asarray(ac, dtype=float)))
+    spectrum[0] = 0.0
+    peak_bin = int(np.argmax(spectrum))
+    frequency = peak_bin * sample_rate / len(ac)
+    if 0 < peak_bin < len(spectrum) - 1:
+        left, center, right = spectrum[peak_bin - 1:peak_bin + 2]
+        denominator = left - 2 * center + right
+        if denominator:
+            correction = 0.5 * (left - right) / denominator
+            frequency = (peak_bin + correction) * sample_rate / len(ac)
+    return {
+        "ac_rms_v": rms,
+        "peak_amplitude_v": max(abs(v) for v in ac),
+        "peak_to_peak_v": p2p,
+        "frequency_hz": frequency,
+        "dc_v": dc,
+    }
+
+
+class SimulatedADP2230:
+    def configure(self, frequency_hz: float, amplitude_v: float) -> None:
+        self.frequency_hz, self.amplitude_v = frequency_hz, amplitude_v
+
+    def acquire(self, duration_s: float = 0.1, sample_rate: float = 1_000_000) -> tuple[list[float], float]:
+        count = min(int(duration_s * sample_rate), 100_000)
+        actual_rate = count / duration_s
+        samples = [self.amplitude_v * math.sin(2 * math.pi * self.frequency_hz * i / actual_rate)
+                   for i in range(count)]
+        return samples, actual_rate
+
+    def start_sine(self, frequency_hz: float, amplitude_v: float) -> None:
+        self.configure(frequency_hz, amplitude_v)
+
+    def stop_sine(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+class WaveFormsADP2230:
+    def __init__(self) -> None:
+        configure_waveforms_sdk()
+        from ctypes import byref, c_double, c_int, cdll, create_string_buffer
+        from dwfconstants import DwfStateDone, hdwfNone
+        self.c_double, self.c_int, self.byref = c_double, c_int, byref
+        self.DwfStateDone, self.hdwfNone = DwfStateDone, hdwfNone
+        self.dwf = cdll.dwf
+        version = create_string_buffer(16)
+        self.dwf.FDwfGetVersion(version)
+        devices = c_int()
+        self.dwf.FDwfEnum(c_int(0), byref(devices))
+        if devices.value == 0:
+            raise RuntimeError("No WaveForms device detected")
+        self.hdwf = c_int()
+        self.dwf.FDwfDeviceOpen(c_int(0), byref(self.hdwf))
+        if self.hdwf.value == hdwfNone.value:
+            raise RuntimeError("Could not open the WaveForms device")
+        self.dwf.FDwfDeviceAutoConfigureSet(self.hdwf, c_int(0))
+        # Match the verified AnalogOutIn.py acquisition setup.
+        self.dwf.FDwfAnalogInFrequencySet(self.hdwf, c_double(100_000))
+        self.dwf.FDwfAnalogInChannelRangeSet(self.hdwf, c_int(-1), c_double(4))
+        self.dwf.FDwfAnalogInBufferSizeSet(self.hdwf, c_int(1000))
+        self.dwf.FDwfAnalogInConfigure(self.hdwf, c_int(1), c_int(0))
+        time.sleep(2)  # allow input offset to stabilize after opening
+
+    def configure(self, frequency_hz: float, amplitude_v: float) -> None:
+        self.dwf.FDwfAnalogOutEnableSet(self.hdwf, self.c_int(0), self.c_int(1))
+        self.dwf.FDwfAnalogOutFunctionSet(self.hdwf, self.c_int(0), self.c_int(1))
+        self.dwf.FDwfAnalogOutFrequencySet(self.hdwf, self.c_int(0), self.c_double(frequency_hz))
+        self.dwf.FDwfAnalogOutAmplitudeSet(self.hdwf, self.c_int(0), self.c_double(amplitude_v))
+        self.dwf.FDwfAnalogOutConfigure(self.hdwf, self.c_int(0), self.c_int(1))
+
+    def start_sine(self, frequency_hz: float, amplitude_v: float) -> None:
+        self.configure(frequency_hz, amplitude_v)
+
+    def acquire(self, duration_s: float = 0.01, sample_rate: float = 100_000) -> tuple[list[float], float]:
+        from ctypes import c_double
+        count = 1000
+        self.dwf.FDwfAnalogInConfigure(self.hdwf, self.c_int(1), self.c_int(1))
+        state = self.c_int()
+        while True:
+            self.dwf.FDwfAnalogInStatus(self.hdwf, self.c_int(1), self.byref(state))
+            if state.value == self.DwfStateDone.value:
+                break
+            time.sleep(0.01)
+        buffer = (c_double * count)()
+        self.dwf.FDwfAnalogInStatusData(self.hdwf, self.c_int(0), buffer, count)
+        actual_rate = self.c_double()
+        self.dwf.FDwfAnalogInFrequencyGet(self.hdwf, self.byref(actual_rate))
+        return list(buffer), actual_rate.value
+
+    def close(self) -> None:
+        self.dwf.FDwfAnalogOutReset(self.hdwf, self.c_int(0))
+        self.dwf.FDwfDeviceCloseAll()
+
+    def stop_sine(self) -> None:
+        # Reset output and close the complete SDK session. The next start
+        # creates a fresh device handle instead of reusing stale state.
+        self.close()
+
+
+class App:
+    frequencies = (8_000, 10_000, 15_000, 20_000)
+
+    def __init__(self, root: tk.Tk, simulate: bool) -> None:
+        self.root, self.simulate = root, simulate
+        root.title("ADP2230 Signal Measurement")
+        self.notebook = ttk.Notebook(root)
+        self.notebook.pack(fill="both", expand=True, padx=6, pady=6)
+        main_tab = ttk.Frame(self.notebook)
+        calibration_tab = ttk.Frame(self.notebook)
+        metal_tab = ttk.Frame(self.notebook)
+        self.notebook.add(main_tab, text="Measurement")
+        self.notebook.add(calibration_tab, text="Air calibration")
+        self.notebook.add(metal_tab, text="Metal delta")
+        root = main_tab
+        self.selected_frequency = 10_000
+        self.amplitude = tk.DoubleVar(value=1.0)
+        self.calibration = self.load_calibration()
+        frequency_controls = ttk.LabelFrame(root, text="Select frequency")
+        frequency_controls.pack(padx=16, pady=(12, 0))
+        for column, frequency in enumerate(self.frequencies):
+            ttk.Button(frequency_controls, text=f"{frequency // 1000} kHz",
+                       command=lambda f=frequency: self.select_frequency(f)).grid(
+                           row=0, column=column, padx=4, pady=4)
+        amplitude_controls = ttk.Frame(root)
+        amplitude_controls.pack(padx=16, pady=(8, 0))
+        ttk.Label(amplitude_controls, text="Amplitude (V peak, max 5 V):").grid(row=0, column=0, padx=4)
+        self.amplitude_input = ttk.Spinbox(amplitude_controls, from_=0.0, to=5.0,
+                                           increment=0.1, width=8, textvariable=self.amplitude)
+        self.amplitude_input.grid(row=0, column=1, padx=4)
+        controls = ttk.Frame(root)
+        controls.pack(padx=16, pady=12)
+        self.start = ttk.Button(controls, text="Start sine wave", command=self.start_sine)
+        self.start.grid(row=0, column=0, padx=4)
+        self.stop = ttk.Button(controls, text="Stop sine wave", command=self.stop_sine, state="disabled")
+        self.stop.grid(row=0, column=1, padx=4)
+        self.acquire_button = ttk.Button(controls, text="Acquire measurement", command=self.start_measurement)
+        self.acquire_button.grid(row=0, column=2, padx=4)
+        self.sample_button = ttk.Button(controls, text="Sample measurement", command=self.start_sampling)
+        self.sample_button.grid(row=0, column=3, padx=4)
+        ttk.Button(controls, text="Save air calibration", command=self.calibrate_air).grid(row=0, column=4, padx=4)
+        sample_controls = ttk.Frame(root)
+        sample_controls.pack(padx=16, pady=(8, 0))
+        ttk.Label(sample_controls, text="N samples:").grid(row=0, column=0, padx=4)
+        self.sample_count = tk.IntVar(value=10)
+        ttk.Spinbox(sample_controls, from_=1, to=1000, width=7, textvariable=self.sample_count).grid(row=0, column=1)
+        ttk.Label(sample_controls, text="Interval (s):").grid(row=0, column=2, padx=(12, 4))
+        self.sample_interval = tk.DoubleVar(value=0.5)
+        ttk.Spinbox(sample_controls, from_=0.0, to=3600.0, increment=0.1, width=7,
+                    textvariable=self.sample_interval).grid(row=0, column=3)
+        self.status = ttk.Label(root, text="Ready")
+        self.status.pack(padx=16)
+        self.table = ttk.Treeview(root, columns=("set", "rms", "peak", "p2p", "freq"), show="headings")
+        for col, title in zip(self.table["columns"], ("Set Hz", "AC RMS V", "Peak V", "Vpp", "Measured Hz")):
+            self.table.heading(col, text=title)
+        self.table.pack(padx=16, pady=12)
+        self.stats_table = ttk.Treeview(root, columns=("metric", "mean", "min", "max", "std", "range"), show="headings")
+        for col, title in zip(self.stats_table["columns"], ("Metric", "Mean", "Min", "Max", "Std dev", "Mean ± std")):
+            self.stats_table.heading(col, text=title)
+        self.stats_table.pack(padx=16, pady=(0, 12))
+        self.instrument = None
+        self.instrument_lock = threading.Lock()
+        self.sine_running = False
+        self.root.protocol("WM_DELETE_WINDOW", self.close_application)
+        self.build_calibration_tab(calibration_tab, metal_tab)
+
+    def build_calibration_tab(self, tab: ttk.Frame, metal_tab: ttk.Frame) -> None:
+        ttk.Label(tab, text="Calibrate air for the selected frequency.").pack(pady=8)
+        buttons = ttk.Frame(tab)
+        buttons.pack(pady=4)
+        ttk.Button(buttons, text="Calibrate air", command=self.calibrate_air).grid(row=0, column=0, padx=5)
+        ttk.Button(buttons, text="Save air calibration", command=self.save_air_calibration).grid(row=0, column=1, padx=5)
+        self.calibration_status = ttk.Label(tab, text="No calibration loaded")
+        self.calibration_status.pack(pady=5)
+        self.calibration_table = ttk.Treeview(tab, columns=("frequency", "air", "metal", "delta"), show="headings")
+        for col, title in zip(self.calibration_table["columns"], ("Frequency", "Air baseline", "Metal", "Delta")):
+            self.calibration_table.heading(col, text=title)
+        self.calibration_table.pack(fill="both", expand=True, padx=10, pady=8)
+        ttk.Label(metal_tab, text="Select a frequency in Measurement, then test the metal target.").pack(pady=8)
+        ttk.Button(metal_tab, text="Test metal", command=self.test_metal).pack(pady=6)
+        self.metal_status = ttk.Label(metal_tab, text="No metal test yet")
+        self.metal_status.pack(pady=5)
+        self.metal_table = ttk.Treeview(metal_tab, columns=("frequency", "air", "metal", "delta"), show="headings")
+        for col, title in zip(self.metal_table["columns"], ("Frequency", "Air baseline", "Metal", "Delta")):
+            self.metal_table.heading(col, text=title)
+        self.metal_table.pack(fill="both", expand=True, padx=10, pady=8)
+        self.refresh_calibration_table()
+
+    def load_calibration(self) -> dict:
+        try:
+            return json.loads(CALIBRATION_FILE.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def save_calibration(self) -> None:
+        CALIBRATION_FILE.write_text(json.dumps(self.calibration, indent=2), encoding="utf-8")
+
+    def save_air_calibration(self) -> None:
+        try:
+            air_count = sum(1 for row in self.calibration.values() if row.get("air"))
+            if air_count == 0:
+                raise ValueError("No air calibration values to save")
+            self.save_calibration()
+            self.calibration_status.config(text=f"Saved {air_count} air calibration value(s) to {CALIBRATION_FILE.name}")
+        except Exception as exc:
+            self.calibration_status.config(text=f"Save error: {exc}")
+
+    def refresh_calibration_table(self) -> None:
+        if not hasattr(self, "calibration_table"):
+            return
+        for item in self.calibration_table.get_children():
+            self.calibration_table.delete(item)
+        for frequency in self.frequencies:
+            row = self.calibration.get(str(frequency), {})
+            air = row.get("air", {})
+            metal = row.get("metal", {})
+            def value(data, key):
+                return "" if key not in data else f"{data[key]:.6g}"
+            self.calibration_table.insert("", "end", values=(f"{frequency / 1000:g} kHz",
+                f"RMS {value(air, 'ac_rms_v')} / Vpp {value(air, 'peak_to_peak_v')}",
+                f"RMS {value(metal, 'ac_rms_v')} / Vpp {value(metal, 'peak_to_peak_v')}",
+                f"RMS {value(row.get('delta', {}), 'ac_rms_v')} / Vpp {value(row.get('delta', {}), 'peak_to_peak_v')}"))
+            if hasattr(self, "metal_table"):
+                self.metal_table.insert("", "end", values=(f"{frequency / 1000:g} kHz",
+                    f"RMS {value(air, 'ac_rms_v')} / Vpp {value(air, 'peak_to_peak_v')}",
+                    f"RMS {value(metal, 'ac_rms_v')} / Vpp {value(metal, 'peak_to_peak_v')}",
+                    f"RMS {value(row.get('delta', {}), 'ac_rms_v')} / Vpp {value(row.get('delta', {}), 'peak_to_peak_v')}"))
+
+    def calibration_measurement(self) -> dict:
+        instrument = self.get_instrument()
+        if not self.sine_running:
+            instrument.start_sine(self.selected_frequency, self.selected_amplitude())
+            self.sine_running = True
+        with self.instrument_lock:
+            samples, rate = instrument.acquire(0.01, self.selected_frequency * 10)
+        return measure(samples, rate)
+
+    def calibrate_air(self) -> None:
+        def worker():
+            try:
+                result = self.calibration_measurement()
+                key = str(self.selected_frequency)
+                self.calibration.setdefault(key, {})["air"] = result
+                self.save_calibration()
+                self.root.after(0, self.refresh_calibration_table)
+                self.root.after(0, self.calibration_status.config, {"text": f"Air calibration saved for {self.selected_frequency / 1000:g} kHz"})
+            except Exception as exc:
+                self.root.after(0, self.calibration_status.config, {"text": f"Calibration error: {exc}"})
+        threading.Thread(target=worker, daemon=True).start()
+
+    def test_metal(self) -> None:
+        def worker():
+            try:
+                result = self.calibration_measurement()
+                key = str(self.selected_frequency)
+                air = self.calibration.get(key, {}).get("air")
+                if not air:
+                    raise ValueError("Calibrate air at this frequency first")
+                delta = {name: result[name] - air[name] for name in ("ac_rms_v", "peak_amplitude_v", "peak_to_peak_v", "frequency_hz", "dc_v")}
+                self.calibration.setdefault(key, {})["metal"] = result
+                self.calibration[key]["delta"] = delta
+                self.save_calibration()
+                self.root.after(0, self.refresh_calibration_table)
+                self.root.after(0, self.calibration_status.config, {"text": f"Metal delta saved for {self.selected_frequency / 1000:g} kHz"})
+                self.root.after(0, self.metal_status.config, {"text": f"Metal delta saved for {self.selected_frequency / 1000:g} kHz"})
+            except Exception as exc:
+                self.root.after(0, self.calibration_status.config, {"text": f"Metal test error: {exc}"})
+        threading.Thread(target=worker, daemon=True).start()
+
+    def select_frequency(self, frequency: int) -> None:
+        if self.sine_running:
+            self.status.config(text="Stop the sine wave before selecting a new frequency")
+            return
+        self.selected_frequency = frequency
+        self.status.config(text=f"Selected {frequency / 1000:g} kHz")
+
+    def selected_amplitude(self) -> float:
+        try:
+            amplitude = float(self.amplitude.get())
+        except (tk.TclError, ValueError):
+            raise ValueError("Amplitude must be a number from 0 to 5 V")
+        if not 0.0 <= amplitude <= 5.0:
+            raise ValueError("Amplitude must be between 0 and 5 V")
+        return amplitude
+
+    def get_instrument(self):
+        if self.instrument is None:
+            self.instrument = SimulatedADP2230() if self.simulate else WaveFormsADP2230()
+        return self.instrument
+
+    def start_sine(self) -> None:
+        def worker() -> None:
+            try:
+                amplitude = self.selected_amplitude()
+                with self.instrument_lock:
+                    self.get_instrument().start_sine(self.selected_frequency, amplitude)
+                self.sine_running = True
+                self.root.after(0, self.status.config, {"text": f"{self.selected_frequency / 1000:g} kHz sine running ({amplitude:g} V peak)"})
+                self.root.after(0, lambda: self.stop.config(state="normal"))
+            except Exception as exc:
+                self.root.after(0, self.status.config, {"text": f"Error: {exc}"})
+        threading.Thread(target=worker, daemon=True).start()
+
+    def stop_sine(self) -> None:
+        def worker() -> None:
+            try:
+                with self.instrument_lock:
+                    if self.instrument:
+                        self.instrument.stop_sine()
+                        self.instrument = None
+                self.sine_running = False
+                self.root.after(0, self.status.config, {"text": "Sine wave stopped"})
+                self.root.after(0, lambda: self.stop.config(state="disabled"))
+            except Exception as exc:
+                self.root.after(0, self.status.config, {"text": f"Error: {exc}"})
+        threading.Thread(target=worker, daemon=True).start()
+
+    def close_application(self) -> None:
+        """Stop output and release the ADP2230 before exiting the GUI."""
+        def worker() -> None:
+            with self.instrument_lock:
+                if self.instrument:
+                    self.instrument.close()
+                    self.instrument = None
+                self.sine_running = False
+            self.root.after(0, self.root.destroy)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def start_measurement(self) -> None:
+        self.start.config(state="disabled")
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def start_sampling(self) -> None:
+        self.sample_button.config(state="disabled")
+        threading.Thread(target=self.run_sampling, daemon=True).start()
+
+    def run_sampling(self) -> None:
+        try:
+            count = int(self.sample_count.get())
+            interval = float(self.sample_interval.get())
+            if count < 1 or interval < 0:
+                raise ValueError("N must be at least 1 and interval cannot be negative")
+            instrument = self.get_instrument()
+            if not self.sine_running:
+                amplitude = self.selected_amplitude()
+                with self.instrument_lock:
+                    instrument.start_sine(self.selected_frequency, amplitude)
+                self.sine_running = True
+            results = []
+            for index in range(count):
+                with self.instrument_lock:
+                    samples, rate = instrument.acquire(0.01, self.selected_frequency * 10)
+                results.append(measure(samples, rate))
+                self.root.after(0, self.status.config, {"text": f"Sample {index + 1}/{count}"})
+                if index + 1 < count:
+                    time.sleep(interval)
+            self.root.after(0, self.show_statistics, results)
+            self.root.after(0, self.status.config, {"text": "Sampling complete"})
+        except Exception as exc:
+            self.root.after(0, self.status.config, {"text": f"Error: {exc}"})
+        finally:
+            self.root.after(0, lambda: self.sample_button.config(state="normal"))
+
+    def show_statistics(self, results: list[dict[str, float]]) -> None:
+        for item in self.stats_table.get_children():
+            self.stats_table.delete(item)
+        metrics = (("AC RMS (V)", "ac_rms_v"), ("Peak amplitude (V)", "peak_amplitude_v"),
+                   ("Peak-to-peak (V)", "peak_to_peak_v"), ("Frequency (Hz)", "frequency_hz"))
+        for label, key in metrics:
+            values = [row[key] for row in results]
+            mean = sum(values) / len(values)
+            variance = sum((value - mean) ** 2 for value in values) / len(values)
+            std = math.sqrt(variance)
+            self.stats_table.insert("", "end", values=(label, f"{mean:.6g}", f"{min(values):.6g}",
+                f"{max(values):.6g}", f"{std:.6g}", f"{mean:.6g} ± {std:.6g}"))
+
+    def run(self) -> None:
+        instrument = self.get_instrument()
+        try:
+            if not self.sine_running:
+                amplitude = self.selected_amplitude()
+                with self.instrument_lock:
+                    instrument.start_sine(self.selected_frequency, amplitude)
+                self.sine_running = True
+            with self.instrument_lock:
+                samples, rate = instrument.acquire(0.01, self.selected_frequency * 10)
+            result = measure(samples, rate)
+            self.root.after(0, self.add_result, self.selected_frequency, result)
+            self.root.after(0, self.status.config, {"text": "Complete"})
+        except Exception as exc:
+            self.root.after(0, self.status.config, {"text": f"Error: {exc}"})
+        finally:
+            self.root.after(0, lambda: self.start.config(state="normal"))
+
+    def add_result(self, set_frequency: float, result: dict[str, float]) -> None:
+        self.table.insert("", "end", values=(f"{set_frequency:.0f}", f"{result['ac_rms_v']:.4f}",
+            f"{result['peak_amplitude_v']:.4f}", f"{result['peak_to_peak_v']:.4f}", f"{result['frequency_hz']:.1f}"))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--simulate", action="store_true", help="Run without an ADP2230")
+    args = parser.parse_args()
+    root = tk.Tk()
+    App(root, args.simulate)
+    root.mainloop()
