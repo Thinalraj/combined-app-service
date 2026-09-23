@@ -34,4 +34,7 @@ launch_chrome.bat 192.168.1.50
 The hamburger menu includes an Exit button and asks for confirmation before
 attempting to close the kiosk window.
 
+The Chrome launcher uses a separate kiosk profile so an already-open personal
+Chrome session cannot consume and ignore the kiosk flags.
+
 The HMI is available at `http://127.0.0.1:8080`.

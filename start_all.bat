@@ -22,7 +22,7 @@ wt.exe -w 0 new-tab --title "Signal 8001" -d "%ROOT_DIR%service\signal-service" 
 timeout /t 5 /nobreak >nul
 
 echo Opening Chrome kiosk at %VIEW_URL%...
-start "" chrome --kiosk --start-fullscreen "%VIEW_URL%"
+call "%ROOT_DIR%launch_chrome.bat" "%TARGET_IP%"
 
 echo Application launched at %VIEW_URL%.
 exit /b 0
