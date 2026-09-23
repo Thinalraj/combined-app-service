@@ -1941,6 +1941,34 @@ async function refreshLoadCellReading() {
   }
 }
 
+async function readSingleLoadCell() {
+  const status = document.getElementById("loadCellStatus");
+  status.textContent = "Reading...";
+  try {
+    const response = await fetch("/api/load-cell/latest", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Unable to read load cell");
+    renderLoadCellReading(payload);
+    document.getElementById("loadCellRaw").textContent = `Single reading: ${payload.raw_response || "--"}`;
+  } catch (error) {
+    renderLoadCellReading({ ok: false, error: error.message || "Unable to read load cell" });
+  }
+}
+
+async function readAverageLoadCell() {
+  const status = document.getElementById("loadCellStatus");
+  status.textContent = "Averaging...";
+  try {
+    const response = await fetch("/api/load-cell/average?samples=10", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Unable to average load cell");
+    renderLoadCellReading({ ...payload, raw_response: `Average of ${payload.sample_count || 10} samples` });
+    document.getElementById("loadCellRaw").textContent = `Average: ${payload.weight_g ?? "--"} g | Std: ${payload.std_g ?? "--"} g`;
+  } catch (error) {
+    renderLoadCellReading({ ok: false, error: error.message || "Unable to average load cell" });
+  }
+}
+
 async function zeroLoadCell() {
   const status = document.getElementById("loadCellStatus");
   status.textContent = "Zeroing";
@@ -2157,10 +2185,8 @@ function toggleLoadCellHold() {
 
 async function startLoadCellMonitor() {
   state.loadCellHeld = false;
-  updateLoadCellHoldButton();
-  await refreshLoadCellReading();
   clearInterval(state.loadCellTimer);
-  state.loadCellTimer = setInterval(refreshLoadCellReading, 2000);
+  await readSingleLoadCell();
 }
 
 document.getElementById("startButton").addEventListener("click", () => {
@@ -2260,8 +2286,9 @@ document.getElementById("liveDeltaTabButton").addEventListener("click", () => {
 document.getElementById("daqSettingsBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("daqSettingsDoneButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("loadCellBackButton").addEventListener("click", () => showScreen("engineering"));
-document.getElementById("loadCellHoldButton").addEventListener("click", toggleLoadCellHold);
-document.getElementById("loadCellZeroButton").addEventListener("click", zeroLoadCell);
+document.getElementById("loadCellSingleButton").addEventListener("click", readSingleLoadCell);
+document.getElementById("loadCellAverageButton").addEventListener("click", readAverageLoadCell);
+document.getElementById("loadCellTareButton").addEventListener("click", zeroLoadCell);
 document.getElementById("detectorSettingsCancelButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("detectorSettingsSaveButton").addEventListener("click", saveDetectorSettings);
 document.getElementById("frequencySlot1Button").addEventListener("click", () => selectFrequencySlot(1));
