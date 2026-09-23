@@ -2112,6 +2112,11 @@ output {
  * available height without changing the service/API contract.
  */
 @media (min-width: 1200px) and (min-height: 600px) {
+  /* Effective Chromium viewport: 1280x720 at Windows 150% display scale. */
+  button {
+    min-height: 42px;
+  }
+
   .app-shell {
     height: 480px;
     max-height: none;
@@ -2119,5 +2124,64 @@ output {
     min-height: 480px;
     width: 800px;
     zoom: 1.5;
+  }
+
+  .top-bar {
+    height: 60px;
+    padding-bottom: 8px;
+  }
+
+  .screen {
+    height: 406px;
+    padding-top: 10px;
+  }
+
+  .button-row {
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .button-row button,
+  .menu-panel button {
+    min-height: 42px;
+  }
+
+  .menu-button {
+    height: 44px;
+    min-height: 44px;
+    width: 54px;
+  }
+
+  .weight-layout,
+  .password-layout {
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) 270px;
+  }
+
+  .keypad {
+    gap: 6px;
+    min-width: 270px;
+    width: 270px;
+  }
+
+  .keypad button,
+  .shape-option,
+  .engineering-actions button {
+    font-size: 18px;
+    min-height: 42px;
+  }
+
+  .engineering-actions {
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .engineering-actions button {
+    font-size: 11px;
+    min-height: 52px;
+  }
+
+  #teachingScreen .button-row button {
+    min-height: 46px;
   }
 }
