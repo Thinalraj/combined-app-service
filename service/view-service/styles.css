@@ -1300,6 +1300,52 @@ output {
   min-height: 48px;
 }
 
+.dimension-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dimension-tabs .mode-toggle {
+  margin-top: 0;
+  min-height: 48px;
+}
+
+.teaching-dimension-panel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.teaching-dimension-panel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.detected-image-panel {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  min-height: 0;
+  padding: 12px;
+}
+
+.teaching-detected-image {
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: min(52vh, 360px);
+  max-width: 100%;
+  object-fit: contain;
+}
+
 .live-view-panels {
   flex: 1;
   min-height: 0;

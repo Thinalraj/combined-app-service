@@ -219,6 +219,30 @@ function showScreen(name) {
   if (name !== "weight" && name !== "teachingWeight") {
     stopWeightProgressTimer();
   }
+
+  if (name === "teachingDimension") {
+    loadTeachingDetectedImage();
+  }
+}
+
+function selectTeachingDimensionPanel(panel) {
+  const dimensionsActive = panel !== "image";
+  document.getElementById("teachingDimensionsPanel").classList.toggle("active", dimensionsActive);
+  document.getElementById("teachingImagePanel").classList.toggle("active", !dimensionsActive);
+  document.getElementById("teachingDimensionsTabButton").classList.toggle("active", dimensionsActive);
+  document.getElementById("teachingImageTabButton").classList.toggle("active", !dimensionsActive);
+  document.getElementById("teachingDimensionsTabButton").setAttribute("aria-selected", String(dimensionsActive));
+  document.getElementById("teachingImageTabButton").setAttribute("aria-selected", String(!dimensionsActive));
+  if (!dimensionsActive) loadTeachingDetectedImage();
+}
+
+function loadTeachingDetectedImage() {
+  const image = document.getElementById("teachingDetectedImage");
+  const status = document.getElementById("teachingDetectedImageStatus");
+  status.textContent = "Loading detected image...";
+  image.onload = () => { status.textContent = "Latest detected item image"; };
+  image.onerror = () => { status.textContent = "No detected image available yet. Capture or detect an image first."; };
+  image.src = `/api/vision/image/detected?t=${Date.now()}`;
 }
 
 function renderLiveViewTab() {
@@ -2307,6 +2331,9 @@ document.getElementById("teachingDimensionNextButton").addEventListener("click",
   if (!teachingDimensionsAreValid()) return;
   startTeachingRecord();
 });
+document.getElementById("teachingDimensionsTabButton").addEventListener("click", () => selectTeachingDimensionPanel("dimensions"));
+document.getElementById("teachingImageTabButton").addEventListener("click", () => selectTeachingDimensionPanel("image"));
+document.getElementById("teachingRefreshImageButton").addEventListener("click", loadTeachingDetectedImage);
 document.getElementById("teachingRemoveBackButton").addEventListener("click", () => showScreen("teaching"));
 document.getElementById("teachingRemoveNextButton").addEventListener("click", () => showScreen("teachingSaved"));
 document.getElementById("teachingSavedAgainButton").addEventListener("click", () => {

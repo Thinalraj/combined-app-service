@@ -815,6 +815,11 @@
       </section>
 
       <section class="screen" id="teachingDimensionScreen">
+        <div class="dimension-tabs" role="tablist" aria-label="Teaching sample details">
+          <button class="mode-toggle active" id="teachingDimensionsTabButton" type="button" role="tab" aria-selected="true">Dimensions</button>
+          <button class="mode-toggle" id="teachingImageTabButton" type="button" role="tab" aria-selected="false">Detected Image</button>
+        </div>
+        <div class="teaching-dimension-panel active" id="teachingDimensionsPanel">
         <div class="weight-layout">
           <div class="value-panel dimension-panel">
             <p class="label">Sample Dimensions</p>
@@ -853,6 +858,15 @@
             <button type="button" data-teaching-dimension-key=".">.</button>
             <button type="button" data-teaching-dimension-key="0">0</button>
             <button type="button" data-teaching-dimension-key="clear">Clear</button>
+          </div>
+        </div>
+        </div>
+        <div class="teaching-dimension-panel" id="teachingImagePanel">
+          <div class="detected-image-panel">
+            <p class="label">Detected Item</p>
+            <img id="teachingDetectedImage" class="teaching-detected-image" alt="Detected teaching sample">
+            <p id="teachingDetectedImageStatus" class="muted-copy">Loading detected image...</p>
+            <button class="secondary" id="teachingRefreshImageButton" type="button">Refresh Image</button>
           </div>
         </div>
         <div class="button-row">
