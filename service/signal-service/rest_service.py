@@ -1,181 +1,874 @@
-"""REST interface for the ADP2230 multi-frequency measurement service."""
+"""
+FastAPI backend for Digilent ADP2230
+=====================================
+
+Endpoints
+---------
+POST /api/start
+    Start sine wave.
+    JSON:
+    {
+        "frequency": 10000,
+        "amplitude": 1.0
+    }
+
+POST /api/stop
+    Stop sine wave and close ADP2230.
+
+GET /api/measurement
+    Get one measurement while sine wave is running.
+
+POST /api/sample
+    Get N measurements with interval T.
+    JSON:
+    {
+        "number_of_samples": 30,
+        "interval": 0.1
+    }
+
+Run:
+    python fast-api-signal.py
+
+Server:
+    http://127.0.0.1:8001
+
+Swagger:
+    http://127.0.0.1:8001/docs
+"""
+
 from __future__ import annotations
 
-import threading
+import math
+import os
+import sys
 import time
-from statistics import mean, pstdev
+import threading
 
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
+import numpy as np
+import uvicorn
 
-from app import SimulatedADP2230, WaveFormsADP2230, measure
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+WAVEFORMS_SDK_ROOT = r"C:\Program Files\Digilent\WaveFormsSDK"
+
+HOST = "127.0.0.1"
+PORT = 8001
+
+
+# ============================================================
+# FASTAPI
+# ============================================================
+
+app = FastAPI(
+    title="ADP2230 Signal API",
+    version="1.0.0",
+)
+
+
+# ============================================================
+# REQUEST MODELS
+# ============================================================
 
 class StartRequest(BaseModel):
-    frequency_hz: int = Field(10_000, ge=8_000, le=20_000)
-    amplitude_v: float = Field(1.0, ge=0.0, le=5.0)
+    frequency: float
+    amplitude: float
 
 
 class SampleRequest(BaseModel):
-    count: int = Field(10, ge=1, le=1000)
-    interval_s: float = Field(0.5, ge=0.0, le=3600.0)
+    number_of_samples: int
+    interval: float
 
 
-class Controller:
-    allowed_frequencies = {8_000, 10_000, 15_000, 20_000}
+# ============================================================
+# WAVEFORMS SDK SETUP
+# ============================================================
 
-    def __init__(self, simulate: bool = False):
-        self.simulate = simulate
-        self.lock = threading.Lock()
-        self.instrument = None
-        self.running = False
-        self.frequency_hz = None
-        self.amplitude_v = None
+def configure_waveforms_sdk():
 
-    def start(self, request: StartRequest):
-        if request.frequency_hz not in self.allowed_frequencies:
-            raise ValueError("frequency_hz must be 8000, 10000, 15000, or 20000")
-        with self.lock:
-            if self.instrument is None:
-                self.instrument = SimulatedADP2230() if self.simulate else WaveFormsADP2230()
-            self.instrument.start_sine(request.frequency_hz, request.amplitude_v)
-            self.running = True
-            self.frequency_hz = request.frequency_hz
-            self.amplitude_v = request.amplitude_v
-        return self.status()
+    sdk_root = os.environ.get(
+        "WAVEFORMS_SDK_ROOT",
+        WAVEFORMS_SDK_ROOT,
+    )
 
-    def stop(self):
-        with self.lock:
-            if self.instrument is not None:
-                self.instrument.stop_sine()
-                self.instrument = None
-            self.running = False
-            self.frequency_hz = None
-            self.amplitude_v = None
-        return self.status()
+    sdk_python = os.path.join(
+        sdk_root,
+        "samples",
+        "py",
+    )
+
+    sdk_lib = os.path.join(
+        sdk_root,
+        "lib",
+        "x64",
+    )
+
+    if not os.path.isdir(sdk_lib):
+        sdk_lib = os.path.join(
+            sdk_root,
+            "lib",
+        )
+
+    if sdk_python not in sys.path:
+        sys.path.insert(
+            0,
+            sdk_python,
+        )
+
+    if os.path.isdir(sdk_lib):
+
+        if hasattr(os, "add_dll_directory"):
+            os.add_dll_directory(
+                sdk_lib
+            )
+
+        os.environ["PATH"] = (
+            sdk_lib
+            + os.pathsep
+            + os.environ.get(
+                "PATH",
+                "",
+            )
+        )
+
+
+# ============================================================
+# SIGNAL PROCESSING
+# ============================================================
+
+def calculate_measurement(
+    samples: list[float],
+    sample_rate: float,
+) -> dict:
+
+    if not samples:
+        raise ValueError(
+            "No ADC samples acquired"
+        )
+
+    values = np.asarray(
+        samples,
+        dtype=float,
+    )
+
+    # --------------------------------------------------------
+    # DC component
+    # --------------------------------------------------------
+
+    dc = float(
+        np.mean(values)
+    )
+
+    # Remove DC
+    ac = values - dc
+
+    # --------------------------------------------------------
+    # AC RMS
+    # --------------------------------------------------------
+
+    rms = float(
+        np.sqrt(
+            np.mean(ac ** 2)
+        )
+    )
+
+    # --------------------------------------------------------
+    # Peak amplitude
+    # --------------------------------------------------------
+
+    peak = float(
+        np.max(
+            np.abs(ac)
+        )
+    )
+
+    # --------------------------------------------------------
+    # Peak-to-peak
+    # --------------------------------------------------------
+
+    p2p = float(
+        np.max(values)
+        - np.min(values)
+    )
+
+    # --------------------------------------------------------
+    # Frequency using FFT
+    # --------------------------------------------------------
+
+    spectrum = np.abs(
+        np.fft.rfft(ac)
+    )
+
+    spectrum[0] = 0.0
+
+    peak_bin = int(
+        np.argmax(spectrum)
+    )
+
+    frequency = (
+        peak_bin
+        * sample_rate
+        / len(ac)
+    )
+
+    # Parabolic interpolation
+    if 0 < peak_bin < len(spectrum) - 1:
+
+        left = spectrum[peak_bin - 1]
+        center = spectrum[peak_bin]
+        right = spectrum[peak_bin + 1]
+
+        denominator = (
+            left
+            - 2 * center
+            + right
+        )
+
+        if denominator != 0:
+
+            correction = (
+                0.5
+                * (left - right)
+                / denominator
+            )
+
+            frequency = (
+                (peak_bin + correction)
+                * sample_rate
+                / len(ac)
+            )
+
+    return {
+        "ac_rms_v": rms,
+        "peak_amplitude_v": peak,
+        "peak_to_peak_v": p2p,
+        "frequency_hz": float(frequency),
+        "dc_v": dc,
+    }
+
+
+# ============================================================
+# ADP2230 HARDWARE
+# ============================================================
+
+class WaveFormsADP2230:
+
+    def __init__(self):
+
+        configure_waveforms_sdk()
+
+        from ctypes import (
+            byref,
+            c_double,
+            c_int,
+            cdll,
+            create_string_buffer,
+        )
+
+        from dwfconstants import (
+            DwfStateDone,
+            hdwfNone,
+        )
+
+        self.c_double = c_double
+        self.c_int = c_int
+        self.byref = byref
+
+        self.DwfStateDone = DwfStateDone
+        self.hdwfNone = hdwfNone
+
+        self.dwf = cdll.dwf
+
+        # ----------------------------------------------------
+        # WaveForms version
+        # ----------------------------------------------------
+
+        version = create_string_buffer(16)
+
+        self.dwf.FDwfGetVersion(
+            version
+        )
+
+        self.version = version.value.decode(
+            errors="ignore"
+        )
+
+        # ----------------------------------------------------
+        # Detect device
+        # ----------------------------------------------------
+
+        devices = c_int()
+
+        self.dwf.FDwfEnum(
+            c_int(0),
+            byref(devices),
+        )
+
+        if devices.value == 0:
+            raise RuntimeError(
+                "No WaveForms device detected"
+            )
+
+        # ----------------------------------------------------
+        # Open first device
+        # ----------------------------------------------------
+
+        self.hdwf = c_int()
+
+        self.dwf.FDwfDeviceOpen(
+            c_int(0),
+            byref(self.hdwf),
+        )
+
+        if self.hdwf.value == hdwfNone.value:
+            raise RuntimeError(
+                "Could not open ADP2230"
+            )
+
+        # ----------------------------------------------------
+        # Disable automatic configuration
+        # ----------------------------------------------------
+
+        self.dwf.FDwfDeviceAutoConfigureSet(
+            self.hdwf,
+            c_int(0),
+        )
+
+        # ----------------------------------------------------
+        # Analog input configuration
+        #
+        # Same configuration as working example:
+        #
+        # 100 kHz
+        # +/- 4 V range
+        # 1000 samples
+        # ----------------------------------------------------
+
+        self.dwf.FDwfAnalogInFrequencySet(
+            self.hdwf,
+            c_double(100_000),
+        )
+
+        self.dwf.FDwfAnalogInChannelRangeSet(
+            self.hdwf,
+            c_int(-1),
+            c_double(4),
+        )
+
+        self.dwf.FDwfAnalogInBufferSizeSet(
+            self.hdwf,
+            c_int(1000),
+        )
+
+        self.dwf.FDwfAnalogInConfigure(
+            self.hdwf,
+            c_int(1),
+            c_int(0),
+        )
+
+        # Allow analog input to stabilize
+        time.sleep(2)
+
+    # ========================================================
+    # START SINE
+    # ========================================================
+
+    def start_sine(
+        self,
+        frequency: float,
+        amplitude: float,
+    ):
+
+        # Enable WaveGen channel 1
+        self.dwf.FDwfAnalogOutEnableSet(
+            self.hdwf,
+            self.c_int(0),
+            self.c_int(1),
+        )
+
+        # Function = sine
+        self.dwf.FDwfAnalogOutFunctionSet(
+            self.hdwf,
+            self.c_int(0),
+            self.c_int(1),
+        )
+
+        # Set frequency
+        self.dwf.FDwfAnalogOutFrequencySet(
+            self.hdwf,
+            self.c_int(0),
+            self.c_double(frequency),
+        )
+
+        # Set amplitude (V peak)
+        self.dwf.FDwfAnalogOutAmplitudeSet(
+            self.hdwf,
+            self.c_int(0),
+            self.c_double(amplitude),
+        )
+
+        # Start output
+        self.dwf.FDwfAnalogOutConfigure(
+            self.hdwf,
+            self.c_int(0),
+            self.c_int(1),
+        )
+
+    # ========================================================
+    # ACQUIRE
+    # ========================================================
 
     def acquire(self):
+
+        from ctypes import c_double
+
+        count = 1000
+
+        # Start fresh ADC acquisition
+        self.dwf.FDwfAnalogInConfigure(
+            self.hdwf,
+            self.c_int(1),
+            self.c_int(1),
+        )
+
+        state = self.c_int()
+
+        # Wait until acquisition is complete
+        while True:
+
+            self.dwf.FDwfAnalogInStatus(
+                self.hdwf,
+                self.c_int(1),
+                self.byref(state),
+            )
+
+            if (
+                state.value
+                == self.DwfStateDone.value
+            ):
+                break
+
+            time.sleep(0.01)
+
+        # ----------------------------------------------------
+        # Read Analog In Channel 1
+        # SDK index 0 = Channel 1
+        # ----------------------------------------------------
+
+        buffer = (
+            c_double * count
+        )()
+
+        self.dwf.FDwfAnalogInStatusData(
+            self.hdwf,
+            self.c_int(0),
+            buffer,
+            count,
+        )
+
+        # ----------------------------------------------------
+        # Actual ADC sample rate
+        # ----------------------------------------------------
+
+        actual_rate = self.c_double()
+
+        self.dwf.FDwfAnalogInFrequencyGet(
+            self.hdwf,
+            self.byref(actual_rate),
+        )
+
+        return (
+            list(buffer),
+            actual_rate.value,
+        )
+
+    # ========================================================
+    # STOP
+    # ========================================================
+
+    def stop_sine(self):
+
+        self.dwf.FDwfAnalogOutReset(
+            self.hdwf,
+            self.c_int(0),
+        )
+
+        self.dwf.FDwfDeviceCloseAll()
+
+
+# ============================================================
+# CONTROLLER
+# ============================================================
+
+class Controller:
+
+    def __init__(self):
+
+        self.instrument = None
+
+        self.lock = threading.Lock()
+
+        self.running = False
+
+        self.frequency = None
+        self.amplitude = None
+
+    # --------------------------------------------------------
+    # Start
+    # --------------------------------------------------------
+
+    def start(
+        self,
+        frequency: float,
+        amplitude: float,
+    ):
+
+        if frequency <= 0:
+            raise ValueError(
+                "Frequency must be greater than 0 Hz"
+            )
+
+        if not 0 <= amplitude <= 5:
+            raise ValueError(
+                "Amplitude must be between 0 and 5 V peak"
+            )
+
         with self.lock:
-            if not self.running or self.instrument is None:
-                raise RuntimeError("Start the sine wave before acquiring")
-            samples, rate = self.instrument.acquire(0.01, self.frequency_hz * 10)
-        result = measure(samples, rate)
-        result["sample_rate_hz"] = rate
-        result["sample_count"] = len(samples)
-        return result
 
-    def read_frequency(self, frequency_hz: int, amplitude_v: float = 1.0):
-        self.start(StartRequest(frequency_hz=frequency_hz, amplitude_v=amplitude_v))
-        try:
-            time.sleep(5.0)  # generator/input stabilization time
-            return self.acquire()
-        finally:
-            self.stop()
+            if self.running:
+                raise RuntimeError(
+                    "Signal is already running. "
+                    "Stop the signal before starting another frequency."
+                )
 
-    def average_frequency(self, frequency_hz: int, sample_size: int,
-                          interval_s: float, amplitude_v: float = 1.0):
-        self.start(StartRequest(frequency_hz=frequency_hz, amplitude_v=amplitude_v))
-        try:
-            time.sleep(5.0)  # stabilize before the first scope acquisition
-            readings = []
-            for index in range(sample_size):
-                readings.append(self.acquire())
-                if index + 1 < sample_size:
-                    time.sleep(interval_s)
-            output = {}
-            for key in ("ac_rms_v", "peak_amplitude_v", "peak_to_peak_v", "frequency_hz"):
-                values = [reading[key] for reading in readings]
-                avg = mean(values)
-                std = pstdev(values) if len(values) > 1 else 0.0
-                output[key] = {"mean": avg, "min": min(values), "max": max(values),
-                               "std_dev": std, "plus_minus": std}
-            return {"frequency_hz": frequency_hz, "amplitude_v": amplitude_v,
-                    "sample_size": sample_size, "interval_s": interval_s,
-                    "statistics": output}
-        finally:
-            self.stop()
+            self.instrument = (
+                WaveFormsADP2230()
+            )
 
-    def sample(self, request: SampleRequest):
-        readings = []
-        for index in range(request.count):
-            readings.append(self.acquire())
-            if index + 1 < request.count:
-                time.sleep(request.interval_s)
-        output = {}
-        for key in ("ac_rms_v", "peak_amplitude_v", "peak_to_peak_v", "frequency_hz"):
-            values = [reading[key] for reading in readings]
-            avg = mean(values)
-            std = pstdev(values) if len(values) > 1 else 0.0
-            output[key] = {"mean": avg, "min": min(values), "max": max(values),
-                           "std_dev": std, "plus_minus": std}
-        return {"count": len(readings), "frequency_hz": self.frequency_hz,
-                "amplitude_v": self.amplitude_v, "statistics": output}
+            self.instrument.start_sine(
+                frequency,
+                amplitude,
+            )
 
-    def status(self):
-        return {"running": self.running, "frequency_hz": self.frequency_hz,
-                "amplitude_v": self.amplitude_v, "simulate": self.simulate}
+            self.frequency = frequency
+            self.amplitude = amplitude
+
+            self.running = True
+
+        return {
+            "status": "running",
+            "frequency": frequency,
+            "amplitude": amplitude,
+        }
+
+    # --------------------------------------------------------
+    # Stop
+    # --------------------------------------------------------
+
+    def stop(self):
+
+        with self.lock:
+
+            if self.instrument is not None:
+
+                self.instrument.stop_sine()
+
+                self.instrument = None
+
+            self.running = False
+
+            old_frequency = self.frequency
+
+            self.frequency = None
+            self.amplitude = None
+
+        return {
+            "status": "stopped",
+            "frequency": old_frequency,
+        }
+
+    # --------------------------------------------------------
+    # Single measurement
+    # --------------------------------------------------------
+
+    def measurement(self):
+
+        if not self.running:
+            raise RuntimeError(
+                "Signal is not running. "
+                "Call /api/start first."
+            )
+
+        with self.lock:
+
+            samples, sample_rate = (
+                self.instrument.acquire()
+            )
+
+        result = calculate_measurement(
+            samples,
+            sample_rate,
+        )
+
+        return {
+            "frequency_set_hz": self.frequency,
+            "amplitude_set_v": self.amplitude,
+            "adc_sample_rate_hz": sample_rate,
+            "adc_points": len(samples),
+            **result,
+        }
+
+    # --------------------------------------------------------
+    # N measurements
+    # --------------------------------------------------------
+
+    def sample(
+        self,
+        number_of_samples: int,
+        interval: float,
+    ):
+
+        if not self.running:
+            raise RuntimeError(
+                "Signal is not running. "
+                "Call /api/start first."
+            )
+
+        if number_of_samples < 1:
+            raise ValueError(
+                "number_of_samples must be at least 1"
+            )
+
+        if number_of_samples > 1000:
+            raise ValueError(
+                "Maximum number_of_samples is 1000"
+            )
+
+        if interval < 0:
+            raise ValueError(
+                "Interval cannot be negative"
+            )
+
+        results = []
+
+        # ----------------------------------------------------
+        # Acquire N measurements
+        # ----------------------------------------------------
+
+        for index in range(
+            number_of_samples
+        ):
+
+            with self.lock:
+
+                samples, sample_rate = (
+                    self.instrument.acquire()
+                )
+
+            measurement = (
+                calculate_measurement(
+                    samples,
+                    sample_rate,
+                )
+            )
+
+            measurement[
+                "sample_number"
+            ] = index + 1
+
+            results.append(
+                measurement
+            )
+
+            # Wait between measurements
+            if (
+                index + 1
+                < number_of_samples
+            ):
+                time.sleep(interval)
+
+        # ----------------------------------------------------
+        # Statistics
+        # ----------------------------------------------------
+
+        statistics = {}
+
+        metrics = [
+            "ac_rms_v",
+            "peak_amplitude_v",
+            "peak_to_peak_v",
+            "frequency_hz",
+            "dc_v",
+        ]
+
+        for metric in metrics:
+
+            values = np.array(
+                [
+                    row[metric]
+                    for row in results
+                ],
+                dtype=float,
+            )
+
+            statistics[metric] = {
+                "mean": float(
+                    np.mean(values)
+                ),
+                "std": float(
+                    np.std(values)
+                ),
+                "min": float(
+                    np.min(values)
+                ),
+                "max": float(
+                    np.max(values)
+                ),
+            }
+
+        return {
+            "frequency_set_hz":
+                self.frequency,
+
+            "amplitude_set_v":
+                self.amplitude,
+
+            "number_of_samples":
+                number_of_samples,
+
+            "interval_s":
+                interval,
+
+            "measurements":
+                results,
+
+            "statistics":
+                statistics,
+        }
 
 
-def create_app(simulate: bool = False) -> FastAPI:
-    controller = Controller(simulate=simulate)
-    api = FastAPI(title="ADP2230 Signal Service", version="0.1.0")
+# ============================================================
+# CONTROLLER INSTANCE
+# ============================================================
 
-    @api.get("/status")
-    def status():
-        return controller.status()
-
-    @api.post("/sine/start")
-    def start(request: StartRequest):
-        try:
-            return controller.start(request)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @api.post("/sine/stop")
-    def stop():
-        try:
-            return controller.stop()
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    @api.post("/measurement")
-    def measurement():
-        try:
-            return controller.acquire()
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @api.get("/measurement/average")
-    def single_frequency_average(frequency_hz: int = Query(...),
-                                 sample_size: int = Query(..., ge=1, le=1000),
-                                 interval_s: float = Query(..., ge=0.0, le=3600.0),
-                                 amplitude_v: float = Query(1.0, ge=0.0, le=5.0)):
-        try:
-            return controller.average_frequency(frequency_hz, sample_size, interval_s, amplitude_v)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @api.get("/measurement/{frequency_hz}")
-    def single_frequency(frequency_hz: int,
-                         amplitude_v: float = Query(1.0, ge=0.0, le=5.0)):
-        try:
-            return controller.read_frequency(frequency_hz, amplitude_v)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @api.post("/measurements/sample")
-    def sample(request: SampleRequest):
-        try:
-            return controller.sample(request)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return api
+controller = Controller()
 
 
-app = create_app()
+# ============================================================
+# API
+# ============================================================
+
+@app.post("/api/start")
+def api_start(
+    request: StartRequest
+):
+
+    try:
+
+        return controller.start(
+            request.frequency,
+            request.amplitude,
+        )
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+@app.post("/api/stop")
+def api_stop():
+
+    try:
+
+        return controller.stop()
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+
+@app.get("/api/measurement")
+def api_measurement():
+
+    try:
+
+        return controller.measurement()
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+@app.post("/api/sample")
+def api_sample(
+    request: SampleRequest
+):
+
+    try:
+
+        return controller.sample(
+            request.number_of_samples,
+            request.interval,
+        )
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+# ============================================================
+# ROOT
+# ============================================================
+
+@app.get("/")
+def root():
+
+    return {
+        "service": "ADP2230 Signal API",
+        "status": "online",
+        "port": PORT,
+        "signal_running":
+            controller.running,
+    }
+
+
+# ============================================================
+# RUN
+# ============================================================
 
 if __name__ == "__main__":
-    import uvicorn
-    import sys
-    uvicorn.run(create_app("--simulate" in sys.argv), host="0.0.0.0", port=8001)
+
+    try:
+
+        uvicorn.run(
+            app,
+            host=HOST,
+            port=PORT,
+        )
+
+    finally:
+
+        if controller.instrument is not None:
+
+            try:
+                controller.stop()
+
+            except Exception:
+                pass

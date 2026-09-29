@@ -1,1 +1,354 @@
-[]
+[
+  {
+    "id": "T-214604",
+    "date": "27 Sep 2026",
+    "time": "21:46",
+    "material": "Silver",
+    "purity": "999",
+    "shape": "Coin",
+    "frequency_hz": 10.0,
+    "frequency_slot": 1,
+    "vision_measurement": {
+      "diameter_mm": null,
+      "estimated_depth_mm": 163.999996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 38.573,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "detected": true,
+        "estimated_depth_mm": 163.99999585701153,
+        "length_mm": 38.57315798993,
+        "surface_area_mm2": 1177.4483289686893,
+        "type": "Coin",
+        "width_mm": 39.532170302223186
+      },
+      "shape": "Coin",
+      "source": "vision_service",
+      "surface_area_mm2": 1177.448,
+      "timestamp": "27 Sep 2026 21:45:20",
+      "vision_type": "coin",
+      "width_mm": 39.532
+    },
+    "weight": "31.964 g",
+    "material_base": "Silver",
+    "purity_value": null,
+    "weight_g": 31.964,
+    "width_mm": 39.532,
+    "length_mm": 39.532,
+    "thickness_mm": 2.9,
+    "dimension_mode": "coin",
+    "dimension_labels": {
+      "width": "Diameter",
+      "length": "Diameter",
+      "thickness": "Thickness"
+    },
+    "sample_area_mm2": 1227.416,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.318938,
+    "calibration": {
+      "ch1_air": 0.519833,
+      "ch2_air": 0.950856,
+      "calibrated_at": "23 Jun 2026 14:41"
+    },
+    "measurement": {
+      "ch1_rms": 0.741755,
+      "ch2_rms": 0.786303,
+      "ch1_std": 0.0,
+      "ch2_std": 0.0,
+      "sample_count": 30
+    },
+    "raw_measurement": {
+      "ch1_rms_raw": 0.707107,
+      "ch2_rms_raw": 0.707107
+    },
+    "features": {
+      "delta_ch1": 0.221922,
+      "delta_ch2": -0.164553,
+      "delta_ch1_pct": 42.691,
+      "delta_ch2_pct": -17.306,
+      "raw_ratio": 0.943345,
+      "delta_ratio": -1.348635,
+      "delta_ch1_per_g": 0.006943,
+      "delta_ch2_per_g": -0.005148,
+      "abs_delta_ch2": 0.164553,
+      "noise_ch1": 0.0,
+      "noise_ch2": 0.0,
+      "sample_area_mm2": 1227.416,
+      "contact_area_ratio": 0.318938
+    },
+    "feature_version": 2,
+    "ch1_rms": "0.741755 V RMS",
+    "ch2_rms": "0.786303 V RMS",
+    "ch1_std": "0.000000 V RMS",
+    "ch2_std": "0.000000 V RMS",
+    "ch1_delta": 0.221922,
+    "ch2_delta": -0.164553,
+    "ch1_delta_pct": 42.691,
+    "ch2_delta_pct": -17.306,
+    "ratio": "0.943345",
+    "ch1_summary": {
+      "mean": 0.741755,
+      "std": 0.0,
+      "tolerance": 0.006,
+      "unit": "V RMS",
+      "sample_count": 2,
+      "last_device": "ch1",
+      "source": "signal_service"
+    },
+    "ch2_summary": {
+      "mean": 0.786303,
+      "std": 0.0,
+      "tolerance": 0.006,
+      "unit": "V RMS",
+      "sample_count": 2,
+      "last_device": "ch2",
+      "source": "signal_service_mirrored"
+    },
+    "calibration_used": "23 Jun 2026 14:41",
+    "acquisition_mode": "signal_service",
+    "daq_correction": {
+      "enabled": true,
+      "version": 1,
+      "ch1_scale": 1.049,
+      "ch1_offset": 0.0,
+      "ch2_scale": 1.112,
+      "ch2_offset": 0.0,
+      "applied_at": "after_rms_before_features"
+    },
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.741755,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.786303,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.741755,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.786303,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      }
+    ],
+    "duration_seconds": 48,
+    "samples_per_frequency": 30,
+    "sample_count": 2,
+    "status": "Reference sample"
+  },
+  {
+    "id": "T-022116",
+    "date": "24 Sep 2026",
+    "time": "02:21",
+    "material": "Silver",
+    "purity": "500",
+    "shape": "Coin",
+    "frequency_hz": 10.0,
+    "frequency_slot": 1,
+    "vision_measurement": {
+      "diameter_mm": null,
+      "estimated_depth_mm": 163.699996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 38.754,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "detected": true,
+        "estimated_depth_mm": 163.69999586459016,
+        "length_mm": 38.75424829804469,
+        "surface_area_mm2": 1196.1672079873335,
+        "type": "Coin",
+        "width_mm": 39.20851869822643
+      },
+      "shape": "Coin",
+      "source": "vision_service",
+      "surface_area_mm2": 1196.167,
+      "timestamp": "24 Sep 2026 02:20:59",
+      "vision_type": "coin",
+      "width_mm": 39.209
+    },
+    "weight": "28.274 g",
+    "material_base": "Silver",
+    "purity_value": null,
+    "weight_g": 28.274,
+    "width_mm": 39.21,
+    "length_mm": 39.21,
+    "thickness_mm": 2.9,
+    "dimension_mode": "coin",
+    "dimension_labels": {
+      "width": "Diameter",
+      "length": "Diameter",
+      "thickness": "Thickness"
+    },
+    "sample_area_mm2": 1207.49,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.31376,
+    "calibration": {
+      "ch1_air": 0.519833,
+      "ch2_air": 0.950856,
+      "calibrated_at": "23 Jun 2026 14:41"
+    },
+    "measurement": {
+      "ch1_rms": 0.741755,
+      "ch2_rms": 0.786303,
+      "ch1_std": 0.0,
+      "ch2_std": 0.0,
+      "sample_count": 30
+    },
+    "raw_measurement": {
+      "ch1_rms_raw": 0.707107,
+      "ch2_rms_raw": 0.707107
+    },
+    "features": {
+      "delta_ch1": 0.221922,
+      "delta_ch2": -0.164553,
+      "delta_ch1_pct": 42.691,
+      "delta_ch2_pct": -17.306,
+      "raw_ratio": 0.943345,
+      "delta_ratio": -1.348635,
+      "delta_ch1_per_g": 0.007849,
+      "delta_ch2_per_g": -0.00582,
+      "abs_delta_ch2": 0.164553,
+      "noise_ch1": 0.0,
+      "noise_ch2": 0.0,
+      "sample_area_mm2": 1207.49,
+      "contact_area_ratio": 0.31376
+    },
+    "feature_version": 2,
+    "ch1_rms": "0.741755 V RMS",
+    "ch2_rms": "0.786303 V RMS",
+    "ch1_std": "0.000000 V RMS",
+    "ch2_std": "0.000000 V RMS",
+    "ch1_delta": 0.221922,
+    "ch2_delta": -0.164553,
+    "ch1_delta_pct": 42.691,
+    "ch2_delta_pct": -17.306,
+    "ratio": "0.943345",
+    "ch1_summary": {
+      "mean": 0.741755,
+      "std": 0.0,
+      "tolerance": 0.006,
+      "unit": "V RMS",
+      "sample_count": 2,
+      "last_device": "ch1",
+      "source": "signal_service"
+    },
+    "ch2_summary": {
+      "mean": 0.786303,
+      "std": 0.0,
+      "tolerance": 0.006,
+      "unit": "V RMS",
+      "sample_count": 2,
+      "last_device": "ch2",
+      "source": "signal_service_mirrored"
+    },
+    "calibration_used": "23 Jun 2026 14:41",
+    "acquisition_mode": "signal_service",
+    "daq_correction": {
+      "enabled": true,
+      "version": 1,
+      "ch1_scale": 1.049,
+      "ch1_offset": 0.0,
+      "ch2_scale": 1.112,
+      "ch2_offset": 0.0,
+      "applied_at": "after_rms_before_features"
+    },
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.741755,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.786303,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.741755,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.786303,
+            "rms_raw": 0.707107,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      }
+    ],
+    "duration_seconds": 48,
+    "samples_per_frequency": 30,
+    "sample_count": 2,
+    "status": "Reference sample"
+  }
+]
