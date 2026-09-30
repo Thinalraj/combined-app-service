@@ -2035,7 +2035,7 @@ output {
   color: var(--text);
   display: grid;
   font-size: 16px;
-  grid-template-columns: 112px 1fr 78px 82px 72px;
+  grid-template-columns: 104px 1.2fr 90px 86px 80px 68px;
   min-height: 46px;
   padding: 0 10px;
 }
@@ -2202,6 +2202,10 @@ output {
   border-left-color: var(--green);
 }
 
+.calibration-frequency-card:nth-child(4) {
+  border-left-color: var(--orange);
+}
+
 .calibration-frequency-card span {
   color: var(--muted);
   font-size: 13px;
@@ -2308,5 +2312,358 @@ output {
 
   #teachingScreen .button-row button {
     min-height: 46px;
+  }
+}
+
+/* ============================================================
+   Signal Service Engineering
+   ============================================================ */
+#signalServiceScreen .signal-service-panel {
+  align-content: start;
+  gap: 8px;
+  padding: 14px 18px;
+}
+
+#signalServiceScreen .signal-service-panel h2 {
+  font-size: 27px;
+  margin-bottom: 2px;
+}
+
+.signal-service-top-grid {
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 4px;
+  width: 100%;
+}
+
+#signalServiceScreen .metric-card.compact {
+  min-height: 62px;
+}
+
+#signalServiceScreen .metric-card.compact strong {
+  font-size: 17px;
+}
+
+.signal-preset-grid {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+}
+
+.signal-preset-grid button {
+  align-items: center;
+  background: #10151c;
+  border: 1px solid rgba(0, 213, 255, 0.28);
+  color: var(--cyan);
+  display: flex;
+  font-size: 15px;
+  font-weight: 800;
+  justify-content: space-between;
+  min-height: 43px;
+  padding: 0 12px;
+}
+
+.signal-preset-grid button span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.signal-preset-grid button.selected {
+  background: linear-gradient(180deg, rgba(0, 213, 255, 0.26), rgba(0, 213, 255, 0.08));
+  border-color: rgba(0, 213, 255, 0.9);
+  box-shadow: 0 0 14px rgba(0, 213, 255, 0.16);
+  color: #effcff;
+}
+
+.signal-metric-grid,
+.signal-sample-summary {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.signal-metric-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.signal-sample-summary {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.signal-metric-grid div,
+.signal-sample-summary div {
+  background: #0b0e12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.signal-metric-grid span,
+.signal-sample-summary span,
+.signal-calibration-box span {
+  color: var(--dim);
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.signal-metric-grid strong,
+.signal-sample-summary strong {
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-calibration-box {
+  align-items: center;
+  background: rgba(56, 224, 111, 0.06);
+  border: 1px solid rgba(56, 224, 111, 0.24);
+  border-radius: 7px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.signal-calibration-box strong {
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.signal-calibration-box small {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  margin-top: 3px;
+  max-width: 720px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#signalAirCalibrationButton {
+  font-size: 11px;
+  min-height: 42px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+#signalResultJson {
+  height: 62px;
+}
+
+#signalServiceScreen .button-row.signal-service-actions {
+  gap: 6px;
+  grid-template-columns: 0.65fr 0.9fr 0.9fr 1.2fr 1.05fr 0.9fr;
+  margin-bottom: 8px;
+  margin-top: 8px;
+}
+
+#signalServiceScreen .button-row.signal-service-actions button {
+  font-size: 11px;
+  line-height: 1.1;
+  min-height: 48px;
+  padding: 0 6px;
+  white-space: normal;
+}
+
+#signalStartButton {
+  border-color: rgba(56, 224, 111, 0.5);
+  color: var(--green);
+}
+
+#signalStopButton {
+  border-color: rgba(255, 95, 95, 0.48);
+  color: #ff8080;
+}
+
+/* ============================================================
+   Engineering Live Signal View
+   ============================================================ */
+.signal-live-shell {
+  gap: 10px;
+}
+
+.signal-live-heading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.signal-live-heading h2 {
+  margin: 2px 0 0;
+}
+
+.signal-live-state {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 160px;
+  padding: 9px 12px;
+  text-align: right;
+}
+
+.signal-live-state span,
+.signal-live-state small {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+}
+
+.signal-live-state strong {
+  color: var(--green);
+  display: block;
+  font-size: 18px;
+  margin: 2px 0;
+}
+
+.signal-live-controlbar {
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.signal-live-presets {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(78px, 1fr));
+}
+
+.signal-live-presets button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  font-size: 16px;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 58px;
+  padding: 7px 12px;
+}
+
+.signal-live-presets button span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.signal-live-presets button.selected {
+  background: rgba(0, 213, 255, 0.08);
+  border-color: rgba(0, 229, 255, 0.72);
+  color: var(--cyan);
+}
+
+.signal-live-presets button.selected span {
+  color: var(--cyan);
+}
+
+.signal-live-run-controls {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(82px, 1fr));
+}
+
+.signal-live-run-controls .compact-action {
+  min-height: 58px;
+  min-width: 88px;
+  padding: 8px 14px;
+}
+
+.signal-live-run-controls button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.signal-live-fixed-note {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px 18px;
+  padding: 8px 10px;
+}
+
+.signal-live-fixed-note #liveSelectedFrequency {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+.signal-live-metrics {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.signal-live-metrics .metric-card {
+  min-width: 0;
+}
+
+.signal-live-metrics .metric-card strong {
+  font-size: clamp(15px, 1.55vw, 20px);
+  overflow-wrap: anywhere;
+}
+
+.signal-live-details {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.signal-live-details div {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.signal-live-details span {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  min-height: 22px;
+}
+
+.signal-live-details strong {
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.signal-live-message {
+  background: rgba(0, 213, 255, 0.045);
+  border: 1px solid rgba(0, 213, 255, 0.22);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+@media (max-width: 900px) {
+  .signal-live-controlbar {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-live-metrics,
+  .signal-live-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

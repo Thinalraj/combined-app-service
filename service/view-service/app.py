@@ -53,7 +53,24 @@ except Exception:
 BASE_DIR = Path(__file__).resolve().parent
 MEASUREMENTS_FILE = BASE_DIR / "measurements.json"
 CALIBRATION_FILE = BASE_DIR / "calibration.json"
+SIGNAL_PRIVATE_DIR = BASE_DIR / "private_data"
+SIGNAL_AIR_CALIBRATION_FILE = SIGNAL_PRIVATE_DIR / "signal_air_calibration.json"
+SIGNAL_AIR_CALIBRATION_BACKUP_FILE = SIGNAL_PRIVATE_DIR / "signal_air_calibration.previous.json"
+SIGNAL_FREQUENCY_PRESETS = {
+    "f1": 8_000.0,
+    "f2": 10_000.0,
+    "f3": 15_000.0,
+    "f4": 20_000.0,
+}
+SIGNAL_AMPLITUDE_V_PEAK = 1.0
+SIGNAL_PEAK_TO_PEAK_V = SIGNAL_AMPLITUDE_V_PEAK * 2.0
+SIGNAL_AIR_SAMPLE_COUNT = 30
+SIGNAL_AIR_SAMPLE_INTERVAL_S = 0.1
+SIGNAL_AIR_SETTLE_SECONDS = 0.5
+SIGNAL_AIR_VALIDATION_THRESHOLD_PCT = 5.0
+SIGNAL_AIR_VALIDATION_HISTORY_LIMIT = 50
 TEACHING_FILE = BASE_DIR / "teaching_library.json"
+TEACHING_IMAGES_DIR = BASE_DIR / "teaching_images"
 SETTINGS_FILE = BASE_DIR / "settings.json"
 CLASSIFIER_MODEL_FILE = BASE_DIR / "classifier_model.json"
 VALIDATION_RESULTS_FILE = BASE_DIR / "validation_results.json"
@@ -90,6 +107,7 @@ LOAD_CELL_STABLE_MAX_ATTEMPTS = 8
 LOAD_CELL_HANDLE = None
 LOAD_CELL_LOCK = threading.Lock()
 DAQ_LOCK = threading.Lock()
+SIGNAL_SERVICE_LOCK = threading.RLock()
 SERVICE_TIMEOUT_SECONDS = 8.0
 KNN_FEATURE_KEYS = [
     "delta_ratio",
@@ -789,6 +807,470 @@ def collect_signal_service_frequency_summaries(
     }
 
 
+def signal_preset_frequency(preset: str) -> tuple[str, float]:
+    key = str(preset or "f1").strip().lower()
+    if key not in SIGNAL_FREQUENCY_PRESETS:
+        raise ValueError(f"Unknown signal preset: {preset}")
+    return key, SIGNAL_FREQUENCY_PRESETS[key]
+
+
+def get_signal_service_status() -> dict:
+    try:
+        payload = service_json_request("GET", service_base_url("signal"), "/api/status", timeout=5.0)
+    except RuntimeError as exc:
+        if "HTTP 404" not in str(exc):
+            raise
+        payload = service_json_request("GET", service_base_url("signal"), "/", timeout=5.0)
+    amplitude = parse_float(payload.get("amplitude_v_peak"), parse_float(payload.get("amplitude")))
+    frequency = parse_float(payload.get("frequency_hz"), parse_float(payload.get("frequency")))
+    return {
+        "ok": True,
+        "service": payload.get("service", "ADP2230 Signal API"),
+        "status": payload.get("status", "running" if payload.get("signal_running") else "stopped"),
+        "signal_running": bool(payload.get("signal_running", str(payload.get("status", "")).lower() == "running")),
+        "frequency_hz": frequency,
+        "amplitude_v_peak": amplitude,
+        "peak_to_peak_v": parse_float(payload.get("peak_to_peak_v"), amplitude * 2.0 if amplitude is not None else None),
+        "waveform": payload.get("waveform", "sine"),
+        "service_url": service_base_url("signal"),
+        "service_payload": payload,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }
+
+
+def start_signal_service(preset: str) -> dict:
+    key, frequency_hz = signal_preset_frequency(preset)
+    payload = service_json_request(
+        "POST",
+        service_base_url("signal"),
+        "/api/start",
+        payload={"frequency": frequency_hz, "amplitude": SIGNAL_AMPLITUDE_V_PEAK},
+        timeout=10.0,
+    )
+    return {
+        "ok": True,
+        "preset": key,
+        "status": payload.get("status", "running"),
+        "frequency_hz": parse_float(payload.get("frequency"), frequency_hz),
+        "amplitude_v_peak": parse_float(payload.get("amplitude"), SIGNAL_AMPLITUDE_V_PEAK),
+        "peak_to_peak_v": parse_float(payload.get("peak_to_peak_v"), SIGNAL_PEAK_TO_PEAK_V),
+        "service_payload": payload,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }
+
+
+def stop_signal_service() -> dict:
+    payload = service_json_request("POST", service_base_url("signal"), "/api/stop", timeout=10.0)
+    return {
+        "ok": True,
+        "status": payload.get("status", "stopped"),
+        "frequency_hz": parse_float(payload.get("frequency")),
+        "service_payload": payload,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }
+
+
+def get_signal_service_measurement() -> dict:
+    payload = service_json_request("GET", service_base_url("signal"), "/api/measurement", timeout=10.0)
+    return {
+        "ok": True,
+        **payload,
+        "source": "signal_service",
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }
+
+
+def get_signal_service_sample(number_of_samples: int = 30, interval: float = 0.1) -> dict:
+    number_of_samples = max(1, min(1000, int(number_of_samples)))
+    interval = max(0.0, float(interval))
+    payload = service_json_request(
+        "POST",
+        service_base_url("signal"),
+        "/api/sample",
+        payload={"number_of_samples": number_of_samples, "interval": interval},
+        timeout=max(15.0, (number_of_samples * interval) + 12.0),
+    )
+    return {
+        "ok": True,
+        **payload,
+        "source": "signal_service",
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }
+
+
+def load_signal_air_calibration() -> dict:
+    if not SIGNAL_AIR_CALIBRATION_FILE.exists():
+        return {}
+    try:
+        with SIGNAL_AIR_CALIBRATION_FILE.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_signal_air_calibration(record: dict) -> None:
+    SIGNAL_PRIVATE_DIR.mkdir(parents=True, exist_ok=True)
+    temp_file = SIGNAL_AIR_CALIBRATION_FILE.with_suffix(".json.tmp")
+    if SIGNAL_AIR_CALIBRATION_FILE.exists():
+        try:
+            previous = SIGNAL_AIR_CALIBRATION_FILE.read_bytes()
+            backup_temp = SIGNAL_AIR_CALIBRATION_BACKUP_FILE.with_suffix(".json.tmp")
+            with backup_temp.open("wb") as file:
+                file.write(previous)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(backup_temp, SIGNAL_AIR_CALIBRATION_BACKUP_FILE)
+        except OSError:
+            pass
+    with temp_file.open("w", encoding="utf-8") as file:
+        json.dump(record, file, indent=2, ensure_ascii=False)
+        file.write("\n")
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(temp_file, SIGNAL_AIR_CALIBRATION_FILE)
+    try:
+        os.chmod(SIGNAL_AIR_CALIBRATION_FILE, 0o600)
+        if SIGNAL_AIR_CALIBRATION_BACKUP_FILE.exists():
+            os.chmod(SIGNAL_AIR_CALIBRATION_BACKUP_FILE, 0o600)
+    except OSError:
+        pass
+
+
+def _signal_air_frequency_summary(item: dict) -> dict:
+    if not isinstance(item, dict):
+        return {}
+    return {
+        "frequency_hz": item.get("frequency_hz"),
+        "statistics": item.get("statistics", {}),
+        "number_of_samples": item.get("number_of_samples"),
+        "interval_s": item.get("interval_s"),
+    }
+
+
+def _signal_air_validation_summary(validation: dict) -> dict:
+    if not isinstance(validation, dict) or not validation:
+        return {}
+    frequencies = {}
+    raw_frequencies = validation.get("frequencies", {}) if isinstance(validation.get("frequencies"), dict) else {}
+    for key, item in raw_frequencies.items():
+        if not isinstance(item, dict):
+            continue
+        frequencies[key] = {
+            "frequency_hz": item.get("frequency_hz"),
+            "baseline_ac_rms_v": item.get("baseline_ac_rms_v"),
+            "fresh_ac_rms_v": item.get("fresh_ac_rms_v"),
+            "drift_pct": item.get("drift_pct"),
+            "abs_drift_pct": item.get("abs_drift_pct"),
+            "within_threshold": item.get("within_threshold"),
+        }
+    return {
+        "validated_at": validation.get("validated_at"),
+        "status": validation.get("status"),
+        "passed": validation.get("passed"),
+        "threshold_pct": validation.get("threshold_pct", SIGNAL_AIR_VALIDATION_THRESHOLD_PCT),
+        "max_drift_pct": validation.get("max_drift_pct"),
+        "recommendation": validation.get("recommendation"),
+        "frequencies": frequencies,
+    }
+
+
+def signal_air_calibration_summary(record: dict) -> dict:
+    if not record:
+        return {}
+    frequencies = {}
+    raw_frequencies = record.get("frequencies", {}) if isinstance(record.get("frequencies"), dict) else {}
+    for key, item in raw_frequencies.items():
+        frequencies[key] = _signal_air_frequency_summary(item)
+    return {
+        "schema_version": record.get("schema_version", 2),
+        "calibrated_at": record.get("calibrated_at"),
+        "condition": record.get("condition"),
+        "amplitude_v_peak": record.get("amplitude_v_peak"),
+        "peak_to_peak_v": record.get("peak_to_peak_v"),
+        "samples_per_frequency": record.get("samples_per_frequency"),
+        "sample_interval_s": record.get("sample_interval_s"),
+        "frequency_order": record.get("frequency_order", []),
+        "frequencies": frequencies,
+        "validation_threshold_pct": record.get("validation_threshold_pct", SIGNAL_AIR_VALIDATION_THRESHOLD_PCT),
+        "last_validation": _signal_air_validation_summary(record.get("last_validation", {})),
+        "validation_history_count": len(record.get("validation_history", [])) if isinstance(record.get("validation_history"), list) else 0,
+        "storage": "server-private atomic JSON with previous-record backup",
+    }
+
+
+def capture_signal_air_sequence(
+    sample_count: int = SIGNAL_AIR_SAMPLE_COUNT,
+    sample_interval_s: float = SIGNAL_AIR_SAMPLE_INTERVAL_S,
+) -> dict:
+    sample_count = max(1, min(1000, int(sample_count)))
+    sample_interval_s = max(0.0, float(sample_interval_s))
+    capture = {
+        "captured_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "condition": "Air / no material",
+        "signal_service_url": service_base_url("signal"),
+        "waveform": "sine",
+        "amplitude_v_peak": SIGNAL_AMPLITUDE_V_PEAK,
+        "peak_to_peak_v": SIGNAL_PEAK_TO_PEAK_V,
+        "samples_per_frequency": sample_count,
+        "sample_interval_s": sample_interval_s,
+        "settle_seconds": SIGNAL_AIR_SETTLE_SECONDS,
+        "frequency_order": list(SIGNAL_FREQUENCY_PRESETS.keys()),
+        "frequencies": {},
+    }
+
+    with SIGNAL_SERVICE_LOCK:
+        try:
+            try:
+                stop_signal_service()
+            except RuntimeError:
+                pass
+
+            for key, frequency_hz in SIGNAL_FREQUENCY_PRESETS.items():
+                started = False
+                try:
+                    start_result = start_signal_service(key)
+                    started = True
+                    time.sleep(SIGNAL_AIR_SETTLE_SECONDS)
+                    sample_result = get_signal_service_sample(
+                        number_of_samples=sample_count,
+                        interval=sample_interval_s,
+                    )
+                    capture["frequencies"][key] = {
+                        "frequency_hz": frequency_hz,
+                        "start": start_result,
+                        "number_of_samples": sample_result.get("number_of_samples", sample_count),
+                        "interval_s": sample_result.get("interval_s", sample_interval_s),
+                        "statistics": sample_result.get("statistics", {}),
+                        "measurements": sample_result.get("measurements", []),
+                    }
+                finally:
+                    if started:
+                        try:
+                            stop_signal_service()
+                        except RuntimeError:
+                            pass
+        finally:
+            try:
+                stop_signal_service()
+            except RuntimeError:
+                pass
+
+    return capture
+
+
+def capture_signal_material_sequence(
+    sample_count: int = SIGNAL_AIR_SAMPLE_COUNT,
+    sample_interval_s: float = SIGNAL_AIR_SAMPLE_INTERVAL_S,
+) -> dict:
+    """Capture a material at F1-F4 using the same ADP2230 API sequence as air calibration.
+
+    This does not alter the saved air calibration. It is a per-teaching-record capture.
+    """
+    sample_count = max(1, min(1000, int(sample_count)))
+    sample_interval_s = max(0.0, float(sample_interval_s))
+    capture = {
+        "captured_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "condition": "Material present",
+        "signal_service_url": service_base_url("signal"),
+        "waveform": "sine",
+        "amplitude_v_peak": SIGNAL_AMPLITUDE_V_PEAK,
+        "peak_to_peak_v": SIGNAL_PEAK_TO_PEAK_V,
+        "samples_per_frequency": sample_count,
+        "sample_interval_s": sample_interval_s,
+        "settle_seconds": SIGNAL_AIR_SETTLE_SECONDS,
+        "frequency_order": list(SIGNAL_FREQUENCY_PRESETS.keys()),
+        "frequencies": {},
+    }
+
+    with SIGNAL_SERVICE_LOCK:
+        try:
+            try:
+                stop_signal_service()
+            except RuntimeError:
+                pass
+
+            for key, frequency_hz in SIGNAL_FREQUENCY_PRESETS.items():
+                started = False
+                try:
+                    start_result = start_signal_service(key)
+                    started = True
+                    time.sleep(SIGNAL_AIR_SETTLE_SECONDS)
+                    sample_result = get_signal_service_sample(
+                        number_of_samples=sample_count,
+                        interval=sample_interval_s,
+                    )
+                    capture["frequencies"][key] = {
+                        "frequency_hz": frequency_hz,
+                        "start": start_result,
+                        "number_of_samples": sample_result.get("number_of_samples", sample_count),
+                        "interval_s": sample_result.get("interval_s", sample_interval_s),
+                        "statistics": sample_result.get("statistics", {}),
+                        "measurements": sample_result.get("measurements", []),
+                    }
+                finally:
+                    if started:
+                        try:
+                            stop_signal_service()
+                        except RuntimeError:
+                            pass
+        finally:
+            try:
+                stop_signal_service()
+            except RuntimeError:
+                pass
+
+    if len(capture["frequencies"]) != len(SIGNAL_FREQUENCY_PRESETS):
+        missing = [key.upper() for key in SIGNAL_FREQUENCY_PRESETS if key not in capture["frequencies"]]
+        raise RuntimeError(f"Incomplete material signal capture. Missing: {', '.join(missing)}")
+    return capture
+
+
+def signal_stat_value(item: dict, metric: str, field: str = "mean") -> float | None:
+    stats = item.get("statistics", {}) if isinstance(item, dict) else {}
+    metric_stats = stats.get(metric, {}) if isinstance(stats, dict) else {}
+    if not isinstance(metric_stats, dict):
+        return None
+    return parse_float(metric_stats.get(field))
+
+
+def build_material_air_comparison(capture: dict, air_calibration: dict) -> dict:
+    """Store the material-vs-air AC RMS deltas without changing the baseline."""
+    result = {}
+    baseline_frequencies = air_calibration.get("frequencies", {}) if isinstance(air_calibration, dict) else {}
+    material_frequencies = capture.get("frequencies", {}) if isinstance(capture, dict) else {}
+    for key, frequency_hz in SIGNAL_FREQUENCY_PRESETS.items():
+        material_item = material_frequencies.get(key, {})
+        baseline_item = baseline_frequencies.get(key, {}) if isinstance(baseline_frequencies, dict) else {}
+        material_rms = signal_stat_value(material_item, "ac_rms_v")
+        baseline_rms = signal_stat_value(baseline_item, "ac_rms_v")
+        delta_v = None
+        delta_pct = None
+        if material_rms is not None and baseline_rms is not None:
+            delta_v = material_rms - baseline_rms
+            if abs(baseline_rms) > 1e-12:
+                delta_pct = (delta_v / baseline_rms) * 100.0
+        result[key] = {
+            "frequency_hz": frequency_hz,
+            "air_ac_rms_v": rounded_or_none(baseline_rms, 9),
+            "material_ac_rms_v": rounded_or_none(material_rms, 9),
+            "delta_ac_rms_v": rounded_or_none(delta_v, 9),
+            "delta_pct": rounded_or_none(delta_pct, 6),
+        }
+    return result
+
+
+def material_signal_features(capture: dict) -> dict:
+    """Flatten the main F1-F4 statistics for later model/training use."""
+    features = {}
+    frequencies = capture.get("frequencies", {}) if isinstance(capture, dict) else {}
+    for key in SIGNAL_FREQUENCY_PRESETS:
+        item = frequencies.get(key, {})
+        for metric in ("ac_rms_v", "peak_amplitude_v", "peak_to_peak_v", "frequency_hz", "dc_v"):
+            features[f"{key}_{metric}_mean"] = rounded_or_none(signal_stat_value(item, metric), 9)
+            features[f"{key}_{metric}_std"] = rounded_or_none(signal_stat_value(item, metric, "std"), 9)
+    return features
+
+
+def run_signal_air_calibration() -> dict:
+    capture = capture_signal_air_sequence()
+    record = {
+        "schema_version": 2,
+        "calibrated_at": capture["captured_at"],
+        "condition": capture["condition"],
+        "signal_service_url": capture["signal_service_url"],
+        "waveform": capture["waveform"],
+        "amplitude_v_peak": capture["amplitude_v_peak"],
+        "peak_to_peak_v": capture["peak_to_peak_v"],
+        "samples_per_frequency": capture["samples_per_frequency"],
+        "sample_interval_s": capture["sample_interval_s"],
+        "settle_seconds": capture["settle_seconds"],
+        "frequency_order": capture["frequency_order"],
+        "frequencies": capture["frequencies"],
+        "validation_threshold_pct": SIGNAL_AIR_VALIDATION_THRESHOLD_PCT,
+        "last_validation": {},
+        "validation_history": [],
+    }
+    save_signal_air_calibration(record)
+    return record
+
+
+def validate_signal_air_calibration() -> tuple[dict, dict]:
+    record = load_signal_air_calibration()
+    if not record:
+        raise ValueError("No saved air calibration found. Run calibration first.")
+
+    sample_count = int(record.get("samples_per_frequency") or SIGNAL_AIR_SAMPLE_COUNT)
+    sample_interval_s = float(record.get("sample_interval_s") or SIGNAL_AIR_SAMPLE_INTERVAL_S)
+    fresh = capture_signal_air_sequence(sample_count=sample_count, sample_interval_s=sample_interval_s)
+
+    threshold_pct = float(record.get("validation_threshold_pct") or SIGNAL_AIR_VALIDATION_THRESHOLD_PCT)
+    comparisons = {}
+    max_drift_pct = 0.0
+    passed = True
+
+    baseline_frequencies = record.get("frequencies", {}) if isinstance(record.get("frequencies"), dict) else {}
+    fresh_frequencies = fresh.get("frequencies", {}) if isinstance(fresh.get("frequencies"), dict) else {}
+
+    for key, frequency_hz in SIGNAL_FREQUENCY_PRESETS.items():
+        baseline_item = baseline_frequencies.get(key, {})
+        fresh_item = fresh_frequencies.get(key, {})
+        baseline_stats = baseline_item.get("statistics", {}) if isinstance(baseline_item, dict) else {}
+        fresh_stats = fresh_item.get("statistics", {}) if isinstance(fresh_item, dict) else {}
+        baseline_rms = parse_float((baseline_stats.get("ac_rms_v") or {}).get("mean")) if isinstance(baseline_stats.get("ac_rms_v"), dict) else None
+        fresh_rms = parse_float((fresh_stats.get("ac_rms_v") or {}).get("mean")) if isinstance(fresh_stats.get("ac_rms_v"), dict) else None
+
+        if baseline_rms is None or abs(baseline_rms) < 1e-12:
+            raise ValueError(f"Saved {key.upper()} AC RMS baseline is missing or zero. Recalibrate first.")
+        if fresh_rms is None:
+            raise RuntimeError(f"Fresh {key.upper()} AC RMS measurement is missing.")
+
+        drift_pct = ((fresh_rms - baseline_rms) / baseline_rms) * 100.0
+        abs_drift_pct = abs(drift_pct)
+        within = abs_drift_pct <= threshold_pct
+        passed = passed and within
+        max_drift_pct = max(max_drift_pct, abs_drift_pct)
+        comparisons[key] = {
+            "frequency_hz": frequency_hz,
+            "baseline_ac_rms_v": baseline_rms,
+            "fresh_ac_rms_v": fresh_rms,
+            "drift_pct": round(drift_pct, 4),
+            "abs_drift_pct": round(abs_drift_pct, 4),
+            "within_threshold": within,
+            "fresh_statistics": fresh_stats,
+            "fresh_measurements": fresh_item.get("measurements", []) if isinstance(fresh_item, dict) else [],
+        }
+
+    status = "PASS" if passed else "RECALIBRATION REQUIRED"
+    recommendation = (
+        "Validation passed. All F1-F4 AC RMS air readings are within 5% of the saved baseline."
+        if passed
+        else "One or more F1-F4 AC RMS air readings changed by more than 5%. Run calibration again."
+    )
+    validation = {
+        "validated_at": fresh["captured_at"],
+        "status": status,
+        "passed": passed,
+        "threshold_pct": threshold_pct,
+        "max_drift_pct": round(max_drift_pct, 4),
+        "recommendation": recommendation,
+        "frequency_order": fresh.get("frequency_order", []),
+        "samples_per_frequency": fresh.get("samples_per_frequency"),
+        "sample_interval_s": fresh.get("sample_interval_s"),
+        "frequencies": comparisons,
+    }
+
+    history = record.get("validation_history", [])
+    if not isinstance(history, list):
+        history = []
+    history_entry = _signal_air_validation_summary(validation)
+    history.insert(0, history_entry)
+    record["last_validation"] = validation
+    record["validation_history"] = history[:SIGNAL_AIR_VALIDATION_HISTORY_LIMIT]
+    save_signal_air_calibration(record)
+    return record, validation
+
+
 def load_measurements() -> list[dict]:
     if not MEASUREMENTS_FILE.exists():
         return []
@@ -835,9 +1317,109 @@ def load_teaching_records() -> list[dict]:
 
 
 def save_teaching_records(records: list[dict]) -> None:
-    with TEACHING_FILE.open("w", encoding="utf-8") as file:
+    """Persist teaching records atomically so an interrupted write does not corrupt the library."""
+    TEACHING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = TEACHING_FILE.with_suffix(".json.tmp")
+    with temp_file.open("w", encoding="utf-8") as file:
         json.dump(records, file, indent=2, ensure_ascii=False)
         file.write("\n")
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(temp_file, TEACHING_FILE)
+
+
+def normalize_client_signal_capture(capture: object, sample_count: int, sample_interval_s: float) -> dict | None:
+    """Accept a complete F1-F4 capture produced by the Engineering/Teaching UI.
+
+    The UI acquires each frequency through the signal-service API so progress can follow
+    actual Start/Sample/Stop completion.  This validator prevents partial captures from
+    being persisted as valid teaching data.
+    """
+    if not isinstance(capture, dict):
+        return None
+    frequencies = capture.get("frequencies")
+    if not isinstance(frequencies, dict):
+        return None
+    normalized = dict(capture)
+    normalized_frequencies = {}
+    for key, frequency_hz in SIGNAL_FREQUENCY_PRESETS.items():
+        item = frequencies.get(key)
+        if not isinstance(item, dict):
+            return None
+        statistics = item.get("statistics")
+        measurements = item.get("measurements")
+        if not isinstance(statistics, dict) or not isinstance(measurements, list) or not measurements:
+            return None
+        normalized_frequencies[key] = {
+            **item,
+            "frequency_hz": frequency_hz,
+            "number_of_samples": int(item.get("number_of_samples") or len(measurements)),
+            "interval_s": float(item.get("interval_s") or sample_interval_s),
+            "statistics": statistics,
+            "measurements": measurements,
+        }
+    normalized.update({
+        "captured_at": capture.get("captured_at") or datetime.now().astimezone().isoformat(timespec="seconds"),
+        "condition": "Material present",
+        "waveform": "sine",
+        "amplitude_v_peak": SIGNAL_AMPLITUDE_V_PEAK,
+        "peak_to_peak_v": SIGNAL_PEAK_TO_PEAK_V,
+        "samples_per_frequency": sample_count,
+        "sample_interval_s": sample_interval_s,
+        "frequency_order": list(SIGNAL_FREQUENCY_PRESETS.keys()),
+        "frequencies": normalized_frequencies,
+    })
+    return normalized
+
+
+def teaching_image_extension(content_type: str) -> str:
+    value = (content_type or "").lower()
+    if "png" in value:
+        return ".png"
+    if "webp" in value:
+        return ".webp"
+    return ".jpg"
+
+
+def capture_teaching_image_snapshot() -> dict:
+    data, content_type = service_binary_get(service_base_url("vision"), "/image/detected", timeout=10.0)
+    if not data:
+        raise RuntimeError("Vision service returned an empty detected image")
+    if not str(content_type or "").lower().startswith("image/"):
+        raise RuntimeError(f"Vision service returned {content_type or 'non-image data'} instead of an image")
+    if len(data) > 20 * 1024 * 1024:
+        raise RuntimeError("Detected image is larger than the 20 MB teaching-image limit")
+    TEACHING_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now().astimezone()
+    filename = f"IMG-{now.strftime('%Y%m%d-%H%M%S-%f')}{teaching_image_extension(content_type)}"
+    final_path = TEACHING_IMAGES_DIR / filename
+    temp_path = TEACHING_IMAGES_DIR / f".{filename}.tmp"
+    with temp_path.open("wb") as file:
+        file.write(data)
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(temp_path, final_path)
+    return {
+        "filename": filename,
+        "relative_path": f"teaching_images/{filename}",
+        "url": f"/api/teaching/image/{urllib.parse.quote(filename)}",
+        "content_type": content_type or "image/jpeg",
+        "size_bytes": len(data),
+        "captured_at": now.isoformat(timespec="seconds"),
+    }
+
+
+def delete_teaching_image(image_info: object) -> None:
+    if not isinstance(image_info, dict):
+        return
+    filename = Path(str(image_info.get("filename") or "")).name
+    if not filename:
+        return
+    path = TEACHING_IMAGES_DIR / filename
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def load_classifier_model() -> dict:
@@ -5023,6 +5605,27 @@ def validate_calibration():
     )
 
 
+@app.post("/api/teaching/image/capture")
+def capture_teaching_image_api():
+    try:
+        return jsonify({"ok": True, "image": capture_teaching_image_snapshot()}), 201
+    except RuntimeError as exc:
+        return jsonify({
+            "ok": False,
+            "error": "teaching_image_capture_failed",
+            "message": str(exc),
+            "source": "vision_service",
+        }), 503
+
+
+@app.get("/api/teaching/image/<path:filename>")
+def get_teaching_image(filename: str):
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename:
+        abort(404)
+    return send_from_directory(TEACHING_IMAGES_DIR, safe_name)
+
+
 @app.get("/api/teaching")
 def get_teaching_records():
     return jsonify(load_teaching_records())
@@ -5033,32 +5636,39 @@ def add_teaching_record():
     payload = request.get_json(silent=True) or {}
     records = load_teaching_records()
     now = datetime.now()
-    target_sample_count = 30
-    frequency_hz = parse_float(payload.get("frequency_hz"))
-    frequency_slot = payload.get("frequency_slot")
-    collection = collect_teaching_summaries(duration_seconds=5, target_sample_count=target_sample_count)
-    if not collection["ok"]:
-        return (
-            jsonify(
-                {
-                    "error": "teaching_failed",
-                    "message": "Unable to collect valid CH1 and CH2 readings",
-                    "acquisition_mode": collection["mode"],
-                    "details": collection["errors"],
-                }
-            ),
-            503,
-        )
+    target_sample_count = max(1, min(1000, int(parse_float(payload.get("samples_per_frequency"), SIGNAL_AIR_SAMPLE_COUNT) or SIGNAL_AIR_SAMPLE_COUNT)))
+    sample_interval_s = max(0.0, float(parse_float(payload.get("sample_interval_s"), SIGNAL_AIR_SAMPLE_INTERVAL_S) or SIGNAL_AIR_SAMPLE_INTERVAL_S))
 
-    calibration = load_calibration()
-    ch1 = collection["ch1"]
-    ch2 = collection["ch2"]
-    ch1_delta = calculate_delta(ch1, calibration, "ch1")
-    ch2_delta = calculate_delta(ch2, calibration, "ch2")
-    ratio = ch1["mean"] / ch2["mean"] if parse_float(ch2.get("mean")) else 0
-    material_label = payload.get("material", "Other")
+    # Prefer the complete F1-F4 capture supplied by the Teaching UI.  The UI now
+    # performs Start/Sample/Stop frequency-by-frequency so its progress indicator
+    # can follow actual API completion.  Keep server-side capture as a compatibility
+    # fallback for older clients.
+    signal_capture = normalize_client_signal_capture(
+        payload.get("signal_capture"),
+        target_sample_count,
+        sample_interval_s,
+    )
+    if signal_capture is None:
+        try:
+            signal_capture = capture_signal_material_sequence(
+                sample_count=target_sample_count,
+                sample_interval_s=sample_interval_s,
+            )
+        except (RuntimeError, ValueError) as exc:
+            return (
+                jsonify(
+                    {
+                        "error": "teaching_signal_capture_failed",
+                        "message": str(exc),
+                        "source": "signal_service",
+                    }
+                ),
+                503,
+            )
+
+    material_label = str(payload.get("material", "Other"))
     material, purity_value = normalize_material_and_purity(material_label)
-    shape = payload.get("shape", "Other")
+    shape = str(payload.get("shape", "Other"))
     weight_g = parse_float(payload.get("weight"), 0.0) or 0.0
     width_mm = parse_float(payload.get("width_mm"), 0.0) or 0.0
     length_mm = parse_float(payload.get("length_mm"), 0.0) or 0.0
@@ -5068,56 +5678,27 @@ def add_teaching_record():
     if not isinstance(dimension_labels, dict):
         dimension_labels = {}
     geometry = build_geometry(width_mm, length_mm, thickness_mm, shape)
-    delta_ch1 = ch1_delta["mean_delta"] or 0.0
-    delta_ch2 = ch2_delta["mean_delta"] or 0.0
-    delta_ch1_per_g = (delta_ch1 / weight_g) if weight_g > 0 else None
-    delta_ch2_per_g = (delta_ch2 / weight_g) if weight_g > 0 else None
-    ch1_std_value = parse_float(ch1.get("std"), 0.0) or 0.0
-    ch2_std_value = parse_float(ch2.get("std"))
 
-    calibration_block = {
-        "ch1_air": calibration.get("ch1", {}).get("mean"),
-        "ch2_air": calibration.get("ch2", {}).get("mean"),
-        "calibrated_at": calibration.get("calibrated_at", "No calibration record"),
-    }
-    measurement_block = {
-        "ch1_rms": round(parse_float(ch1.get("mean"), 0.0) or 0.0, 6),
-        "ch2_rms": round(parse_float(ch2.get("mean"), 0.0) or 0.0, 6) if parse_float(ch2.get("mean")) is not None else None,
-        "ch1_std": round(parse_float(ch1.get("std"), 0.0) or 0.0, 6),
-        "ch2_std": round(parse_float(ch2.get("std"), 0.0) or 0.0, 6) if parse_float(ch2.get("std")) is not None else None,
-        "sample_count": target_sample_count,
-    }
-    delta_ratio = (delta_ch1 / delta_ch2) if delta_ch2 not in (None, 0) else None
-    features_block = {
-        "delta_ch1": round(delta_ch1, 6),
-        "delta_ch2": round(delta_ch2, 6),
-        "delta_ch1_pct": ch1_delta["mean_delta_pct"],
-        "delta_ch2_pct": ch2_delta["mean_delta_pct"],
-        "raw_ratio": round(ratio, 6),
-        "delta_ratio": round(delta_ratio, 6) if delta_ratio is not None else None,
-        "delta_ch1_per_g": round(delta_ch1_per_g, 6) if delta_ch1_per_g is not None else None,
-        "delta_ch2_per_g": round(delta_ch2_per_g, 6) if delta_ch2_per_g is not None else None,
-        "abs_delta_ch2": round(abs(delta_ch2), 6),
-        "noise_ch1": round(ch1_std_value, 6),
-        "noise_ch2": round(ch2_std_value, 6) if ch2_std_value is not None else None,
-        "sample_area_mm2": geometry["sample_area_mm2"],
-        "contact_area_ratio": geometry["contact_area_ratio"],
-    }
+    air_calibration = load_signal_air_calibration()
+    air_comparison = build_material_air_comparison(signal_capture, air_calibration)
+    signal_features = material_signal_features(signal_capture)
 
+    # A timestamp down to microseconds makes every teaching record independently addressable.
+    record_id = payload.get("id") or f"T-{now.strftime('%Y%m%d-%H%M%S-%f')}"
     record = {
-        "id": payload.get("id") or f"T-{now.strftime('%H%M%S')}",
+        "id": record_id,
+        "schema_version": 5,
         "date": payload.get("date") or now.strftime("%d %b %Y"),
-        "time": payload.get("time") or now.strftime("%H:%M"),
+        "time": payload.get("time") or now.strftime("%H:%M:%S"),
+        "created_at": now.astimezone().isoformat(timespec="microseconds"),
         "material": material_label,
-        "purity": payload.get("purity", "Known"),
-        "shape": shape,
-        "frequency_hz": round(frequency_hz, 3) if frequency_hz is not None else None,
-        "frequency_slot": frequency_slot,
-        "vision_measurement": payload.get("vision_measurement"),
-        "weight": payload.get("weight", "0 g"),
         "material_base": material,
+        "purity": payload.get("purity", "Known"),
         "purity_value": purity_value,
+        "shape": shape,
+        "weight": payload.get("weight", "0 g"),
         "weight_g": round(weight_g, 3),
+        "weight_std_g": rounded_or_none(parse_float(payload.get("weight_std_g")), 6),
         "width_mm": geometry["width_mm"],
         "length_mm": geometry["length_mm"],
         "thickness_mm": geometry["thickness_mm"],
@@ -5126,31 +5707,47 @@ def add_teaching_record():
         "sample_area_mm2": geometry["sample_area_mm2"],
         "coil_area_mm2": geometry["coil_area_mm2"],
         "contact_area_ratio": geometry["contact_area_ratio"],
-        "calibration": calibration_block,
-        "measurement": measurement_block,
-        "raw_measurement": collection.get("raw_measurement", {}),
-        "features": features_block,
-        "feature_version": 2,
-        "ch1_rms": format_measurement(ch1),
-        "ch2_rms": format_measurement(ch2),
-        "ch1_std": f"{(parse_float(ch1.get('std'), 0.0) or 0.0):.6f} {ch1.get('unit', '')}",
-        "ch2_std": f"{(parse_float(ch2.get('std'), 0.0) or 0.0):.6f} {ch2.get('unit', '')}" if parse_float(ch2.get("std")) is not None else "--",
-        "ch1_delta": ch1_delta["mean_delta"],
-        "ch2_delta": ch2_delta["mean_delta"],
-        "ch1_delta_pct": ch1_delta["mean_delta_pct"],
-        "ch2_delta_pct": ch2_delta["mean_delta_pct"],
-        "ratio": f"{ratio:.6f}",
-        "ch1_summary": ch1,
-        "ch2_summary": ch2,
-        "calibration_used": calibration.get("calibrated_at", "No calibration record"),
-        "acquisition_mode": collection["mode"],
-        "daq_correction": collection.get("daq_correction", daq_correction_metadata()),
-        "frequency_sequence": collection.get("frequency_sequence", []),
-        "duration_seconds": 48,
+        "vision_measurement": payload.get("vision_measurement"),
+        "image": payload.get("image") if isinstance(payload.get("image"), dict) else None,
+        "measurement_mode": "adp2230_f1_f4",
+        "signal_capture": signal_capture,
+        "signal_features": signal_features,
+        "air_comparison": air_comparison,
+        "frequency_order": list(SIGNAL_FREQUENCY_PRESETS.keys()),
+        "frequency_presets_hz": SIGNAL_FREQUENCY_PRESETS,
+        "amplitude_v_peak": SIGNAL_AMPLITUDE_V_PEAK,
+        "peak_to_peak_v": SIGNAL_PEAK_TO_PEAK_V,
         "samples_per_frequency": target_sample_count,
-        "sample_count": ch1.get("sample_count", target_sample_count),
-        "status": payload.get("status", "Reference sample"),
+        "sample_interval_s": sample_interval_s,
+        "calibration_used": air_calibration.get("calibrated_at", "No saved air calibration"),
+        "status": payload.get("status", "Reference sample · F1-F4 captured"),
+        "feature_version": 4,
     }
+
+    # Keep a concise frequency_sequence for generic history renderers while preserving
+    # the full raw per-sample payload in signal_capture. No synthetic CH2 is created.
+    frequency_sequence = []
+    for key, frequency_hz in SIGNAL_FREQUENCY_PRESETS.items():
+        item = signal_capture["frequencies"].get(key, {})
+        rms_mean = signal_stat_value(item, "ac_rms_v")
+        rms_std = signal_stat_value(item, "ac_rms_v", "std")
+        frequency_sequence.append(
+            {
+                "frequency_command": key,
+                "frequency_hz": frequency_hz,
+                "channels": {
+                    "signal": {
+                        "rms": rounded_or_none(rms_mean, 9),
+                        "std": rounded_or_none(rms_std, 9),
+                        "unit": "V",
+                        "sample_count": item.get("number_of_samples", target_sample_count),
+                        "source": "signal_service",
+                    }
+                },
+            }
+        )
+    record["frequency_sequence"] = frequency_sequence
+
     records.insert(0, record)
     save_teaching_records(records)
     return jsonify(record), 201
@@ -5376,11 +5973,13 @@ def delete_teaching_record(record_id: str):
         return jsonify({"error": "invalid_pin"}), 403
 
     records = load_teaching_records()
+    target = next((record for record in records if record.get("id") == record_id), None)
     next_records = [record for record in records if record.get("id") != record_id]
-    if len(next_records) == len(records):
+    if target is None:
         abort(404)
 
     save_teaching_records(next_records)
+    delete_teaching_image(target.get("image"))
     return jsonify({"deleted": record_id})
 
 
@@ -5637,6 +6236,109 @@ def get_load_cell_status():
     reading = read_load_cell(stable_only=False, max_attempts=1, retry_seconds=0.0)
     reading["connected"] = bool(reading.get("ok"))
     return jsonify(reading), 200 if reading.get("ok") else 503
+
+
+@app.get("/api/signal/status")
+def signal_status_api():
+    try:
+        with SIGNAL_SERVICE_LOCK:
+            return jsonify(get_signal_service_status())
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 503
+
+
+@app.post("/api/signal/start")
+def signal_start_api():
+    payload = request.get_json(silent=True) or {}
+    preset = payload.get("preset", "f1")
+    try:
+        with SIGNAL_SERVICE_LOCK:
+            return jsonify(start_signal_service(preset))
+    except (RuntimeError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 400
+
+
+@app.post("/api/signal/stop")
+def signal_stop_api():
+    try:
+        with SIGNAL_SERVICE_LOCK:
+            return jsonify(stop_signal_service())
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 503
+
+
+@app.get("/api/signal/measurement")
+def signal_measurement_api():
+    try:
+        with SIGNAL_SERVICE_LOCK:
+            return jsonify(get_signal_service_measurement())
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 503
+
+
+@app.post("/api/signal/sample")
+def signal_sample_api():
+    payload = request.get_json(silent=True) or {}
+    try:
+        number_of_samples = int(payload.get("number_of_samples", 30))
+        interval = float(payload.get("interval", 0.1))
+        with SIGNAL_SERVICE_LOCK:
+            return jsonify(get_signal_service_sample(number_of_samples, interval))
+    except (RuntimeError, TypeError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 400
+
+
+@app.get("/api/signal/air-calibration")
+def signal_air_calibration_api():
+    return jsonify(signal_air_calibration_summary(load_signal_air_calibration()))
+
+
+@app.get("/api/signal/air-calibration/history")
+def signal_air_calibration_history_api():
+    record = load_signal_air_calibration()
+    history = record.get("validation_history", []) if isinstance(record, dict) else []
+    return jsonify({
+        "calibrated_at": record.get("calibrated_at") if isinstance(record, dict) else None,
+        "validation_threshold_pct": record.get("validation_threshold_pct", SIGNAL_AIR_VALIDATION_THRESHOLD_PCT) if isinstance(record, dict) else SIGNAL_AIR_VALIDATION_THRESHOLD_PCT,
+        "validation_history": history if isinstance(history, list) else [],
+    })
+
+
+@app.post("/api/signal/air-calibration/run")
+def signal_air_calibration_run_api():
+    try:
+        record = run_signal_air_calibration()
+        return jsonify(signal_air_calibration_summary(record)), 201
+    except (RuntimeError, ValueError) as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+            "message": "Air calibration failed. No new calibration record was saved.",
+            "source": "signal_service",
+        }), 503
+
+
+@app.post("/api/signal/air-calibration/validate")
+def signal_air_calibration_validate_api():
+    try:
+        record, validation = validate_signal_air_calibration()
+        summary = signal_air_calibration_summary(record)
+        summary["validation"] = _signal_air_validation_summary(validation)
+        return jsonify(summary), 200
+    except ValueError as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+            "message": str(exc),
+            "source": "signal_service",
+        }), 400
+    except RuntimeError as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+            "message": "Air validation failed while acquiring a fresh sample.",
+            "source": "signal_service",
+        }), 503
 
 
 @app.get("/api/vision/size")

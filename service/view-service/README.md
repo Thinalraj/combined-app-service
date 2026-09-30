@@ -122,3 +122,37 @@ GET  /api/teaching
 POST /api/teaching
 POST /api/teaching/<id>/delete
 ```
+
+## Signal Service Engineering (2026-09 update)
+
+Engineering -> Signal Service uses the ADP2230 FastAPI service at `http://127.0.0.1:8001`.
+
+Fixed engineering presets:
+
+```text
+F1 = 8 kHz
+F2 = 10 kHz
+F3 = 15 kHz
+F4 = 20 kHz
+Amplitude = 1.0 V peak = 2.0 V peak-to-peak (zero offset sine)
+```
+
+View-service proxy API:
+
+```text
+GET  /api/signal/status
+POST /api/signal/start                {"preset":"f1"}
+POST /api/signal/stop
+GET  /api/signal/measurement
+POST /api/signal/sample               {"number_of_samples":30,"interval":0.1}
+GET  /api/signal/air-calibration
+POST /api/signal/air-calibration/run
+```
+
+Air calibration runs F1 -> F4 sequentially, collects 30 measurements per frequency, and stores the complete raw measurements plus service statistics in `private_data/signal_air_calibration.json`. The file is not in the Flask static allowlist. Writes use a temporary file + `os.replace()` and keep the prior record as `signal_air_calibration.previous.json`.
+
+The signal service currently acquires one WaveForms Analog In channel. The new engineering calibration therefore stores the signal-service metrics directly and does not fabricate a second channel.
+
+## Teaching F1-F4 signal capture
+
+New teaching records use the Signal Service API after the dimension/vision step. The capture order is fixed at F1 8 kHz, F2 10 kHz, F3 15 kHz, and F4 20 kHz with 1.0 V peak output. Each frequency is sampled 30 times at 0.1 s intervals. The full per-sample response and summary statistics are stored inside the unique teaching record in `teaching_library.json` under `signal_capture`, together with flattened `signal_features` and the material-vs-air `air_comparison` when an air calibration exists. Teaching History renders all four frequency summaries and the unique record ID.

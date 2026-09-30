@@ -6,7 +6,7 @@
     20.0,
     30.0
   ],
-  "active_frequency_slot": 3,
+  "active_frequency_slot": 1,
   "classifier_algorithm": "two_pass_frequency_rf",
   "service_mode_enabled": true,
   "weight_service_url": "http://127.0.0.1:8002",

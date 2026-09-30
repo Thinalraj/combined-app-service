@@ -350,10 +350,8 @@
         </div>
         <div class="engineering-actions">
           <button type="button" id="engineeringLiveViewButton">Live View</button>
-          <button type="button" id="engineeringFrequencyButton">Frequency Mode</button>
           <button type="button" id="engineeringCalibrationButton">Calibration</button>
           <button type="button" id="engineeringTeachingButton">Teaching</button>
-          <button type="button" id="engineeringDaqSettingsButton">DAQ Settings</button>
           <button type="button" id="engineeringLoadCellButton">Load Cell</button>
           <button type="button" id="engineeringDetectorSettingsButton">Detector Settings</button>
           <button type="button" id="engineeringClassifierButton">Classifier</button>
@@ -422,64 +420,71 @@
       </section>
 
       <section class="screen" id="liveViewScreen">
-        <div class="live-view-shell">
-          <div class="live-view-toolbar">
-            <article class="metric-card orange compact live-frequency-card">
-              <span>Frequency</span>
-              <strong id="liveFrequency">F1 10.00 kHz</strong>
-            </article>
-            <div class="live-view-tabs" role="tablist" aria-label="Live view mode">
-              <button class="mode-toggle active" id="liveRawTabButton" type="button" role="tab" aria-selected="true">Raw</button>
-              <button class="mode-toggle" id="liveDeltaTabButton" type="button" role="tab" aria-selected="false">Delta</button>
+        <div class="live-view-shell signal-live-shell">
+          <div class="signal-live-heading">
+            <div>
+              <p class="eyebrow">Engineering · Live Signal</p>
+              <h2>ADP2230 Live View</h2>
+            </div>
+            <div class="signal-live-state">
+              <span>Service</span>
+              <strong id="liveSignalStatus">Unknown</strong>
+              <small id="livePollingStatus">Polling stopped</small>
             </div>
           </div>
 
-          <div class="live-view-panels">
-            <div class="live-panel active" id="liveRawPanel" role="tabpanel">
-              <div class="engineering-grid live-view-grid compact-live-grid">
-                <article class="metric-card yellow compact">
-                  <span>CH1 RMS</span>
-                  <strong id="primaryRms">0.000 V</strong>
-                </article>
-                <article class="metric-card yellow compact">
-                  <span>CH1 Std</span>
-                  <strong id="primaryStd">0.000000</strong>
-                </article>
-                <article class="metric-card green compact">
-                  <span>CH1 Quality</span>
-                  <strong id="primaryQuality">0%</strong>
-                </article>
-                <article class="metric-card cyan compact">
-                  <span>CH2 RMS</span>
-                  <strong id="secondaryRms">0.000 V</strong>
-                </article>
-                <article class="metric-card cyan compact">
-                  <span>CH2 Std</span>
-                  <strong id="secondaryStd">0.000000</strong>
-                </article>
-                <article class="metric-card green compact">
-                  <span>CH2 Quality</span>
-                  <strong id="secondaryQuality">0%</strong>
-                </article>
-              </div>
+          <div class="signal-live-controlbar">
+            <div class="signal-live-presets" id="liveSignalPresetGrid" aria-label="Live signal frequency presets">
+              <button class="selected" type="button" data-signal-preset="f1">F1<span>8 kHz</span></button>
+              <button type="button" data-signal-preset="f2">F2<span>10 kHz</span></button>
+              <button type="button" data-signal-preset="f3">F3<span>15 kHz</span></button>
+              <button type="button" data-signal-preset="f4">F4<span>20 kHz</span></button>
             </div>
+            <div class="signal-live-run-controls">
+              <button class="primary compact-action" id="liveSignalStartButton" type="button">Start</button>
+              <button class="secondary compact-action" id="liveSignalStopButton" type="button">Stop</button>
+            </div>
+          </div>
 
-            <div class="live-panel" id="liveDeltaPanel" role="tabpanel">
-              <div class="live-delta-panel compact-live-grid">
-                <article class="metric-card cyan compact">
-                  <span>CH1 Delta</span>
-                  <strong id="liveDeltaCh1">--</strong>
-                </article>
-                <article class="metric-card cyan compact">
-                  <span>CH2 Delta</span>
-                  <strong id="liveDeltaCh2">--</strong>
-                </article>
-                <article class="metric-card orange compact">
-                  <span>Delta Ratio</span>
-                  <strong id="liveDeltaRatio">--</strong>
-                </article>
-              </div>
-            </div>
+          <div class="signal-live-fixed-note">
+            <span id="liveSelectedFrequency">F1 · 8.00 kHz</span>
+            <span>Amplitude fixed: 1.00 Vpk · 2.00 Vpp</span>
+            <span>Live refresh: 0.5 s</span>
+          </div>
+
+          <div class="signal-live-metrics">
+            <article class="metric-card yellow compact">
+              <span>AC RMS</span>
+              <strong id="liveAcRms">-- V</strong>
+            </article>
+            <article class="metric-card cyan compact">
+              <span>Peak Amplitude</span>
+              <strong id="livePeakAmplitude">-- V</strong>
+            </article>
+            <article class="metric-card orange compact">
+              <span>Peak-to-Peak</span>
+              <strong id="livePeakToPeak">-- V</strong>
+            </article>
+            <article class="metric-card green compact">
+              <span>Measured Frequency</span>
+              <strong id="liveMeasuredFrequency">-- Hz</strong>
+            </article>
+            <article class="metric-card cyan compact">
+              <span>DC Voltage</span>
+              <strong id="liveDcVoltage">-- V</strong>
+            </article>
+          </div>
+
+          <div class="signal-live-details">
+            <div><span>Commanded Frequency</span><strong id="liveCommandedFrequency">-- Hz</strong></div>
+            <div><span>Commanded Amplitude</span><strong id="liveCommandedAmplitude">1.000 Vpk</strong></div>
+            <div><span>ADC Sample Rate</span><strong id="liveAdcSampleRate">-- Hz</strong></div>
+            <div><span>ADC Points</span><strong id="liveAdcPoints">--</strong></div>
+            <div><span>Last Update</span><strong id="liveSignalUpdated">--</strong></div>
+          </div>
+
+          <div class="signal-live-message" id="liveSignalMessage">
+            Select F1–F4 and press Start. Live measurements will update every 0.5 s.
           </div>
         </div>
         <div class="button-row">
@@ -545,6 +550,72 @@
         </div>
       </section>
 
+      <section class="screen" id="signalServiceScreen">
+        <div class="settings-panel signal-service-panel">
+          <p class="eyebrow">Signal Engineering</p>
+          <h2>ADP2230 Signal Service</h2>
+          <div class="engineering-grid signal-service-top-grid">
+            <article class="metric-card compact green">
+              <span>Service Status</span>
+              <strong id="signalServiceStatus">Unknown</strong>
+            </article>
+            <article class="metric-card compact cyan">
+              <span>Selected Frequency</span>
+              <strong id="signalSelectedFrequency">F1 · 8.00 kHz</strong>
+            </article>
+            <article class="metric-card compact yellow">
+              <span>Fixed Amplitude</span>
+              <strong id="signalAmplitude">1.00 Vpk · 2.00 Vpp</strong>
+            </article>
+          </div>
+
+          <div class="signal-preset-grid" id="signalPresetGrid" aria-label="Fixed signal frequency presets">
+            <button class="selected" type="button" data-signal-preset="f1" data-frequency-hz="8000">F1<span>8 kHz</span></button>
+            <button type="button" data-signal-preset="f2" data-frequency-hz="10000">F2<span>10 kHz</span></button>
+            <button type="button" data-signal-preset="f3" data-frequency-hz="15000">F3<span>15 kHz</span></button>
+            <button type="button" data-signal-preset="f4" data-frequency-hz="20000">F4<span>20 kHz</span></button>
+          </div>
+
+          <div class="signal-metric-grid">
+            <div><span>AC RMS</span><strong id="signalAcRms">-- V</strong></div>
+            <div><span>Peak</span><strong id="signalPeak">-- V</strong></div>
+            <div><span>Peak-to-Peak</span><strong id="signalP2P">-- V</strong></div>
+            <div><span>Measured Frequency</span><strong id="signalMeasuredFrequency">-- Hz</strong></div>
+            <div><span>DC</span><strong id="signalDc">-- V</strong></div>
+          </div>
+
+          <div class="signal-sample-summary">
+            <div><span>Last Action</span><strong id="signalLastAction">Get Status</strong></div>
+            <div><span>Samples</span><strong id="signalSampleCount">--</strong></div>
+            <div><span>AC RMS Mean ± Std</span><strong id="signalSampleRms">--</strong></div>
+            <div><span>Frequency Mean</span><strong id="signalSampleFrequency">--</strong></div>
+          </div>
+
+          <div class="signal-calibration-box">
+            <div>
+              <span>Air Calibration</span>
+              <strong id="signalCalibrationStatus">No saved record loaded</strong>
+              <small id="signalCalibrationDetail">F1–F4 · 30 samples each · 1.0 V peak</small>
+            </div>
+            <button class="primary" id="signalAirCalibrationButton" type="button">Run &amp; Save Air Calibration</button>
+          </div>
+
+          <div class="load-cell-response signal-response">
+            <span id="signalResponseText">Response: --</span>
+            <span id="signalUpdated">Updated: --</span>
+            <pre id="signalResultJson">Select a preset, start the sine wave, then measure or sample.</pre>
+          </div>
+        </div>
+        <div class="button-row signal-service-actions">
+          <button class="secondary" id="signalBackButton" type="button">Back</button>
+          <button class="secondary" id="signalStartButton" type="button">Signal Start</button>
+          <button class="secondary" id="signalStopButton" type="button">Signal Stop</button>
+          <button class="secondary" id="signalMeasurementButton" type="button">Get Measurement</button>
+          <button class="secondary" id="signalSampleButton" type="button">Get Sample ×30</button>
+          <button class="primary" id="signalStatusButton" type="button">Get Status</button>
+        </div>
+      </section>
+
       <section class="screen" id="calibrationScreen">
         <div class="calibration-start-panel">
           <div class="calibration-empty-icon" aria-hidden="true">
@@ -552,22 +623,22 @@
             <div class="empty-cross"></div>
           </div>
           <div class="calibration-copy">
-            <p class="eyebrow">No Material Condition</p>
-            <h2>Empty Calibration</h2>
-            <p>Remove all materials from the sensing area before starting.</p>
+            <p class="eyebrow">Signal Air Baseline</p>
+            <h2>Air Calibration</h2>
+            <p>Keep the sensing area empty. Calibration automatically runs each fixed signal frequency in sequence and saves the resulting air baseline.</p>
             <div class="calibration-note">
-              <span>Keep area empty</span>
-              <span>Do not touch sensor</span>
-              <span>Capture duration 15 seconds</span>
-              <span id="calibrationFrequencyTag">Frequency: --</span>
+              <span>F1 8 kHz → F2 10 kHz → F3 15 kHz → F4 20 kHz</span>
+              <span>1.00 V peak / 2.00 Vpp</span>
+              <span>30 samples per frequency</span>
+              <span>Saved persistently in the private JSON calibration record</span>
             </div>
           </div>
         </div>
         <div class="button-row">
           <button class="secondary" id="calibrationCancelButton" type="button">Cancel</button>
           <button class="secondary" id="viewCalibrationButton" type="button">View Record</button>
-          <button class="secondary" id="validateCalibrationButton" type="button">Validate</button>
-          <button class="primary" id="calibrationStartButton" type="button">Start Calibration</button>
+          <button class="secondary" id="validateCalibrationButton" type="button">Validate Baseline</button>
+          <button class="primary" id="calibrationStartButton" type="button">Run Calibration</button>
         </div>
       </section>
 
@@ -581,16 +652,16 @@
             <strong id="calibrationProgressText">0%</strong>
           </div>
           <div class="measure-copy">
-            <h2 id="calibrationStage">Capturing Air Reading</h2>
-            <p>Do not place any material on the sensing area.</p>
+            <h2 id="calibrationStage">Preparing Signal Calibration</h2>
+            <p>Do not place any material on the sensing area or touch the sensor.</p>
             <div class="progress-bar">
               <span id="calibrationProgressBar"></span>
             </div>
             <div class="summary-row">
-              <span id="calibrationDurationLabel">3 frequencies</span>
-              <span id="calibrationFrequencyLabel">F1</span>
+              <span id="calibrationDurationLabel">4 frequencies</span>
+              <span id="calibrationFrequencyLabel">F1 · 8 kHz</span>
               <span id="calibrationSampleLabel">Sample 0 / 30</span>
-              <span class="signal-ok">No material condition</span>
+              <span class="signal-ok">Air / no material</span>
             </div>
           </div>
         </div>
@@ -598,38 +669,42 @@
 
       <section class="screen" id="calibrationResultScreen">
         <div class="history-detail-panel left-scroll-panel calibration-result-panel">
-          <p class="eyebrow">Latest Calibration</p>
-          <h2>Air Baseline Saved</h2>
+          <p class="eyebrow">Signal Calibration Record</p>
+          <h2 id="calibrationResultTitle">Air Baseline</h2>
           <div class="calibration-frequency-list" id="calibrationFrequencyCards">
             <article class="calibration-frequency-card">
-              <span>F1 Air</span>
+              <span>F1 · 8 kHz</span>
               <strong id="calF1Air">--</strong>
             </article>
             <article class="calibration-frequency-card">
-              <span>F2 Air</span>
+              <span>F2 · 10 kHz</span>
               <strong id="calF2Air">--</strong>
             </article>
             <article class="calibration-frequency-card">
-              <span>F3 Air</span>
+              <span>F3 · 15 kHz</span>
               <strong id="calF3Air">--</strong>
+            </article>
+            <article class="calibration-frequency-card">
+              <span>F4 · 20 kHz</span>
+              <strong id="calF4Air">--</strong>
             </article>
           </div>
           <div class="detail-grid calibration-grid">
             <span>Calibrated At</span><strong id="calibratedAt">--</strong>
-            <span>Condition</span><strong id="calibrationCondition">No material / air reading</strong>
+            <span>Condition</span><strong id="calibrationCondition">Air / no material</strong>
             <span>Samples</span><strong id="calibrationSampleCount">--</strong>
-            <span>CH1 Mean</span><strong id="calCh1Mean">--</strong>
-            <span>CH1 Std Dev</span><strong id="calCh1Std">--</strong>
-            <span>CH1 Tolerance</span><strong id="calCh1Tolerance">--</strong>
-            <span>CH2 Mean</span><strong id="calCh2Mean">--</strong>
-            <span>CH2 Std Dev</span><strong id="calCh2Std">--</strong>
-            <span>CH2 Tolerance</span><strong id="calCh2Tolerance">--</strong>
+            <span>Signal Amplitude</span><strong id="calAmplitude">--</strong>
+            <span>Peak-to-Peak</span><strong id="calPeakToPeak">--</strong>
+            <span>Validation Threshold</span><strong id="calValidationThreshold">5.00%</strong>
+            <span>Last Validation</span><strong id="calValidationAt">Not validated</strong>
             <span>Validation</span><strong id="calValidationStatus">Not validated</strong>
-            <span>Max Drift</span><strong id="calValidationDrift">--</strong>
+            <span>Max AC RMS Drift</span><strong id="calValidationDrift">--</strong>
           </div>
+          <p class="calibration-validation-note" id="calibrationValidationNote">Validation compares a fresh AC RMS mean at F1–F4 against this saved baseline. Every frequency must remain within 5%.</p>
         </div>
         <div class="button-row">
           <button class="secondary" id="calibrationAgainButton" type="button">Calibrate Again</button>
+          <button class="secondary" id="calibrationValidateAgainButton" type="button">Validate Again</button>
           <button class="primary" id="calibrationDoneButton" type="button">Done</button>
         </div>
       </section>
@@ -913,7 +988,7 @@
           <div class="measure-copy">
             <p class="eyebrow">Step 7 of 9 · Signal Capture</p>
             <h2 id="teachingStage">Signal Measurements</h2>
-            <p>Keep the known sample still while F1, F2 and F3 signal measurements are captured.</p>
+            <p>Keep the known sample still while F1, F2, F3 and F4 are sampled sequentially through the signal-service API.</p>
             <div class="progress-bar">
               <span id="teachingProgressBar"></span>
             </div>
@@ -953,32 +1028,47 @@
         <div class="history-detail-panel left-scroll-panel">
           <p class="eyebrow" id="teachingSavedEyebrow">Step 9 of 9 · Teaching Result</p>
           <h2 id="teachingSavedMaterial">Gold 916</h2>
-          <div class="calibration-frequency-list" id="teachingSavedFrequencyCards">
-            <article class="calibration-frequency-card">
-              <span>F1 Reading</span>
-              <strong id="teachingSavedF1">--</strong>
-            </article>
-            <article class="calibration-frequency-card">
-              <span>F2 Reading</span>
-              <strong id="teachingSavedF2">--</strong>
-            </article>
-            <article class="calibration-frequency-card">
-              <span>F3 Reading</span>
-              <strong id="teachingSavedF3">--</strong>
-            </article>
+          <div class="dimension-tabs" role="tablist" aria-label="Teaching result view">
+            <button class="mode-toggle active" id="teachingSavedDataTabButton" type="button" role="tab" aria-selected="true">Measurements</button>
+            <button class="mode-toggle" id="teachingSavedImageTabButton" type="button" role="tab" aria-selected="false">Captured Image</button>
           </div>
-          <div class="detail-grid">
-            <span>Validation</span><strong id="teachingSavedValidation">--</strong>
-            <span>Confidence</span><strong id="teachingSavedConfidence">--</strong>
-            <span>Shape</span><strong id="teachingSavedShape">Bar</strong>
-            <span>Weight</span><strong id="teachingSavedWeight">0 g</strong>
-            <span>CH1 RMS</span><strong id="teachingSavedCh1">--</strong>
-            <span>CH2 RMS</span><strong id="teachingSavedCh2">--</strong>
-            <span>Ratio</span><strong id="teachingSavedRatio">--</strong>
-            <span>CH1 Δ Cal</span><strong id="teachingSavedCh1Delta">--</strong>
-            <span>CH2 Δ Cal</span><strong id="teachingSavedCh2Delta">--</strong>
-            <span>Purity</span><strong id="teachingSavedPurity">--</strong>
-            <span>Status</span><strong>Reference sample</strong>
+          <div class="teaching-dimension-panel active" id="teachingSavedDataPanel">
+            <div class="calibration-frequency-list" id="teachingSavedFrequencyCards">
+              <article class="calibration-frequency-card">
+                <span>F1 · 8 kHz</span>
+                <strong id="teachingSavedF1">--</strong>
+              </article>
+              <article class="calibration-frequency-card">
+                <span>F2 · 10 kHz</span>
+                <strong id="teachingSavedF2">--</strong>
+              </article>
+              <article class="calibration-frequency-card">
+                <span>F3 · 15 kHz</span>
+                <strong id="teachingSavedF3">--</strong>
+              </article>
+              <article class="calibration-frequency-card">
+                <span>F4 · 20 kHz</span>
+                <strong id="teachingSavedF4">--</strong>
+              </article>
+            </div>
+            <div class="detail-grid">
+              <span>Record ID</span><strong id="teachingSavedRecordId">--</strong>
+              <span>Shape</span><strong id="teachingSavedShape">Bar</strong>
+              <span>Weight</span><strong id="teachingSavedWeight">0 g</strong>
+              <span>Purity</span><strong id="teachingSavedPurity">--</strong>
+              <span>Signal Capture</span><strong id="teachingSavedSignalMode">--</strong>
+              <span>Samples</span><strong id="teachingSavedSamples">--</strong>
+              <span>Air Calibration</span><strong id="teachingSavedCalibration">--</strong>
+              <span>Image</span><strong id="teachingSavedImageStatus">--</strong>
+              <span>Status</span><strong id="teachingSavedStatus">Reference sample</strong>
+            </div>
+          </div>
+          <div class="teaching-dimension-panel" id="teachingSavedImagePanel">
+            <div class="detected-image-panel">
+              <p class="label">Captured Teaching Image</p>
+              <img id="teachingSavedImage" class="teaching-detected-image" alt="Captured teaching result image">
+              <p id="teachingSavedImageMessage" class="muted-copy">No image saved with this record.</p>
+            </div>
           </div>
         </div>
         <div class="button-row">
@@ -1005,35 +1095,53 @@
         <div class="history-detail-panel left-scroll-panel">
           <p class="eyebrow">Teaching Detail</p>
           <h2 id="teachingDetailMaterial">Gold 916</h2>
-          <div class="calibration-frequency-list" id="teachingDetailFrequencyCards">
-            <article class="calibration-frequency-card">
-              <span>F1 Reading</span>
-              <strong id="teachingDetailF1">--</strong>
-            </article>
-            <article class="calibration-frequency-card">
-              <span>F2 Reading</span>
-              <strong id="teachingDetailF2">--</strong>
-            </article>
-            <article class="calibration-frequency-card">
-              <span>F3 Reading</span>
-              <strong id="teachingDetailF3">--</strong>
-            </article>
+          <div class="dimension-tabs" role="tablist" aria-label="Teaching record view">
+            <button class="mode-toggle active" id="teachingDetailDataTabButton" type="button" role="tab" aria-selected="true">Measurements</button>
+            <button class="mode-toggle" id="teachingDetailImageTabButton" type="button" role="tab" aria-selected="false">Captured Image</button>
           </div>
-          <div class="detail-grid">
-            <span>Date</span><strong id="teachingDetailDate">--</strong>
-            <span>Time</span><strong id="teachingDetailTime">--</strong>
-            <span>Shape</span><strong id="teachingDetailShape">--</strong>
-            <span>Weight</span><strong id="teachingDetailWeight">--</strong>
-            <span>CH1 RMS</span><strong id="teachingDetailCh1">--</strong>
-            <span>CH2 RMS</span><strong id="teachingDetailCh2">--</strong>
-            <span>CH1 Std Dev</span><strong id="teachingDetailCh1Std">--</strong>
-            <span>CH2 Std Dev</span><strong id="teachingDetailCh2Std">--</strong>
-            <span>Ratio</span><strong id="teachingDetailRatio">--</strong>
-            <span>CH1 Δ Cal</span><strong id="teachingDetailCh1Delta">--</strong>
-            <span>CH2 Δ Cal</span><strong id="teachingDetailCh2Delta">--</strong>
-            <span>Calibration</span><strong id="teachingDetailCalibration">--</strong>
-            <span>Purity</span><strong id="teachingDetailPurity">--</strong>
-            <span>Status</span><strong id="teachingDetailStatus">Reference sample</strong>
+          <div class="teaching-dimension-panel active" id="teachingDetailDataPanel">
+            <div class="calibration-frequency-list" id="teachingDetailFrequencyCards">
+              <article class="calibration-frequency-card">
+                <span>F1 · 8 kHz</span>
+                <strong id="teachingDetailF1">--</strong>
+              </article>
+              <article class="calibration-frequency-card">
+                <span>F2 · 10 kHz</span>
+                <strong id="teachingDetailF2">--</strong>
+              </article>
+              <article class="calibration-frequency-card">
+                <span>F3 · 15 kHz</span>
+                <strong id="teachingDetailF3">--</strong>
+              </article>
+              <article class="calibration-frequency-card">
+                <span>F4 · 20 kHz</span>
+                <strong id="teachingDetailF4">--</strong>
+              </article>
+            </div>
+            <div class="detail-grid">
+              <span>Record ID</span><strong id="teachingDetailId">--</strong>
+              <span>Date</span><strong id="teachingDetailDate">--</strong>
+              <span>Time</span><strong id="teachingDetailTime">--</strong>
+              <span>Shape</span><strong id="teachingDetailShape">--</strong>
+              <span>Purity</span><strong id="teachingDetailPurity">--</strong>
+              <span>Weight</span><strong id="teachingDetailWeight">--</strong>
+              <span>Dimensions</span><strong id="teachingDetailDimensions">--</strong>
+              <span>Area</span><strong id="teachingDetailArea">--</strong>
+              <span>Signal Capture</span><strong id="teachingDetailSignalMode">--</strong>
+              <span>Samples</span><strong id="teachingDetailSamples">--</strong>
+              <span>Amplitude</span><strong id="teachingDetailAmplitude">--</strong>
+              <span>Air Calibration</span><strong id="teachingDetailCalibration">--</strong>
+              <span>Captured At</span><strong id="teachingDetailCapturedAt">--</strong>
+              <span>Image</span><strong id="teachingDetailImageStatus">--</strong>
+              <span>Status</span><strong id="teachingDetailStatus">Reference sample</strong>
+            </div>
+          </div>
+          <div class="teaching-dimension-panel" id="teachingDetailImagePanel">
+            <div class="detected-image-panel">
+              <p class="label">Captured Teaching Image</p>
+              <img id="teachingDetailImage" class="teaching-detected-image" alt="Captured teaching record image">
+              <p id="teachingDetailImageMessage" class="muted-copy">No image saved with this record.</p>
+            </div>
           </div>
         </div>
         <div class="button-row">

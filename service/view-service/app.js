@@ -13,6 +13,7 @@ const screens = {
   liveView: document.getElementById("liveViewScreen"),
   daqSettings: document.getElementById("daqSettingsScreen"),
   loadCell: document.getElementById("loadCellScreen"),
+  signalService: document.getElementById("signalServiceScreen"),
   calibration: document.getElementById("calibrationScreen"),
   calibrationProgress: document.getElementById("calibrationProgressScreen"),
   calibrationResult: document.getElementById("calibrationResultScreen"),
@@ -64,16 +65,19 @@ const state = {
   teachingWeightReady: false,
   weightProgressTimer: null,
   engineeringTimer: null,
+  signalLiveTimer: null,
+  signalLiveBusy: false,
+  signalLiveRunning: false,
   loadCellTimer: null,
   loadCellHeld: false,
   acquisitionMode: "simulator",
   calibrationRecord: {},
   confidenceThresholdPct: 40,
   detectorConfidenceInput: "40",
-  liveViewTab: "raw",
   frequencyMode: "single",
   multiFrequenciesKhz: [10, 20, 30],
-  activeFrequencySlot: 1
+  activeFrequencySlot: 1,
+  signalPreset: "f1"
 };
 
 const titles = {
@@ -91,6 +95,7 @@ const titles = {
   liveView: "Live View",
   daqSettings: "DAQ Settings",
   loadCell: "Load Cell Settings",
+  signalService: "Signal Service",
   calibration: "Calibration",
   calibrationProgress: "Calibrating",
   calibrationResult: "Calibration Result",
@@ -134,6 +139,7 @@ const teachingState = {
   lengthMm: "",
   thicknessMm: "",
   visionMeasurement: null,
+  imageReference: null,
   activeDimensionField: "width",
   latestRecord: null,
   mode: "teach"
@@ -204,16 +210,22 @@ function showScreen(name) {
     loadCalibration();
     clearInterval(state.engineeringTimer);
   } else if (name === "liveView") {
-    renderLiveViewTab();
     startLiveViewMonitor();
   } else if (name === "loadCell") {
     startLoadCellMonitor();
+  } else if (name === "signalService") {
+    loadSignalEngineeringStatus();
+    loadSignalAirCalibration();
   } else {
     clearInterval(state.engineeringTimer);
   }
 
   if (name !== "loadCell") {
     clearInterval(state.loadCellTimer);
+  }
+
+  if (name !== "liveView") {
+    stopSignalLivePolling();
   }
 
   if (name !== "weight" && name !== "teachingWeight") {
@@ -245,19 +257,27 @@ function loadTeachingDetectedImage() {
   image.src = `/api/vision/image/detected?t=${Date.now()}`;
 }
 
-function renderLiveViewTab() {
-  const rawActive = state.liveViewTab !== "delta";
-  const rawButton = document.getElementById("liveRawTabButton");
-  const deltaButton = document.getElementById("liveDeltaTabButton");
-  const rawPanel = document.getElementById("liveRawPanel");
-  const deltaPanel = document.getElementById("liveDeltaPanel");
-
-  rawButton.classList.toggle("active", rawActive);
-  rawButton.setAttribute("aria-selected", rawActive ? "true" : "false");
-  deltaButton.classList.toggle("active", !rawActive);
-  deltaButton.setAttribute("aria-selected", rawActive ? "false" : "true");
-  rawPanel.classList.toggle("active", rawActive);
-  deltaPanel.classList.toggle("active", !rawActive);
+async function captureTeachingImageSnapshot() {
+  const status = document.getElementById("teachingDetectedImageStatus");
+  status.textContent = "Saving detected image with teaching record...";
+  try {
+    const response = await fetch("/api/teaching/image/capture", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shape: getTeachingShapeLabel() })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false || !payload.image) {
+      throw new Error(payload.message || payload.error || "Unable to save detected image");
+    }
+    teachingState.imageReference = payload.image;
+    status.textContent = `Image saved · ${payload.image.filename || "teaching image"}`;
+    return payload.image;
+  } catch (error) {
+    teachingState.imageReference = null;
+    status.textContent = `Image save failed: ${error.message || "Vision service unavailable"}`;
+    throw error;
+  }
 }
 
 function setWeight(value) {
@@ -635,6 +655,7 @@ function resetTeachingInputs() {
   teachingState.lengthMm = "";
   teachingState.thicknessMm = "";
   teachingState.visionMeasurement = null;
+  teachingState.imageReference = null;
   teachingState.activeDimensionField = "width";
   teachingState.latestRecord = null;
   resetTeachingWeight();
@@ -833,6 +854,7 @@ function renderTeachingRecords() {
     <div class="teaching-row header">
       <span>Date</span>
       <span>Material</span>
+      <span>Purity</span>
       <span>Shape</span>
       <span>Weight</span>
       <span>Details</span>
@@ -843,10 +865,11 @@ function renderTeachingRecords() {
     const row = document.createElement("div");
     row.className = "teaching-row";
     row.innerHTML = `
-      <span>${record.date.replace(" 2026", "")}</span>
-      <strong>${record.material}</strong>
-      <span>${record.shape}</span>
-      <span>${record.weight}</span>
+      <span>${String(record.date || "--").replace(" 2026", "")}</span>
+      <strong title="${record.id || ""}">${record.material || "--"}</strong>
+      <span>${record.purity || "--"}</span>
+      <span>${record.shape || "--"}</span>
+      <span>${record.weight || "--"}</span>
       <button type="button" data-teaching-id="${record.id}">View</button>
     `;
     row.addEventListener("click", () => showTeachingDetail(record.id));
@@ -890,26 +913,52 @@ function showHistoryDetail(id) {
   showScreen("historyDetail");
 }
 
+function selectTeachingDetailPanel(panel) {
+  const dataActive = panel !== "image";
+  document.getElementById("teachingDetailDataPanel").classList.toggle("active", dataActive);
+  document.getElementById("teachingDetailImagePanel").classList.toggle("active", !dataActive);
+  document.getElementById("teachingDetailDataTabButton").classList.toggle("active", dataActive);
+  document.getElementById("teachingDetailImageTabButton").classList.toggle("active", !dataActive);
+  document.getElementById("teachingDetailDataTabButton").setAttribute("aria-selected", String(dataActive));
+  document.getElementById("teachingDetailImageTabButton").setAttribute("aria-selected", String(!dataActive));
+}
+
 function showTeachingDetail(id) {
   const record = teachingRecords.find((item) => item.id === id);
   if (!record) return;
   selectedTeachingId = id;
 
   document.getElementById("teachingDetailMaterial").textContent = record.material;
+  document.getElementById("teachingDetailId").textContent = record.id || "--";
   document.getElementById("teachingDetailDate").textContent = record.date;
   document.getElementById("teachingDetailTime").textContent = record.time;
   document.getElementById("teachingDetailShape").textContent = record.shape;
   document.getElementById("teachingDetailWeight").textContent = record.weight;
-  document.getElementById("teachingDetailCh1").textContent = record.ch1_rms;
-  document.getElementById("teachingDetailCh2").textContent = record.ch2_rms;
-  document.getElementById("teachingDetailCh1Std").textContent = record.ch1_std || "--";
-  document.getElementById("teachingDetailCh2Std").textContent = record.ch2_std || "--";
-  document.getElementById("teachingDetailRatio").textContent = record.ratio;
-  document.getElementById("teachingDetailCh1Delta").textContent = formatDelta(record.ch1_delta, record.ch1_delta_pct);
-  document.getElementById("teachingDetailCh2Delta").textContent = formatDelta(record.ch2_delta, record.ch2_delta_pct);
-  document.getElementById("teachingDetailCalibration").textContent = record.calibration_used || "--";
+  document.getElementById("teachingDetailDimensions").textContent = `${Number(record.width_mm || 0).toFixed(2)} × ${Number(record.length_mm || 0).toFixed(2)} × ${Number(record.thickness_mm || 0).toFixed(2)} mm`;
+  document.getElementById("teachingDetailArea").textContent = `${Number(record.sample_area_mm2 || 0).toFixed(2)} mm²`;
   document.getElementById("teachingDetailPurity").textContent = record.purity || "Known";
-  document.getElementById("teachingDetailStatus").textContent = record.status;
+  document.getElementById("teachingDetailSignalMode").textContent = record.measurement_mode || record.acquisition_mode || "--";
+  document.getElementById("teachingDetailSamples").textContent = record.samples_per_frequency ? `${record.samples_per_frequency} per frequency` : "--";
+  document.getElementById("teachingDetailAmplitude").textContent = record.amplitude_v_peak !== undefined ? `${Number(record.amplitude_v_peak).toFixed(2)} Vpk / ${Number(record.peak_to_peak_v || 0).toFixed(2)} Vpp` : "--";
+  document.getElementById("teachingDetailCalibration").textContent = record.calibration_used || "--";
+  document.getElementById("teachingDetailCapturedAt").textContent = record.signal_capture?.captured_at || record.created_at || "--";
+  document.getElementById("teachingDetailStatus").textContent = record.status || "Reference sample";
+  const imageInfo = record.image || null;
+  const imageNode = document.getElementById("teachingDetailImage");
+  const imageMessage = document.getElementById("teachingDetailImageMessage");
+  const imageStatus = document.getElementById("teachingDetailImageStatus");
+  if (imageInfo?.url) {
+    imageNode.hidden = false;
+    imageNode.src = `${imageInfo.url}?t=${Date.now()}`;
+    imageMessage.textContent = imageInfo.captured_at ? `Captured ${imageInfo.captured_at}` : "Saved with this teaching record.";
+    imageStatus.textContent = "Saved";
+  } else {
+    imageNode.removeAttribute("src");
+    imageNode.hidden = true;
+    imageMessage.textContent = "No image saved with this record.";
+    imageStatus.textContent = "Not available";
+  }
+  selectTeachingDetailPanel("data");
   renderFrequencyCards("teachingDetail", record);
   showScreen("teachingDetail");
 }
@@ -930,8 +979,29 @@ function formatCalibrationFrequencyAir(entry) {
   return `${ch1}\n${ch2}`;
 }
 
+function formatSignalCaptureFrequency(record, command) {
+  const item = record?.signal_capture?.frequencies?.[command];
+  const stats = item?.statistics || {};
+  const rms = stats?.ac_rms_v || {};
+  const peak = stats?.peak_amplitude_v || {};
+  const p2p = stats?.peak_to_peak_v || {};
+  const measuredFrequency = stats?.frequency_hz || {};
+  const dc = stats?.dc_v || {};
+  if (rms.mean === undefined || rms.mean === null) return null;
+  const count = Number(item?.number_of_samples || record?.samples_per_frequency || 0);
+  const freqKhz = Number(item?.frequency_hz || 0) / 1000;
+  return `${Number(rms.mean).toFixed(6)} V RMS ± ${Number(rms.std || 0).toFixed(6)} | ` +
+    `${Number(p2p.mean || 0).toFixed(4)} Vpp | ${Number(peak.mean || 0).toFixed(4)} Vpk | ` +
+    `${Number(measuredFrequency.mean || 0).toFixed(1)} Hz measured | DC ${Number(dc.mean || 0).toFixed(5)} V | ` +
+    `${freqKhz.toFixed(0)} kHz set | n=${count}`;
+}
+
 function formatRecordFrequencyStep(sequence, command) {
   const step = (sequence || []).find((item) => String(item.frequency_command || "").toLowerCase() === command);
+  const signal = step?.channels?.signal;
+  if (signal) {
+    return `${Number(signal.rms ?? 0).toFixed(6)} V RMS ± ${Number(signal.std ?? 0).toFixed(6)} | n=${Number(signal.sample_count || 0)}`;
+  }
   const ch1 = step?.channels?.ch1;
   const ch2 = step?.channels?.ch2;
   if (!ch1 && !ch2) return "--";
@@ -946,9 +1016,11 @@ function formatRecordFrequencyStep(sequence, command) {
 
 function renderFrequencyCards(prefix, record) {
   const sequence = record?.frequency_sequence || [];
-  document.getElementById(`${prefix}F1`).textContent = formatRecordFrequencyStep(sequence, "f1");
-  document.getElementById(`${prefix}F2`).textContent = formatRecordFrequencyStep(sequence, "f2");
-  document.getElementById(`${prefix}F3`).textContent = formatRecordFrequencyStep(sequence, "f3");
+  ["f1", "f2", "f3", "f4"].forEach((command, index) => {
+    const node = document.getElementById(`${prefix}F${index + 1}`);
+    if (!node) return;
+    node.textContent = formatSignalCaptureFrequency(record, command) || formatRecordFrequencyStep(sequence, command);
+  });
 }
 
 function renderClassifierStatus(payload) {
@@ -1072,42 +1144,71 @@ async function saveClassifierAlgorithm() {
   }
 }
 
+function calibrationFrequencyDisplayName(key) {
+  const labels = { f1: "F1 · 8 kHz", f2: "F2 · 10 kHz", f3: "F3 · 15 kHz", f4: "F4 · 20 kHz" };
+  return labels[key] || key.toUpperCase();
+}
+
+function formatSignalCalibrationCard(record, key) {
+  const item = record?.frequencies?.[key] || {};
+  const rms = item?.statistics?.ac_rms_v || {};
+  const mean = Number(rms.mean);
+  if (!Number.isFinite(mean)) return "--";
+  const std = Number(rms.std);
+  const validation = record?.last_validation?.frequencies?.[key] || {};
+  const drift = Number(validation.drift_pct);
+  const driftText = Number.isFinite(drift)
+    ? ` · Δ ${drift >= 0 ? "+" : ""}${drift.toFixed(2)}% ${validation.within_threshold ? "PASS" : "FAIL"}`
+    : "";
+  return `${mean.toFixed(6)} V RMS${Number.isFinite(std) ? ` ± ${std.toFixed(6)}` : ""}${driftText}`;
+}
+
 function renderCalibration(record) {
-  const ch1 = record.ch1 || {};
-  const ch2 = record.ch2 || {};
-  const air = record.frequency_air || {};
-  state.calibrationRecord = record || {};
-  document.getElementById("calibratedAt").textContent = record.calibrated_at || "--";
-  document.getElementById("calibrationCondition").textContent = record.condition || "No material / air reading";
-  document.getElementById("calibrationSampleCount").textContent =
-    record.samples_per_frequency ? `30 per frequency / ${record.sample_count || 0} total` : `${record.sample_count || "--"}`;
-  document.getElementById("calCh1Mean").textContent = `${ch1.mean ?? "--"} ${ch1.unit || "A RMS"}`;
-  document.getElementById("calCh1Std").textContent = `${ch1.std ?? "--"} ${ch1.unit || "A RMS"}`;
-  document.getElementById("calCh1Tolerance").textContent = `± ${ch1.tolerance ?? "--"} ${ch1.unit || "A RMS"}`;
-  document.getElementById("calCh2Mean").textContent = `${ch2.mean ?? "--"} ${ch2.unit || "V RMS"}`;
-  document.getElementById("calCh2Std").textContent = `${ch2.std ?? "--"} ${ch2.unit || "V RMS"}`;
-  document.getElementById("calCh2Tolerance").textContent = `± ${ch2.tolerance ?? "--"} ${ch2.unit || "V RMS"}`;
-  document.getElementById("calF1Air").textContent = formatCalibrationFrequencyAir(air.f1);
-  document.getElementById("calF2Air").textContent = formatCalibrationFrequencyAir(air.f2);
-  document.getElementById("calF3Air").textContent = formatCalibrationFrequencyAir(air.f3);
-  document.getElementById("calValidationStatus").textContent = record.validation_status || "Not validated";
-  document.getElementById("calValidationDrift").textContent =
-    record.max_drift_pct === undefined || record.max_drift_pct === null ? "--" : `${Number(record.max_drift_pct).toFixed(3)}%`;
+  const safe = record || {};
+  state.calibrationRecord = safe;
+  const validation = safe.last_validation || safe.validation || {};
+  const hasBaseline = Boolean(safe.calibrated_at);
+
+  document.getElementById("calibrationResultTitle").textContent = hasBaseline
+    ? (validation.status === "RECALIBRATION REQUIRED" ? "Recalibration Required" : "Air Baseline Saved")
+    : "No Air Baseline Saved";
+  document.getElementById("calibratedAt").textContent = safe.calibrated_at
+    ? new Date(safe.calibrated_at).toLocaleString()
+    : "--";
+  document.getElementById("calibrationCondition").textContent = safe.condition || "Air / no material";
+  document.getElementById("calibrationSampleCount").textContent = safe.samples_per_frequency
+    ? `${safe.samples_per_frequency} per frequency · F1–F4`
+    : "--";
+  document.getElementById("calAmplitude").textContent = Number.isFinite(Number(safe.amplitude_v_peak))
+    ? `${Number(safe.amplitude_v_peak).toFixed(2)} V peak`
+    : "--";
+  document.getElementById("calPeakToPeak").textContent = Number.isFinite(Number(safe.peak_to_peak_v))
+    ? `${Number(safe.peak_to_peak_v).toFixed(2)} Vpp`
+    : "--";
+  document.getElementById("calValidationThreshold").textContent = `${Number(safe.validation_threshold_pct ?? validation.threshold_pct ?? 5).toFixed(2)}%`;
+  document.getElementById("calValidationAt").textContent = validation.validated_at
+    ? new Date(validation.validated_at).toLocaleString()
+    : "Not validated";
+  document.getElementById("calValidationStatus").textContent = validation.status || "Not validated";
+  document.getElementById("calValidationDrift").textContent = Number.isFinite(Number(validation.max_drift_pct))
+    ? `${Number(validation.max_drift_pct).toFixed(2)}%`
+    : "--";
+  document.getElementById("calibrationValidationNote").textContent = validation.recommendation
+    || "Validation compares a fresh AC RMS mean at F1–F4 against this saved baseline. Every frequency must remain within 5%.";
+
+  ["f1", "f2", "f3", "f4"].forEach((key) => {
+    const el = document.getElementById(`cal${key.toUpperCase()}Air`);
+    if (el) el.textContent = formatSignalCalibrationCard(safe, key);
+  });
 }
 
 async function loadCalibration() {
   try {
-    const response = await fetch("/api/calibration", { cache: "no-store" });
-    if (!response.ok) throw new Error("Unable to load calibration");
+    const response = await fetch("/api/signal/air-calibration", { cache: "no-store" });
+    if (!response.ok) throw new Error("Unable to load signal air calibration");
     renderCalibration(await response.json());
   } catch (error) {
-    try {
-      const response = await fetch("calibration.json", { cache: "no-store" });
-      if (!response.ok) throw new Error("Unable to load calibration.json");
-      renderCalibration(await response.json());
-    } catch (fallbackError) {
-      renderCalibration({});
-    }
+    renderCalibration({});
   }
 }
 
@@ -1119,14 +1220,18 @@ function startCalibrationValidation() {
   runCalibrationProgress("validate");
 }
 
-function runCalibrationProgress(mode) {
+async function runCalibrationProgress(mode) {
   showScreen("calibrationProgress");
-  let elapsed = 0;
   const sampleTarget = 30;
-  const settleSeconds = 5;
-  const sampleSeconds = 11;
-  const perFrequencySeconds = settleSeconds + sampleSeconds;
-  const total = mode === "validate" ? 15 : perFrequencySeconds * 3;
+  const frequencies = [
+    { key: "F1", hz: "8 kHz" },
+    { key: "F2", hz: "10 kHz" },
+    { key: "F3", hz: "15 kHz" },
+    { key: "F4", hz: "20 kHz" }
+  ];
+  const estimatedSecondsPerFrequency = 4.5;
+  const totalSeconds = estimatedSecondsPerFrequency * frequencies.length;
+  const startedAt = Date.now();
   const progressBar = document.getElementById("calibrationProgressBar");
   const progressText = document.getElementById("calibrationProgressText");
   const ring = document.getElementById("calibrationRingMeter");
@@ -1134,106 +1239,93 @@ function runCalibrationProgress(mode) {
   const durationLabel = document.getElementById("calibrationDurationLabel");
   const frequencyLabel = document.getElementById("calibrationFrequencyLabel");
   const sampleLabel = document.getElementById("calibrationSampleLabel");
-  let finished = false;
-  const request = mode === "validate" ? validateCalibration({ deferResultScreen: true }) : saveCalibration({ deferResultScreen: true });
 
-  stage.textContent = mode === "validate" ? "Validating Air Baseline" : "Switching to F1";
-  durationLabel.textContent = mode === "validate" ? "Validation" : "3 frequencies";
-  frequencyLabel.textContent = mode === "validate" ? "Air check" : "F1";
-  sampleLabel.textContent = mode === "validate" ? "Sampling air" : `CH1/CH2 0 / ${sampleTarget}`;
-
+  durationLabel.textContent = mode === "validate" ? "Fresh F1–F4 validation" : "F1–F4 calibration";
+  stage.textContent = mode === "validate" ? "Starting Validation" : "Starting Calibration";
+  frequencyLabel.textContent = "F1 · 8 kHz";
+  sampleLabel.textContent = `Sample 0 / ${sampleTarget}`;
   progressBar.style.width = "0%";
   progressText.textContent = "0%";
   ring.style.strokeDashoffset = "314";
 
+  let finished = false;
   const timer = setInterval(() => {
-    elapsed += 1;
-    const progress = finished ? 100 : Math.min(99, Math.round((elapsed / total) * 100));
-    if (mode !== "validate") {
-      const zeroBased = Math.min(2, Math.floor(Math.max(0, elapsed - 1) / perFrequencySeconds));
-      const slot = zeroBased + 1;
-      const slotElapsed = Math.max(0, elapsed - zeroBased * perFrequencySeconds);
-      const sample = slotElapsed <= settleSeconds ? 0 : Math.min(sampleTarget, Math.round(((slotElapsed - settleSeconds) / sampleSeconds) * sampleTarget));
-      frequencyLabel.textContent = `F${slot}`;
-      sampleLabel.textContent = `CH1/CH2 ${sample} / ${sampleTarget}`;
-      stage.textContent = sample === 0 ? `Switching to F${slot}` : `Sampling F${slot} air`;
-    }
+    const elapsedSeconds = (Date.now() - startedAt) / 1000;
+    const progress = finished ? 100 : Math.min(98, Math.round((elapsedSeconds / totalSeconds) * 100));
+    const slotIndex = Math.min(frequencies.length - 1, Math.floor(elapsedSeconds / estimatedSecondsPerFrequency));
+    const slotElapsed = Math.max(0, elapsedSeconds - slotIndex * estimatedSecondsPerFrequency);
+    const sample = Math.min(sampleTarget, Math.max(0, Math.round((slotElapsed / estimatedSecondsPerFrequency) * sampleTarget)));
+    const freq = frequencies[slotIndex];
+    frequencyLabel.textContent = `${freq.key} · ${freq.hz}`;
+    sampleLabel.textContent = `Sample ${sample} / ${sampleTarget}`;
+    stage.textContent = `${mode === "validate" ? "Validating" : "Calibrating"} ${freq.key}`;
     progressBar.style.width = `${progress}%`;
     progressText.textContent = `${progress}%`;
     ring.style.strokeDashoffset = `${314 - (314 * progress) / 100}`;
-  }, 1000);
+  }, 250);
 
-  request.finally(() => {
+  try {
+    if (mode === "validate") {
+      await validateCalibration();
+    } else {
+      await saveCalibration();
+    }
+  } finally {
     finished = true;
     clearInterval(timer);
     progressBar.style.width = "100%";
     progressText.textContent = "100%";
     ring.style.strokeDashoffset = "0";
-  });
-}
-
-async function saveCalibration(options = {}) {
-  try {
-    const response = await fetch("/api/calibration/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        frequency_hz: getCurrentFrequencyValue(),
-        frequency_slot: state.activeFrequencySlot
-      })
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || "Unable to save calibration");
-    }
-    renderCalibration(await response.json());
-  } catch (error) {
-    renderCalibration({
-      calibrated_at: "--",
-      condition: "Calibration failed. Check USB serial and try again.",
-      frequency_air: {},
-      ch1: { mean: "--", std: "--", tolerance: "--", unit: "A RMS" },
-      ch2: { mean: "--", std: "--", tolerance: "--", unit: "V RMS" }
-    });
+    showScreen("calibrationResult");
   }
-
-  if (!options.deferResultScreen) return;
-  showScreen("calibrationResult");
 }
 
-async function validateCalibration(options = {}) {
+async function saveCalibration() {
   try {
-    const response = await fetch("/api/calibration/validate", {
+    const response = await fetch("/api/signal/air-calibration/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        frequency_hz: getCurrentFrequencyValue(),
-        frequency_slot: state.activeFrequencySlot
-      })
+      body: JSON.stringify({})
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.message || "Unable to validate calibration");
-    }
-    const current = state.calibrationRecord || {};
+    if (!response.ok) throw new Error(payload.message || payload.error || "Unable to run air calibration");
+    renderCalibration(payload);
+    return true;
+  } catch (error) {
     renderCalibration({
-      ...current,
-      validation_status: payload.validation_status,
-      max_drift_pct: payload.max_drift_pct
+      calibrated_at: null,
+      condition: error.message || "Calibration failed. Check the signal service and ADP2230.",
+      frequencies: {},
+      last_validation: {}
     });
-    document.getElementById("calibrationCondition").textContent = payload.recommendation || "Validation completed";
+    return false;
+  }
+}
+
+async function validateCalibration() {
+  try {
+    const response = await fetch("/api/signal/air-calibration/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || payload.error || "Unable to validate air calibration");
+    renderCalibration(payload);
+    return true;
   } catch (error) {
     const current = state.calibrationRecord || {};
     renderCalibration({
       ...current,
-      validation_status: "Validation failed",
-      max_drift_pct: null
+      last_validation: {
+        ...(current.last_validation || {}),
+        status: "VALIDATION FAILED",
+        recommendation: error.message || "Validation failed",
+        max_drift_pct: null
+      }
     });
-    document.getElementById("calibrationCondition").textContent = error.message || "Validation failed";
+    return false;
   }
-
-  if (!options.deferResultScreen) return;
-  showScreen("calibrationResult");
 }
 
 function updateTeachingMaterialSelection() {
@@ -1360,63 +1452,188 @@ function getTeachingShapeLabel() {
   return teachingState.shape === "Other" ? teachingState.otherShape : teachingState.shape;
 }
 
-function startTeachingRecord() {
-  const currentFrequency = getCurrentFrequencyValue();
+function setTeachingSignalProgress(percent, stageText, instructionText) {
+  const safe = Math.max(0, Math.min(100, Number(percent) || 0));
+  const progressBar = document.getElementById("teachingProgressBar");
+  const progressText = document.getElementById("teachingProgressText");
+  const ring = document.getElementById("teachingRingMeter");
+  const stage = document.getElementById("teachingStage");
+  const instruction = document.querySelector("#teachingRecordScreen .measure-copy p");
+  progressBar.style.width = `${safe}%`;
+  progressText.textContent = `${Math.round(safe)}%`;
+  ring.style.strokeDashoffset = `${314 - (314 * safe) / 100}`;
+  if (stageText) stage.textContent = stageText;
+  if (instructionText) instruction.textContent = instructionText;
+}
+
+function delayMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function animateTeachingSampleProgress(fromPct, toPct, expectedMs, promise) {
+  let done = false;
+  const startedAt = Date.now();
+  const cap = Math.max(fromPct, toPct - 1.2);
+  const timer = setInterval(() => {
+    if (done) return;
+    const elapsed = Date.now() - startedAt;
+    const fraction = Math.min(0.96, elapsed / Math.max(500, expectedMs));
+    const value = fromPct + ((cap - fromPct) * fraction);
+    setTeachingSignalProgress(value);
+  }, 150);
+  try {
+    const result = await promise;
+    done = true;
+    clearInterval(timer);
+    setTeachingSignalProgress(toPct);
+    return result;
+  } catch (error) {
+    done = true;
+    clearInterval(timer);
+    throw error;
+  }
+}
+
+async function signalJsonRequest(url, options = {}) {
+  const response = await fetch(url, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    throw new Error(payload.error || payload.message || `Signal request failed: ${url}`);
+  }
+  return payload;
+}
+
+async function captureTeachingSignalSequence() {
+  const sampleTarget = 30;
+  const sampleInterval = 0.1;
+  const frequencies = [
+    { key: "f1", label: "F1", hz: 8000 },
+    { key: "f2", label: "F2", hz: 10000 },
+    { key: "f3", label: "F3", hz: 15000 },
+    { key: "f4", label: "F4", hz: 20000 }
+  ];
+  const capture = {
+    captured_at: new Date().toISOString(),
+    condition: "Material present",
+    waveform: "sine",
+    amplitude_v_peak: 1.0,
+    peak_to_peak_v: 2.0,
+    samples_per_frequency: sampleTarget,
+    sample_interval_s: sampleInterval,
+    settle_seconds: 0.5,
+    frequency_order: frequencies.map((item) => item.key),
+    frequencies: {}
+  };
+
+  // The signal capture occupies 0–96%. Saving the completed teaching record occupies 96–100%.
+  const segment = 96 / frequencies.length;
+  try {
+    await fetch("/api/signal/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => null);
+    for (let index = 0; index < frequencies.length; index += 1) {
+      const freq = frequencies[index];
+      const base = index * segment;
+      const startDone = base + 2.5;
+      const settleDone = base + 5;
+      const sampleDone = base + segment - 2;
+      const stopDone = base + segment;
+
+      setTeachingSignalProgress(base, `${freq.label} · ${(freq.hz / 1000).toFixed(0)} kHz`, `Starting ${freq.label} at 1.00 V peak...`);
+      const startResult = await signalJsonRequest("/api/signal/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preset: freq.key })
+      });
+      setTeachingSignalProgress(startDone, `${freq.label} · ${(freq.hz / 1000).toFixed(0)} kHz`, `${freq.label} running. Waiting 0.5 s for the signal to settle...`);
+      await animateTeachingSampleProgress(startDone, settleDone, 500, delayMs(500));
+
+      setTeachingSignalProgress(settleDone, `${freq.label} · ${(freq.hz / 1000).toFixed(0)} kHz`, `Sampling ${freq.label}: 30 measurements in progress...`);
+      const sampleResult = await animateTeachingSampleProgress(
+        settleDone,
+        sampleDone,
+        Math.max(3200, sampleTarget * sampleInterval * 1000 + 500),
+        signalJsonRequest("/api/signal/sample", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ number_of_samples: sampleTarget, interval: sampleInterval })
+        })
+      );
+
+      capture.frequencies[freq.key] = {
+        frequency_hz: freq.hz,
+        start: startResult,
+        number_of_samples: sampleResult.number_of_samples ?? sampleTarget,
+        interval_s: sampleResult.interval_s ?? sampleInterval,
+        statistics: sampleResult.statistics || {},
+        measurements: Array.isArray(sampleResult.measurements) ? sampleResult.measurements : []
+      };
+
+      setTeachingSignalProgress(sampleDone, `${freq.label} complete`, `${freq.label} samples received. Stopping waveform...`);
+      await signalJsonRequest("/api/signal/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      setTeachingSignalProgress(stopDone, `${freq.label} complete`, `${freq.label}: ${capture.frequencies[freq.key].number_of_samples} samples captured successfully.`);
+    }
+  } catch (error) {
+    await fetch("/api/signal/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => null);
+    throw error;
+  }
+  return capture;
+}
+
+async function startTeachingRecord() {
   const geometry = calculateGeometryForTeaching();
   const dimensionPayload = buildTeachingDimensionPayload();
   document.getElementById("teachingMaterialSummary").textContent = getTeachingMaterialLabel();
   document.getElementById("teachingShapeSummary").textContent = getTeachingShapeLabel();
-  document.getElementById("teachingWeightSummary").textContent =
-    `${teachingState.weight || "0"} g`;
+  document.getElementById("teachingWeightSummary").textContent = `${teachingState.weight || "0"} g`;
   document.getElementById("teachingDimensionSummary").textContent =
     `${dimensionPayload.width_mm} x ${dimensionPayload.length_mm} x ${dimensionPayload.thickness_mm} mm (${geometry.contactRatio.toFixed(1)}%)`;
   showScreen("teachingRecord");
+  setTeachingSignalProgress(0, "Starting F1 · 8 kHz", "Keep the known sample still. Progress advances when each real signal API operation completes.");
 
-  let elapsed = 0;
-  let finished = false;
-  const sampleTarget = 30;
-  const settleSeconds = 5;
-  const sampleSeconds = 11;
-  const perFrequencySeconds = settleSeconds + sampleSeconds;
-  const total = perFrequencySeconds * 3;
-  const progressBar = document.getElementById("teachingProgressBar");
-  const progressText = document.getElementById("teachingProgressText");
-  const ring = document.getElementById("teachingRingMeter");
-
-  progressBar.style.width = "0%";
-  progressText.textContent = "0%";
-  ring.style.strokeDashoffset = "314";
-  const teachingInstruction = document.querySelector("#teachingRecordScreen .measure-copy p");
-  const request = teachingState.mode === "validate"
-    ? runTeachingValidation({ deferResultScreen: true })
-    : saveTeachingRecord({ deferResultScreen: true });
-
-  const timer = setInterval(() => {
-    elapsed += 1;
-    const progress = finished ? 100 : Math.min(99, Math.round((elapsed / total) * 100));
-    const zeroBased = Math.min(2, Math.floor(Math.max(0, elapsed - 1) / perFrequencySeconds));
-    const slot = zeroBased + 1;
-    const slotElapsed = Math.max(0, elapsed - zeroBased * perFrequencySeconds);
-    const sample = slotElapsed <= settleSeconds ? 0 : Math.min(sampleTarget, Math.round(((slotElapsed - settleSeconds) / sampleSeconds) * sampleTarget));
-    if (sample === 0) {
-      document.getElementById("teachingStage").textContent = `Switching to F${slot}`;
-      teachingInstruction.textContent = "Waiting for frequency to settle.";
-    } else {
-      document.getElementById("teachingStage").textContent = `Sampling F${slot}`;
-      teachingInstruction.textContent = `CH1 and CH2 sample ${sample} / ${sampleTarget}. Keep the known sample still.`;
+  if (teachingState.mode === "validate") {
+    // Validation remains a single backend transaction; hold the bar below completion until the backend returns.
+    try {
+      setTeachingSignalProgress(10, "Validation Capture", "Capturing a fresh validation sample...");
+      await runTeachingValidation({ deferResultScreen: true });
+      setTeachingSignalProgress(100, "Validation Complete", "Fresh validation capture completed.");
+    } catch (error) {
+      setTeachingSignalProgress(0, "Validation Failed", error.message || "Validation failed");
     }
-    progressBar.style.width = `${progress}%`;
-    progressText.textContent = `${progress}%`;
-    ring.style.strokeDashoffset = `${314 - (314 * progress) / 100}`;
-  }, 1000);
+    return;
+  }
 
-  request.finally(() => {
-    finished = true;
-    clearInterval(timer);
-    progressBar.style.width = "100%";
-    progressText.textContent = "100%";
-    ring.style.strokeDashoffset = "0";
-  });
+  try {
+    const signalCapture = await captureTeachingSignalSequence();
+    setTeachingSignalProgress(96, "Saving Teaching Record", "F1–F4 complete. Saving measurements and captured image...");
+    const saved = await saveTeachingRecord({ deferResultScreen: true, signalCapture });
+    if (!saved) {
+      setTeachingSignalProgress(96, "Save Failed", teachingState.latestRecord?.status || "Teaching record could not be saved.");
+      showScreen("teachingSaved");
+      return;
+    }
+    setTeachingSignalProgress(100, "Capture Complete", "F1–F4 signal data and teaching record saved.");
+    await delayMs(350);
+    showScreen("teachingRemove");
+  } catch (error) {
+    teachingState.latestRecord = {
+      material: getTeachingMaterialLabel(),
+      purity: teachingState.purity || "Not applicable",
+      shape: getTeachingShapeLabel(),
+      weight: `${teachingState.weight || "0"} g`,
+      id: "Not saved",
+      status: error.message || "Teaching signal capture failed.",
+      signal_capture: { frequencies: {} }
+    };
+    renderTeachingSaved(teachingState.latestRecord);
+    setTeachingSignalProgress(0, "Signal Capture Failed", teachingState.latestRecord.status);
+    const status = document.getElementById("teachingDetectedImageStatus");
+    if (status) status.textContent = `${teachingState.latestRecord.status} Press Next to retry.`;
+    showScreen("teachingDimension");
+    selectTeachingDimensionPanel("dimensions");
+  }
 }
 
 async function runTeachingValidation(options = {}) {
@@ -1429,6 +1646,7 @@ async function runTeachingValidation(options = {}) {
     weight: `${teachingState.weight || "0"} g`,
     ...dimensionPayload,
     vision_measurement: teachingState.visionMeasurement,
+    image: teachingState.imageReference,
     frequency_hz: currentFrequency,
     frequency_slot: state.activeFrequencySlot
   };
@@ -1464,17 +1682,20 @@ async function runTeachingValidation(options = {}) {
 }
 
 async function saveTeachingRecord(options = {}) {
-  const currentFrequency = getCurrentFrequencyValue();
   const dimensionPayload = buildTeachingDimensionPayload();
+  let saved = false;
   const record = {
     material: getTeachingMaterialLabel(),
     purity: teachingState.purity || "Not applicable",
     shape: getTeachingShapeLabel(),
     weight: `${teachingState.weight || "0"} g`,
+    weight_std_g: teachingState.weightStd || null,
     ...dimensionPayload,
     vision_measurement: teachingState.visionMeasurement,
-    frequency_hz: currentFrequency,
-    frequency_slot: state.activeFrequencySlot
+    image: teachingState.imageReference,
+    signal_capture: options.signalCapture || null,
+    samples_per_frequency: 30,
+    sample_interval_s: 0.1
   };
 
   try {
@@ -1488,43 +1709,62 @@ async function saveTeachingRecord(options = {}) {
       throw new Error(error.message || "Unable to save teaching record");
     }
     teachingState.latestRecord = await response.json();
+    saved = true;
     await loadTeachingRecords();
   } catch (error) {
     teachingState.latestRecord = {
       ...record,
-      ch1_rms: "--",
-      ch2_rms: "--",
-      ch1_std: "--",
-      ch2_std: "--",
-      ratio: "--",
-      ch1_delta: null,
-      ch2_delta: null,
-      status: "Teaching failed. Check USB serial and try again."
+      id: "Not saved",
+      status: error.message || "Teaching failed. Check the signal service and ADP2230, then try again.",
+      signal_capture: options.signalCapture || { frequencies: {} }
     };
   }
 
   renderTeachingSaved(teachingState.latestRecord);
-  if (!options.deferResultScreen) return;
-  showScreen("teachingRemove");
+  return saved;
+}
+
+
+function selectTeachingSavedPanel(panel) {
+  const dataActive = panel !== "image";
+  document.getElementById("teachingSavedDataPanel").classList.toggle("active", dataActive);
+  document.getElementById("teachingSavedImagePanel").classList.toggle("active", !dataActive);
+  document.getElementById("teachingSavedDataTabButton").classList.toggle("active", dataActive);
+  document.getElementById("teachingSavedImageTabButton").classList.toggle("active", !dataActive);
+  document.getElementById("teachingSavedDataTabButton").setAttribute("aria-selected", String(dataActive));
+  document.getElementById("teachingSavedImageTabButton").setAttribute("aria-selected", String(!dataActive));
 }
 
 function renderTeachingSaved(record) {
   const validateMode = teachingState.mode === "validate";
   document.getElementById("teachingSavedEyebrow").textContent = validateMode ? "Step 9 of 9 · Validation Result" : "Step 9 of 9 · Teaching Result";
   document.getElementById("teachingSavedAgainButton").textContent = validateMode ? "Scan New Validation" : "Scan New Material";
-  document.getElementById("teachingSavedMaterial").textContent = record.material;
-  document.getElementById("teachingSavedShape").textContent = record.shape;
-  document.getElementById("teachingSavedWeight").textContent = record.weight;
-  document.getElementById("teachingSavedCh1").textContent = record.ch1_rms;
-  document.getElementById("teachingSavedCh2").textContent = record.ch2_rms;
-  document.getElementById("teachingSavedRatio").textContent = record.ratio;
-  document.getElementById("teachingSavedCh1Delta").textContent = formatDelta(record.ch1_delta, record.ch1_delta_pct);
-  document.getElementById("teachingSavedCh2Delta").textContent = formatDelta(record.ch2_delta, record.ch2_delta_pct);
+  document.getElementById("teachingSavedMaterial").textContent = record.material || "--";
+  document.getElementById("teachingSavedRecordId").textContent = record.id || "--";
+  document.getElementById("teachingSavedShape").textContent = record.shape || "--";
+  document.getElementById("teachingSavedWeight").textContent = record.weight || "--";
   document.getElementById("teachingSavedPurity").textContent = record.purity || "Known";
-  document.getElementById("teachingSavedValidation").textContent = record.validation_result || (validateMode ? "FAIL" : "N/A");
-  document.getElementById("teachingSavedConfidence").textContent = record.confidence || (validateMode ? "0%" : "--");
+  document.getElementById("teachingSavedSignalMode").textContent = record.measurement_mode || record.acquisition_mode || "--";
+  document.getElementById("teachingSavedSamples").textContent = record.samples_per_frequency ? `${record.samples_per_frequency} per frequency` : "--";
+  document.getElementById("teachingSavedCalibration").textContent = record.calibration_used || "--";
+  document.getElementById("teachingSavedStatus").textContent = record.status || "Reference sample";
+  const savedImageInfo = record.image || null;
+  const savedImageNode = document.getElementById("teachingSavedImage");
+  const savedImageMessage = document.getElementById("teachingSavedImageMessage");
+  document.getElementById("teachingSavedImageStatus").textContent = savedImageInfo?.url ? "Saved" : "Not available";
+  if (savedImageInfo?.url) {
+    savedImageNode.hidden = false;
+    savedImageNode.src = `${savedImageInfo.url}?t=${Date.now()}`;
+    savedImageMessage.textContent = savedImageInfo.captured_at ? `Captured ${savedImageInfo.captured_at}` : "Saved with this teaching record.";
+  } else {
+    savedImageNode.removeAttribute("src");
+    savedImageNode.hidden = true;
+    savedImageMessage.textContent = "No image saved with this record.";
+  }
+  selectTeachingSavedPanel("data");
   renderFrequencyCards("teachingSaved", record);
 }
+
 
 function showDeletePasswordScreen() {
   deletePassword = "";
@@ -1840,102 +2080,213 @@ async function saveMeasurementRecord(record) {
   }
 }
 
-async function refreshLiveViewReadings() {
-  const liveFrequency = document.getElementById("liveFrequency");
-  const primary = document.getElementById("primaryRms");
-  const primaryStd = document.getElementById("primaryStd");
-  const primaryQuality = document.getElementById("primaryQuality");
-  const secondary = document.getElementById("secondaryRms");
-  const secondaryStd = document.getElementById("secondaryStd");
-  const secondaryQuality = document.getElementById("secondaryQuality");
-  const deltaCh1Display = document.getElementById("liveDeltaCh1");
-  const deltaCh2Display = document.getElementById("liveDeltaCh2");
-  const deltaRatioDisplay = document.getElementById("liveDeltaRatio");
-  const calCh1 = Number(state.calibrationRecord?.ch1?.mean);
-  const calCh2 = Number(state.calibrationRecord?.ch2?.mean);
+const SIGNAL_LIVE_INTERVAL_MS = 500;
 
-  if (state.acquisitionMode === "simulator") {
-    if (liveFrequency) liveFrequency.textContent = `F${state.activeFrequencySlot} ${getCurrentFrequencyValue().toFixed(2)} kHz`;
-    const ch1Val = 0.83 + Math.random() * 0.04;
-    const ch2Val = 0.93 + Math.random() * 0.05;
-    primary.textContent = `${ch1Val.toFixed(3)} V`;
-    primaryStd.textContent = `${(0.0018 + Math.random() * 0.0025).toFixed(6)}`;
-    primaryQuality.textContent = `${Math.round(96 + Math.random() * 3)}%`;
-    secondary.textContent = `${ch2Val.toFixed(3)} V`;
-    secondaryStd.textContent = `${(0.0020 + Math.random() * 0.0030).toFixed(6)}`;
-    secondaryQuality.textContent = `${Math.round(95 + Math.random() * 4)}%`;
-    if (Number.isFinite(calCh1) && Number.isFinite(calCh2)) {
-      const deltaCh1 = ch1Val - calCh1;
-      const deltaCh2 = ch2Val - calCh2;
-      deltaCh1Display.textContent = `${deltaCh1 >= 0 ? "+" : ""}${deltaCh1.toFixed(6)} V`;
-      deltaCh2Display.textContent = `${deltaCh2 >= 0 ? "+" : ""}${deltaCh2.toFixed(6)} V`;
-      deltaRatioDisplay.textContent = deltaCh2 !== 0 ? `${(deltaCh1 / deltaCh2).toFixed(6)}` : "--";
-    } else {
-      deltaCh1Display.textContent = "--";
-      deltaCh2Display.textContent = "--";
-      deltaRatioDisplay.textContent = "No calibration";
+function signalLiveMetric(value, digits = 6, unit = "V") {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toFixed(digits)} ${unit}` : `-- ${unit}`;
+}
+
+function updateSignalLivePresetUi() {
+  const preset = SIGNAL_PRESETS[state.signalPreset] || SIGNAL_PRESETS.f1;
+  document.querySelectorAll("#liveSignalPresetGrid button[data-signal-preset]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.signalPreset === state.signalPreset);
+  });
+  const label = document.getElementById("liveSelectedFrequency");
+  if (label) label.textContent = `${preset.label} · ${(preset.frequencyHz / 1000).toFixed(2)} kHz`;
+}
+
+function setSignalLiveRunning(running) {
+  state.signalLiveRunning = Boolean(running);
+  const status = document.getElementById("liveSignalStatus");
+  const polling = document.getElementById("livePollingStatus");
+  const startButton = document.getElementById("liveSignalStartButton");
+  const stopButton = document.getElementById("liveSignalStopButton");
+  if (status) status.textContent = state.signalLiveRunning ? "Running" : "Stopped";
+  if (polling) polling.textContent = state.signalLiveRunning ? "Polling every 0.5 s" : "Polling stopped";
+  if (startButton) startButton.disabled = state.signalLiveRunning;
+  if (stopButton) stopButton.disabled = !state.signalLiveRunning;
+}
+
+function renderSignalLiveMeasurement(payload) {
+  const hasMeasurement = payload.ac_rms_v !== undefined || payload.peak_amplitude_v !== undefined || payload.dc_v !== undefined;
+  if (hasMeasurement) {
+    document.getElementById("liveAcRms").textContent = signalLiveMetric(payload.ac_rms_v, 6, "V");
+    document.getElementById("livePeakAmplitude").textContent = signalLiveMetric(payload.peak_amplitude_v, 6, "V");
+    document.getElementById("livePeakToPeak").textContent = signalLiveMetric(payload.peak_to_peak_v, 6, "V");
+    document.getElementById("liveMeasuredFrequency").textContent = signalLiveMetric(payload.frequency_hz, 2, "Hz");
+    document.getElementById("liveDcVoltage").textContent = signalLiveMetric(payload.dc_v, 6, "V");
+    document.getElementById("liveAdcSampleRate").textContent = signalLiveMetric(payload.adc_sample_rate_hz, 0, "Hz");
+    document.getElementById("liveAdcPoints").textContent = Number.isFinite(Number(payload.adc_points)) ? String(payload.adc_points) : "--";
+    document.getElementById("liveSignalUpdated").textContent = new Date().toLocaleTimeString();
+    document.getElementById("liveSignalMessage").textContent = "Live measurement received from the ADP2230 signal service.";
+  }
+
+  const commandedFrequency = payload.frequency_set_hz ?? payload.frequency_hz;
+  const commandedAmplitude = payload.amplitude_set_v ?? payload.amplitude_v_peak;
+  if (Number.isFinite(Number(commandedFrequency))) {
+    document.getElementById("liveCommandedFrequency").textContent = signalLiveMetric(commandedFrequency, 0, "Hz");
+  }
+  if (Number.isFinite(Number(commandedAmplitude))) {
+    document.getElementById("liveCommandedAmplitude").textContent = signalLiveMetric(commandedAmplitude, 3, "Vpk");
+  }
+
+  const frequencySet = Number(commandedFrequency);
+  if (Number.isFinite(frequencySet)) {
+    const matched = Object.entries(SIGNAL_PRESETS).find(([, item]) => item.frequencyHz === Math.round(frequencySet));
+    if (matched) {
+      state.signalPreset = matched[0];
+      updateSignalLivePresetUi();
+      updateSignalPresetSelection();
     }
-    return;
   }
+}
 
-  const sensors = await loadLatestSensors();
-  if (liveFrequency) {
-    const slot = Number.parseInt(sensors.frequency_slot || state.activeFrequencySlot, 10);
-    const hz = Number(sensors.frequency_hz || getCurrentFrequencyValue());
-    liveFrequency.textContent = `F${Number.isFinite(slot) ? slot : state.activeFrequencySlot} ${Number.isFinite(hz) ? hz.toFixed(2) : getCurrentFrequencyValue().toFixed(2)} kHz`;
-  }
-  if (!sensorsAreValid(sensors)) {
-    primary.textContent = "Error";
-    primaryStd.textContent = "-";
-    primaryQuality.textContent = "Check USB";
-    secondary.textContent = "Error";
-    secondaryStd.textContent = "-";
-    secondaryQuality.textContent = "Check USB";
-    deltaCh1Display.textContent = "--";
-    deltaCh2Display.textContent = "--";
-    deltaRatioDisplay.textContent = "Check USB";
-    return;
-  }
+function clearSignalLiveValues(message = "Signal stopped. Select a frequency and press Start.") {
+  document.getElementById("liveSignalMessage").textContent = message;
+}
 
-  const ch1Val = Number(sensors.ch1.rms);
-  primary.textContent = `${ch1Val.toFixed(3)} ${sensors.ch1.unit}`;
-  primaryStd.textContent = `${Number(sensors.ch1.std).toFixed(6)}`;
-  primaryQuality.textContent = `${Math.round(sensors.ch1.quality * 100)}%`;
-  if (sensors.ch2?.valid === true) {
-    const ch2Val = Number(sensors.ch2.rms);
-    secondary.textContent = `${ch2Val.toFixed(3)} ${sensors.ch2.unit}`;
-    secondaryStd.textContent = `${Number(sensors.ch2.std).toFixed(6)}`;
-    secondaryQuality.textContent = `${Math.round(sensors.ch2.quality * 100)}%`;
-  } else {
-    secondary.textContent = "Pending";
-    secondaryStd.textContent = "-";
-    secondaryQuality.textContent = "STM32 CH2";
-  }
-  if (Number.isFinite(calCh1)) {
-    const deltaCh1 = ch1Val - calCh1;
-    deltaCh1Display.textContent = `${deltaCh1 >= 0 ? "+" : ""}${deltaCh1.toFixed(6)} ${sensors.ch1.unit}`;
-    if (sensors.ch2?.valid === true && Number.isFinite(calCh2)) {
-      const ch2Val = Number(sensors.ch2.rms);
-      const deltaCh2 = ch2Val - calCh2;
-      deltaCh2Display.textContent = `${deltaCh2 >= 0 ? "+" : ""}${deltaCh2.toFixed(6)} ${sensors.ch2.unit}`;
-      deltaRatioDisplay.textContent = deltaCh2 !== 0 ? `${(deltaCh1 / deltaCh2).toFixed(6)}` : "--";
-    } else {
-      deltaCh2Display.textContent = "--";
-      deltaRatioDisplay.textContent = "CH2 pending";
+async function pollSignalLiveMeasurement() {
+  if (!state.signalLiveRunning || state.signalLiveBusy || !screens.liveView.classList.contains("active")) return;
+  state.signalLiveBusy = true;
+  try {
+    const response = await fetch("/api/signal/measurement", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || "Unable to read live signal");
     }
-  } else {
-    deltaCh1Display.textContent = "--";
-    deltaCh2Display.textContent = "--";
-    deltaRatioDisplay.textContent = "No calibration";
+    renderSignalLiveMeasurement(payload);
+  } catch (error) {
+    document.getElementById("liveSignalMessage").textContent = `Live read error: ${error.message || "Signal service unavailable"}`;
+    if (/not running/i.test(String(error.message || ""))) {
+      setSignalLiveRunning(false);
+      stopSignalLivePolling();
+    }
+  } finally {
+    state.signalLiveBusy = false;
+  }
+}
+
+function startSignalLivePolling() {
+  clearInterval(state.signalLiveTimer);
+  if (!state.signalLiveRunning) return;
+  pollSignalLiveMeasurement();
+  state.signalLiveTimer = setInterval(pollSignalLiveMeasurement, SIGNAL_LIVE_INTERVAL_MS);
+}
+
+function stopSignalLivePolling() {
+  clearInterval(state.signalLiveTimer);
+  state.signalLiveTimer = null;
+  state.signalLiveBusy = false;
+}
+
+async function loadSignalLiveStatus() {
+  updateSignalLivePresetUi();
+  try {
+    const response = await fetch("/api/signal/status", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || "Signal service unavailable");
+    }
+
+    const running = payload.signal_running ?? (String(payload.status || "").toLowerCase() === "running");
+    const frequency = Number(payload.frequency_set_hz ?? payload.frequency_hz);
+    if (Number.isFinite(frequency)) {
+      const matched = Object.entries(SIGNAL_PRESETS).find(([, item]) => item.frequencyHz === Math.round(frequency));
+      if (matched) state.signalPreset = matched[0];
+    }
+    updateSignalLivePresetUi();
+    updateSignalPresetSelection();
+    setSignalLiveRunning(running);
+    document.getElementById("liveSignalMessage").textContent = running
+      ? "Signal is already running. Live polling has started."
+      : "Select F1–F4 and press Start. Live measurements will update every 0.5 s.";
+    if (running) startSignalLivePolling();
+  } catch (error) {
+    setSignalLiveRunning(false);
+    document.getElementById("liveSignalStatus").textContent = "Offline";
+    document.getElementById("liveSignalMessage").textContent = `Signal service error: ${error.message || "Unable to get status"}`;
+  }
+}
+
+async function startSignalLive() {
+  stopSignalLivePolling();
+  document.getElementById("liveSignalStatus").textContent = "Starting...";
+  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at 1.00 V peak...`;
+  try {
+    const response = await fetch("/api/signal/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preset: state.signalPreset })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || "Unable to start signal");
+    }
+    setSignalLiveRunning(true);
+    renderSignalLiveMeasurement(payload);
+    document.getElementById("liveSignalMessage").textContent = "Signal started. Reading live values every 0.5 s.";
+    startSignalLivePolling();
+  } catch (error) {
+    setSignalLiveRunning(false);
+    document.getElementById("liveSignalStatus").textContent = "Error";
+    document.getElementById("liveSignalMessage").textContent = `Start error: ${error.message || "Unable to start signal"}`;
+  }
+}
+
+async function stopSignalLive() {
+  stopSignalLivePolling();
+  document.getElementById("liveSignalStatus").textContent = "Stopping...";
+  try {
+    const response = await fetch("/api/signal/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || "Unable to stop signal");
+    }
+    setSignalLiveRunning(false);
+    clearSignalLiveValues("Signal stopped. Last measured values are retained on screen.");
+    document.getElementById("liveSignalUpdated").textContent = new Date().toLocaleTimeString();
+  } catch (error) {
+    setSignalLiveRunning(false);
+    document.getElementById("liveSignalStatus").textContent = "Error";
+    document.getElementById("liveSignalMessage").textContent = `Stop error: ${error.message || "Unable to stop signal"}`;
+  }
+}
+
+async function selectSignalLivePreset(preset) {
+  if (!SIGNAL_PRESETS[preset] || preset === state.signalPreset) return;
+  const wasRunning = state.signalLiveRunning;
+  if (wasRunning) {
+    await stopSignalLive();
+  }
+  state.signalPreset = preset;
+  updateSignalLivePresetUi();
+  updateSignalPresetSelection();
+  const selected = SIGNAL_PRESETS[preset];
+  document.getElementById("liveSignalMessage").textContent = wasRunning
+    ? `Changing to ${selected.label} ${(selected.frequencyHz / 1000).toFixed(0)} kHz...`
+    : `${selected.label} selected. Press Start to output ${(selected.frequencyHz / 1000).toFixed(0)} kHz.`;
+  if (wasRunning) {
+    await startSignalLive();
   }
 }
 
 async function startLiveViewMonitor() {
-  await loadAcquisitionMode();
-  await refreshLiveViewReadings();
+  stopSignalLivePolling();
+  await loadSignalLiveStatus();
+}
 
-  clearInterval(state.engineeringTimer);
-  state.engineeringTimer = setInterval(refreshLiveViewReadings, state.acquisitionMode === "daq" ? 1800 : 600);
+async function exitSignalLiveView(targetScreen) {
+  if (state.signalLiveRunning) {
+    await stopSignalLive();
+  } else {
+    stopSignalLivePolling();
+  }
+  showScreen(targetScreen);
 }
 
 function loadCellDisplayPayload(payload) {
@@ -2071,6 +2422,210 @@ async function getLoadCellStatus() {
   return callLoadCellApi("Get Status", "/api/load-cell/status");
 }
 
+const SIGNAL_PRESETS = {
+  f1: { label: "F1", frequencyHz: 8000 },
+  f2: { label: "F2", frequencyHz: 10000 },
+  f3: { label: "F3", frequencyHz: 15000 },
+  f4: { label: "F4", frequencyHz: 20000 }
+};
+
+function updateSignalPresetSelection() {
+  const preset = SIGNAL_PRESETS[state.signalPreset] || SIGNAL_PRESETS.f1;
+  document.querySelectorAll("#signalPresetGrid button").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.signalPreset === state.signalPreset);
+  });
+  document.querySelectorAll("#liveSignalPresetGrid button[data-signal-preset]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.signalPreset === state.signalPreset);
+  });
+  const serviceLabel = document.getElementById("signalSelectedFrequency");
+  const liveLabel = document.getElementById("liveSelectedFrequency");
+  if (serviceLabel) serviceLabel.textContent = `${preset.label} · ${(preset.frequencyHz / 1000).toFixed(2)} kHz`;
+  if (liveLabel) liveLabel.textContent = `${preset.label} · ${(preset.frequencyHz / 1000).toFixed(2)} kHz`;
+  const amplitude = document.getElementById("signalAmplitude");
+  if (amplitude) amplitude.textContent = "1.00 Vpk · 2.00 Vpp";
+}
+
+function selectSignalPreset(preset) {
+  if (!SIGNAL_PRESETS[preset]) return;
+  state.signalPreset = preset;
+  updateSignalPresetSelection();
+}
+
+function signalMetricValue(value, digits = 6, unit = "V") {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toFixed(digits)} ${unit}` : `-- ${unit}`;
+}
+
+function renderSignalPayload(payload, action = "Result") {
+  const statusNode = document.getElementById("signalServiceStatus");
+  const resultJson = document.getElementById("signalResultJson");
+  const responseText = document.getElementById("signalResponseText");
+  const updated = document.getElementById("signalUpdated");
+  const lastAction = document.getElementById("signalLastAction");
+  const stats = payload?.statistics || {};
+  const rmsStats = stats.ac_rms_v || {};
+  const freqStats = stats.frequency_hz || {};
+
+  lastAction.textContent = action;
+  resultJson.textContent = JSON.stringify(payload || {}, null, 2);
+  updated.textContent = `Updated: ${payload?.timestamp || new Date().toLocaleTimeString()}`;
+
+  if (!payload?.ok) {
+    statusNode.textContent = "Error";
+    responseText.textContent = `Error: ${payload?.error || payload?.message || "Signal service call failed"}`;
+    return;
+  }
+
+  const running = payload.signal_running ?? (String(payload.status || "").toLowerCase() === "running");
+  if (payload.status || payload.signal_running !== undefined) {
+    statusNode.textContent = running ? "Running" : (payload.status || "Stopped");
+  }
+
+  const frequencySet = Number(payload.frequency_set_hz ?? payload.frequency_hz);
+  if (Number.isFinite(frequencySet) && frequencySet > 0) {
+    const matched = Object.entries(SIGNAL_PRESETS).find(([, item]) => item.frequencyHz === Math.round(frequencySet));
+    if (matched) {
+      state.signalPreset = matched[0];
+      updateSignalPresetSelection();
+    }
+  }
+
+  document.getElementById("signalAcRms").textContent = signalMetricValue(payload.ac_rms_v, 6, "V");
+  document.getElementById("signalPeak").textContent = signalMetricValue(payload.peak_amplitude_v, 6, "V");
+  document.getElementById("signalP2P").textContent = signalMetricValue(payload.peak_to_peak_v, 6, "V");
+  document.getElementById("signalMeasuredFrequency").textContent = signalMetricValue(payload.frequency_hz, 2, "Hz");
+  document.getElementById("signalDc").textContent = signalMetricValue(payload.dc_v, 6, "V");
+
+  const count = Number(payload.number_of_samples || payload.measurements?.length || 0);
+  document.getElementById("signalSampleCount").textContent = count > 0 ? String(count) : "--";
+  if (Number.isFinite(Number(rmsStats.mean))) {
+    document.getElementById("signalSampleRms").textContent = `${Number(rmsStats.mean).toFixed(6)} ± ${Number(rmsStats.std || 0).toFixed(6)} V`;
+  } else {
+    document.getElementById("signalSampleRms").textContent = "--";
+  }
+  document.getElementById("signalSampleFrequency").textContent = Number.isFinite(Number(freqStats.mean))
+    ? `${Number(freqStats.mean).toFixed(2)} Hz`
+    : "--";
+  responseText.textContent = `Response: ${action} completed`;
+}
+
+async function callSignalEngineeringApi(action, endpoint, options = {}) {
+  document.getElementById("signalLastAction").textContent = action;
+  document.getElementById("signalServiceStatus").textContent = "Working...";
+  document.getElementById("signalResponseText").textContent = `${action}...`;
+  try {
+    const response = await fetch(endpoint, { cache: "no-store", ...options });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw Object.assign(new Error(payload.error || payload.message || `${action} failed`), { payload });
+    }
+    renderSignalPayload({ ok: true, ...payload }, action);
+    return payload;
+  } catch (error) {
+    renderSignalPayload({
+      ok: false,
+      ...(error.payload || {}),
+      error: error.message || `${action} failed`,
+      timestamp: new Date().toLocaleTimeString()
+    }, action);
+    return null;
+  }
+}
+
+async function startSignalEngineering() {
+  return callSignalEngineeringApi("Signal Start", "/api/signal/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ preset: state.signalPreset })
+  });
+}
+
+async function stopSignalEngineering() {
+  return callSignalEngineeringApi("Signal Stop", "/api/signal/stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+}
+
+async function getSignalMeasurement() {
+  return callSignalEngineeringApi("Get Measurement", "/api/signal/measurement");
+}
+
+async function sampleSignalEngineering() {
+  return callSignalEngineeringApi("Sample ×30", "/api/signal/sample", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ number_of_samples: 30, interval: 0.1 })
+  });
+}
+
+async function loadSignalEngineeringStatus() {
+  updateSignalPresetSelection();
+  return callSignalEngineeringApi("Get Status", "/api/signal/status");
+}
+
+function formatAirCalibrationFrequency(key, item) {
+  const rms = item?.statistics?.ac_rms_v || {};
+  const freq = item?.statistics?.frequency_hz || {};
+  if (!Number.isFinite(Number(rms.mean))) return `${key.toUpperCase()} --`;
+  return `${key.toUpperCase()} ${Number(rms.mean).toFixed(6)} V RMS · ${Number(freq.mean || 0).toFixed(1)} Hz`;
+}
+
+function renderSignalAirCalibration(record) {
+  const status = document.getElementById("signalCalibrationStatus");
+  const detail = document.getElementById("signalCalibrationDetail");
+  if (!record?.calibrated_at) {
+    status.textContent = "No air calibration saved";
+    detail.textContent = "F1–F4 · 30 samples each · 1.0 V peak";
+    return;
+  }
+  status.textContent = `Saved ${new Date(record.calibrated_at).toLocaleString()}`;
+  const frequencies = record.frequencies || {};
+  detail.textContent = ["f1", "f2", "f3", "f4"]
+    .map((key) => formatAirCalibrationFrequency(key, frequencies[key]))
+    .join(" | ");
+}
+
+async function loadSignalAirCalibration() {
+  try {
+    const response = await fetch("/api/signal/air-calibration", { cache: "no-store" });
+    if (!response.ok) throw new Error("Unable to load signal air calibration");
+    renderSignalAirCalibration(await response.json());
+  } catch (error) {
+    renderSignalAirCalibration({});
+  }
+}
+
+async function runSignalAirCalibration() {
+  const button = document.getElementById("signalAirCalibrationButton");
+  const status = document.getElementById("signalCalibrationStatus");
+  button.disabled = true;
+  status.textContent = "Running F1 → F4 air calibration...";
+  document.getElementById("signalResponseText").textContent = "Keep the sensing area empty and do not touch the sensor.";
+  try {
+    const response = await fetch("/api/signal/air-calibration/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || "Air calibration failed");
+    }
+    renderSignalAirCalibration(payload);
+    document.getElementById("signalResultJson").textContent = JSON.stringify(payload, null, 2);
+    document.getElementById("signalResponseText").textContent = "Response: air calibration saved in private server storage.";
+    document.getElementById("signalUpdated").textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+    await loadSignalEngineeringStatus();
+  } catch (error) {
+    status.textContent = "Air calibration failed";
+    document.getElementById("signalResponseText").textContent = `Error: ${error.message || "Air calibration failed"}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function prepareTeachingScale() {
   showScreen("teachingWeight");
   await sampleTeachingWeight();
@@ -2190,8 +2745,8 @@ async function zeroTeachingScaleBeforePlacement(mode) {
     button.textContent = originalText;
     button.disabled = false;
   }
-  document.getElementById("teachingStage").textContent = "F1 Measuring";
-  document.querySelector("#teachingRecordScreen .measure-copy p").textContent = "Switching to F1 and preparing live signal acquisition.";
+  document.getElementById("teachingStage").textContent = "F1 · 8 kHz";
+  document.querySelector("#teachingRecordScreen .measure-copy p").textContent = "F1–F4 will be sampled sequentially after dimensions are confirmed.";
   document.getElementById("teachingRecordButton").textContent = "Next";
   showScreen("teachingPlace");
 }
@@ -2313,14 +2868,8 @@ document.getElementById("menuExitButton").addEventListener("click", () => {
 });
 document.getElementById("modeToggleButton").addEventListener("click", toggleAcquisitionMode);
 document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));
-document.getElementById("engineeringFrequencyButton").addEventListener("click", async () => {
-  await loadAcquisitionMode();
-  updateFrequencyModeSelection();
-  showScreen("frequencyMode");
-});
 document.getElementById("engineeringCalibrationButton").addEventListener("click", () => showScreen("calibration"));
 document.getElementById("engineeringTeachingButton").addEventListener("click", () => showScreen("teaching"));
-document.getElementById("engineeringDaqSettingsButton").addEventListener("click", () => showScreen("daqSettings"));
 document.getElementById("engineeringLoadCellButton").addEventListener("click", () => showScreen("loadCell"));
 document.getElementById("engineeringDetectorSettingsButton").addEventListener("click", async () => {
   await loadAcquisitionMode();
@@ -2338,15 +2887,14 @@ document.getElementById("engineeringHistoryButton").addEventListener("click", ()
 document.getElementById("classifierBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("classifierTrainButton").addEventListener("click", trainClassifierModel);
 document.getElementById("classifierAlgorithmSelect").addEventListener("change", saveClassifierAlgorithm);
-document.getElementById("liveViewBackButton").addEventListener("click", () => showScreen("engineering"));
-document.getElementById("liveViewHomeButton").addEventListener("click", () => showScreen("home"));
-document.getElementById("liveRawTabButton").addEventListener("click", () => {
-  state.liveViewTab = "raw";
-  renderLiveViewTab();
-});
-document.getElementById("liveDeltaTabButton").addEventListener("click", () => {
-  state.liveViewTab = "delta";
-  renderLiveViewTab();
+document.getElementById("liveViewBackButton").addEventListener("click", () => exitSignalLiveView("engineering"));
+document.getElementById("liveViewHomeButton").addEventListener("click", () => exitSignalLiveView("home"));
+document.getElementById("liveSignalStartButton").addEventListener("click", startSignalLive);
+document.getElementById("liveSignalStopButton").addEventListener("click", stopSignalLive);
+document.getElementById("liveSignalPresetGrid").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-signal-preset]");
+  if (!button) return;
+  selectSignalLivePreset(button.dataset.signalPreset);
 });
 document.getElementById("daqSettingsBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("daqSettingsDoneButton").addEventListener("click", () => showScreen("engineering"));
@@ -2356,6 +2904,18 @@ document.getElementById("loadCellTareButton").addEventListener("click", tareLoad
 document.getElementById("loadCellSingleButton").addEventListener("click", readSingleLoadCell);
 document.getElementById("loadCellAverageButton").addEventListener("click", readAverageLoadCell);
 document.getElementById("loadCellStatusButton").addEventListener("click", getLoadCellStatus);
+document.getElementById("signalBackButton").addEventListener("click", () => showScreen("engineering"));
+document.getElementById("signalStartButton").addEventListener("click", startSignalEngineering);
+document.getElementById("signalStopButton").addEventListener("click", stopSignalEngineering);
+document.getElementById("signalMeasurementButton").addEventListener("click", getSignalMeasurement);
+document.getElementById("signalSampleButton").addEventListener("click", sampleSignalEngineering);
+document.getElementById("signalStatusButton").addEventListener("click", loadSignalEngineeringStatus);
+document.getElementById("signalAirCalibrationButton").addEventListener("click", runSignalAirCalibration);
+document.getElementById("signalPresetGrid").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-signal-preset]");
+  if (!button) return;
+  selectSignalPreset(button.dataset.signalPreset);
+});
 document.getElementById("detectorSettingsCancelButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("detectorSettingsSaveButton").addEventListener("click", saveDetectorSettings);
 document.getElementById("frequencySlot1Button").addEventListener("click", () => selectFrequencySlot(1));
@@ -2379,6 +2939,7 @@ document.getElementById("calibrationCancelButton").addEventListener("click", () 
 document.getElementById("calibrationStartButton").addEventListener("click", startCalibration);
 document.getElementById("validateCalibrationButton").addEventListener("click", startCalibrationValidation);
 document.getElementById("calibrationAgainButton").addEventListener("click", () => showScreen("calibration"));
+document.getElementById("calibrationValidateAgainButton").addEventListener("click", startCalibrationValidation);
 document.getElementById("calibrationDoneButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("teachingCancelButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("teachingViewButton").addEventListener("click", async () => {
@@ -2436,9 +2997,18 @@ document.getElementById("teachingOtherShapeNextButton").addEventListener("click"
 document.getElementById("teachingDimensionBackButton").addEventListener("click", () => {
   showScreen("teachingWeight");
 });
-document.getElementById("teachingDimensionNextButton").addEventListener("click", () => {
+document.getElementById("teachingDimensionNextButton").addEventListener("click", async () => {
   if (!teachingDimensionsAreValid()) return;
-  startTeachingRecord();
+  const button = document.getElementById("teachingDimensionNextButton");
+  button.disabled = true;
+  try {
+    await captureTeachingImageSnapshot();
+    await startTeachingRecord();
+  } catch (error) {
+    selectTeachingDimensionPanel("image");
+  } finally {
+    button.disabled = false;
+  }
 });
 document.getElementById("teachingDimensionsTabButton").addEventListener("click", () => selectTeachingDimensionPanel("dimensions"));
 document.getElementById("teachingImageTabButton").addEventListener("click", () => selectTeachingDimensionPanel("image"));
@@ -2449,11 +3019,15 @@ document.getElementById("teachingSavedAgainButton").addEventListener("click", ()
   zeroTeachingScaleBeforePlacement(teachingState.mode);
 });
 document.getElementById("teachingSavedDoneButton").addEventListener("click", () => showScreen("engineering"));
+document.getElementById("teachingSavedDataTabButton").addEventListener("click", () => selectTeachingSavedPanel("data"));
+document.getElementById("teachingSavedImageTabButton").addEventListener("click", () => selectTeachingSavedPanel("image"));
 document.getElementById("teachingRecordsBackButton").addEventListener("click", () => showScreen("teaching"));
 document.getElementById("teachingRecordsHomeButton").addEventListener("click", () => showScreen("home"));
 document.getElementById("teachingDetailBackButton").addEventListener("click", () => showScreen("teachingRecords"));
 document.getElementById("teachingDetailHomeButton").addEventListener("click", () => showScreen("home"));
 document.getElementById("teachingDetailDeleteButton").addEventListener("click", showDeletePasswordScreen);
+document.getElementById("teachingDetailDataTabButton").addEventListener("click", () => selectTeachingDetailPanel("data"));
+document.getElementById("teachingDetailImageTabButton").addEventListener("click", () => selectTeachingDetailPanel("image"));
 
 document.querySelectorAll("[data-back-home]").forEach((button) => {
   button.addEventListener("click", () => showScreen("home"));

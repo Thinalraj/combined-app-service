@@ -1,5 +1,1398 @@
 [
   {
+    "id": "T-20260930-223815-374472",
+    "schema_version": 5,
+    "date": "30 Sep 2026",
+    "time": "22:38:15",
+    "created_at": "2026-09-30T22:38:15.374472+08:00",
+    "material": "Aluminium",
+    "material_base": "Aluminium",
+    "purity": "999",
+    "purity_value": null,
+    "shape": "Coin",
+    "weight": "36.02 g",
+    "weight_g": 36.02,
+    "weight_std_g": 0.025,
+    "width_mm": 34.9,
+    "length_mm": 34.9,
+    "thickness_mm": 12.0,
+    "dimension_mode": "coin",
+    "dimension_labels": {
+      "width": "Diameter",
+      "length": "Diameter",
+      "thickness": "Thickness"
+    },
+    "sample_area_mm2": 956.623,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.248573,
+    "vision_measurement": {
+      "diameter_mm": null,
+      "estimated_depth_mm": 153.599996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 34.946,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "detected": true,
+        "estimated_depth_mm": 153.59999611973763,
+        "length_mm": 34.94643256629526,
+        "surface_area_mm2": 959.8451778371099,
+        "type": "Coin",
+        "width_mm": 34.902785499704024
+      },
+      "shape": "Coin",
+      "source": "vision_service",
+      "surface_area_mm2": 959.845,
+      "timestamp": "30 Sep 2026 22:37:44",
+      "vision_type": "coin",
+      "width_mm": 34.903
+    },
+    "image": {
+      "captured_at": "2026-09-30T22:37:50+08:00",
+      "content_type": "image/jpeg",
+      "filename": "IMG-20260930-223750-472689.jpg",
+      "relative_path": "teaching_images/IMG-20260930-223750-472689.jpg",
+      "size_bytes": 31492,
+      "url": "/api/teaching/image/IMG-20260930-223750-472689.jpg"
+    },
+    "measurement_mode": "adp2230_f1_f4",
+    "signal_capture": {
+      "captured_at": "2026-09-30T14:37:50.484Z",
+      "condition": "Material present",
+      "waveform": "sine",
+      "amplitude_v_peak": 1.0,
+      "peak_to_peak_v": 2.0,
+      "samples_per_frequency": 30,
+      "sample_interval_s": 0.1,
+      "settle_seconds": 0.5,
+      "frequency_order": [
+        "f1",
+        "f2",
+        "f3",
+        "f4"
+      ],
+      "frequencies": {
+        "f1": {
+          "frequency_hz": 8000.0,
+          "start": {
+            "amplitude_v_peak": 1,
+            "frequency_hz": 8000,
+            "ok": true,
+            "peak_to_peak_v": 2,
+            "preset": "f1",
+            "service_payload": {
+              "amplitude": 1,
+              "frequency": 8000,
+              "status": "running"
+            },
+            "status": "running",
+            "timestamp": "30 Sep 2026 22:37:52"
+          },
+          "number_of_samples": 30,
+          "interval_s": 0.1,
+          "statistics": {
+            "ac_rms_v": {
+              "max": 0.2717985175341621,
+              "mean": 0.271709911350304,
+              "min": 0.27164883135172646,
+              "std": 3.922953021627258e-05
+            },
+            "dc_v": {
+              "max": 0.001442386039899711,
+              "mean": 0.0005836733739557185,
+              "min": -0.0002168357488107715,
+              "std": 0.0005607322163433914
+            },
+            "frequency_hz": {
+              "max": 8000.00445880657,
+              "mean": 8000.000633150879,
+              "min": 7999.997433101958,
+              "std": 0.001659256899222212
+            },
+            "peak_amplitude_v": {
+              "max": 0.39281417819287373,
+              "mean": 0.38979180752992076,
+              "min": 0.3873609171039253,
+              "std": 0.001483370404573752
+            },
+            "peak_to_peak_v": {
+              "max": 0.7814654911172596,
+              "mean": 0.7772794126409266,
+              "min": 0.7730493280833708,
+              "std": 0.002250503434439734
+            }
+          },
+          "measurements": [
+            {
+              "ac_rms_v": 0.2717985175341621,
+              "dc_v": 0.0005218888359187003,
+              "frequency_hz": 8000.002006501562,
+              "peak_amplitude_v": 0.3895657042845972,
+              "peak_to_peak_v": 0.776597318381971,
+              "sample_number": 1
+            },
+            {
+              "ac_rms_v": 0.27174038791094846,
+              "dc_v": 0.0003008407891756799,
+              "frequency_hz": 8000.000564458264,
+              "peak_amplitude_v": 0.39008725885849144,
+              "peak_to_peak_v": 0.7790726604507618,
+              "sample_number": 2
+            },
+            {
+              "ac_rms_v": 0.2717269701436445,
+              "dc_v": 0.0005649597879156599,
+              "frequency_hz": 8000.00283174031,
+              "peak_amplitude_v": 0.3906814234664035,
+              "peak_to_peak_v": 0.7774224324049013,
+              "sample_number": 3
+            },
+            {
+              "ac_rms_v": 0.2716761536684231,
+              "dc_v": 0.0010176998522974988,
+              "frequency_hz": 7999.999068930213,
+              "peak_amplitude_v": 0.3873609171039253,
+              "peak_to_peak_v": 0.7740394649108873,
+              "sample_number": 4
+            },
+            {
+              "ac_rms_v": 0.2717744328761734,
+              "dc_v": 0.0012703497661187486,
+              "frequency_hz": 8000.00445880657,
+              "peak_amplitude_v": 0.38915900558269484,
+              "peak_to_peak_v": 0.7765148069796779,
+              "sample_number": 5
+            },
+            {
+              "ac_rms_v": 0.27169701461899165,
+              "dc_v": 0.001442386039899711,
+              "frequency_hz": 8000.000157629391,
+              "peak_amplitude_v": 0.38751381073237423,
+              "peak_to_peak_v": 0.7740394649108872,
+              "sample_number": 6
+            },
+            {
+              "ac_rms_v": 0.27170310589443414,
+              "dc_v": 0.0012592932382114834,
+              "frequency_hz": 8000.001797433951,
+              "peak_amplitude_v": 0.3884053464341504,
+              "peak_to_peak_v": 0.773544396497129,
+              "sample_number": 7
+            },
+            {
+              "ac_rms_v": 0.27173340048452355,
+              "dc_v": 0.001095755638866703,
+              "frequency_hz": 7999.9998325451525,
+              "peak_amplitude_v": 0.39038710529442433,
+              "peak_to_peak_v": 0.7777524780140734,
+              "sample_number": 8
+            },
+            {
+              "ac_rms_v": 0.2717090098856968,
+              "dc_v": 0.00046635866217549336,
+              "frequency_hz": 7999.99804912447,
+              "peak_amplitude_v": 0.39198551617964483,
+              "peak_to_peak_v": 0.7791551718530549,
+              "sample_number": 9
+            },
+            {
+              "ac_rms_v": 0.27171692049939233,
+              "dc_v": 0.00016387186136925558,
+              "frequency_hz": 8000.000006450155,
+              "peak_amplitude_v": 0.3893727101146338,
+              "peak_to_peak_v": 0.7770098753934361,
+              "sample_number": 10
+            },
+            {
+              "ac_rms_v": 0.2717018354720631,
+              "dc_v": -0.00018432625630731913,
+              "frequency_hz": 7999.999091774137,
+              "peak_amplitude_v": 0.39133483126116203,
+              "peak_to_peak_v": 0.7804753542897434,
+              "sample_number": 11
+            },
+            {
+              "ac_rms_v": 0.2717273547365492,
+              "dc_v": -0.0001671638846303679,
+              "frequency_hz": 8000.000243008783,
+              "peak_amplitude_v": 0.39176455064430404,
+              "peak_to_peak_v": 0.7787426148415897,
+              "sample_number": 12
+            },
+            {
+              "ac_rms_v": 0.27164958054737365,
+              "dc_v": -0.00010767316357709666,
+              "frequency_hz": 8000.000858842887,
+              "peak_amplitude_v": 0.39281417819287373,
+              "peak_to_peak_v": 0.7814654911172596,
+              "sample_number": 13
+            },
+            {
+              "ac_rms_v": 0.27164883135172646,
+              "dc_v": 0.0003311224738172213,
+              "frequency_hz": 8000.000267787559,
+              "peak_amplitude_v": 0.3888798695087376,
+              "peak_to_peak_v": 0.776514806979678,
+              "sample_number": 14
+            },
+            {
+              "ac_rms_v": 0.2717070831874158,
+              "dc_v": 0.0005546458626290305,
+              "frequency_hz": 8000.001155816314,
+              "peak_amplitude_v": 0.391784518403659,
+              "peak_to_peak_v": 0.7805578656920363,
+              "sample_number": 15
+            },
+            {
+              "ac_rms_v": 0.27166774163743795,
+              "dc_v": 0.0011100301114633966,
+              "frequency_hz": 7999.998839704428,
+              "peak_amplitude_v": 0.3877636552585175,
+              "peak_to_peak_v": 0.7730493280833708,
+              "sample_number": 16
+            },
+            {
+              "ac_rms_v": 0.2716595067893623,
+              "dc_v": 0.0013821527162258002,
+              "frequency_hz": 8000.000420504946,
+              "peak_amplitude_v": 0.3900959225557322,
+              "peak_to_peak_v": 0.7780825236232455,
+              "sample_number": 17
+            },
+            {
+              "ac_rms_v": 0.27165529005065503,
+              "dc_v": 0.001412186866660462,
+              "frequency_hz": 8000.000714190111,
+              "peak_amplitude_v": 0.39012595670616684,
+              "peak_to_peak_v": 0.77684485258885,
+              "sample_number": 18
+            },
+            {
+              "ac_rms_v": 0.2717264017487428,
+              "dc_v": 0.0011957594584458523,
+              "frequency_hz": 7999.997433101958,
+              "peak_amplitude_v": 0.38908061975051655,
+              "peak_to_peak_v": 0.7759372271636269,
+              "sample_number": 19
+            },
+            {
+              "ac_rms_v": 0.27171872697684046,
+              "dc_v": 0.0009551562093593849,
+              "frequency_hz": 8000.003821791315,
+              "peak_amplitude_v": 0.39064140543629144,
+              "peak_to_peak_v": 0.7793201946576409,
+              "sample_number": 20
+            },
+            {
+              "ac_rms_v": 0.27179017202205114,
+              "dc_v": 0.00037402840300959417,
+              "frequency_hz": 8000.002283488581,
+              "peak_amplitude_v": 0.3913156061044277,
+              "peak_to_peak_v": 0.7777524780140734,
+              "sample_number": 21
+            },
+            {
+              "ac_rms_v": 0.27170554631538635,
+              "dc_v": 0.00017707368573614024,
+              "frequency_hz": 7999.9998516114665,
+              "peak_amplitude_v": 0.3911186513871543,
+              "peak_to_peak_v": 0.7809704227035015,
+              "sample_number": 22
+            },
+            {
+              "ac_rms_v": 0.2717226824950593,
+              "dc_v": -4.1994087351846844e-05,
+              "frequency_hz": 7999.998723909023,
+              "peak_amplitude_v": 0.3877641503269313,
+              "peak_to_peak_v": 0.7752771359452826,
+              "sample_number": 23
+            },
+            {
+              "ac_rms_v": 0.27176571710662983,
+              "dc_v": -0.00013341672109252122,
+              "frequency_hz": 8000.000388648195,
+              "peak_amplitude_v": 0.388992910129879,
+              "peak_to_peak_v": 0.7761847613705058,
+              "sample_number": 24
+            },
+            {
+              "ac_rms_v": 0.27168425120929945,
+              "dc_v": -0.0002168357488107715,
+              "frequency_hz": 7999.998449061587,
+              "peak_amplitude_v": 0.38991563514172195,
+              "peak_to_peak_v": 0.7769273639911431,
+              "sample_number": 25
+            },
+            {
+              "ac_rms_v": 0.27168418102458713,
+              "dc_v": -9.026325769326759e-05,
+              "frequency_hz": 8000.003333707493,
+              "peak_amplitude_v": 0.3907791994781208,
+              "peak_to_peak_v": 0.7802278200828642,
+              "sample_number": 26
+            },
+            {
+              "ac_rms_v": 0.2716553395272095,
+              "dc_v": -8.907015032344145e-06,
+              "frequency_hz": 8000.000895593372,
+              "peak_amplitude_v": 0.38754970319237164,
+              "peak_to_peak_v": 0.7741219763131801,
+              "sample_number": 27
+            },
+            {
+              "ac_rms_v": 0.27168738907064643,
+              "dc_v": 0.000578656680696303,
+              "frequency_hz": 8000.000168285166,
+              "peak_amplitude_v": 0.3878824716778195,
+              "peak_to_peak_v": 0.7751946245429895,
+              "sample_number": 28
+            },
+            {
+              "ac_rms_v": 0.27172598533486936,
+              "dc_v": 0.0009930289430118851,
+              "frequency_hz": 8000.002481900477,
+              "peak_amplitude_v": 0.388799173357295,
+              "peak_to_peak_v": 0.7774224324049013,
+              "sample_number": 29
+            },
+            {
+              "ac_rms_v": 0.27173781038882383,
+              "dc_v": 0.0012935354701630892,
+              "frequency_hz": 8000.000798178578,
+              "peak_amplitude_v": 0.39083241933259977,
+              "peak_to_peak_v": 0.7781650350255385,
+              "sample_number": 30
+            }
+          ]
+        },
+        "f2": {
+          "frequency_hz": 10000.0,
+          "start": {
+            "amplitude_v_peak": 1,
+            "frequency_hz": 10000,
+            "ok": true,
+            "peak_to_peak_v": 2,
+            "preset": "f2",
+            "service_payload": {
+              "amplitude": 1,
+              "frequency": 10000,
+              "status": "running"
+            },
+            "status": "running",
+            "timestamp": "30 Sep 2026 22:37:58"
+          },
+          "number_of_samples": 30,
+          "interval_s": 0.1,
+          "statistics": {
+            "ac_rms_v": {
+              "max": 0.36549255374068945,
+              "mean": 0.36504061532776416,
+              "min": 0.3645460189770843,
+              "std": 0.0002935005016053594
+            },
+            "dc_v": {
+              "max": 0.0015193691782391056,
+              "mean": 0.0006300282797639442,
+              "min": -0.00024579725101561765,
+              "std": 0.0005469147064049314
+            },
+            "frequency_hz": {
+              "max": 10000.005067040363,
+              "mean": 9999.999485385122,
+              "min": 9999.996058721214,
+              "std": 0.0019130039234287368
+            },
+            "peak_amplitude_v": {
+              "max": 0.5245560086640354,
+              "mean": 0.5170020347765072,
+              "min": 0.500991907328779,
+              "std": 0.006853214905627811
+            },
+            "peak_to_peak_v": {
+              "max": 1.0456670012595324,
+              "mean": 1.0319481054382782,
+              "min": 1.0005332642052465,
+              "std": 0.013284078381219179
+            }
+          },
+          "measurements": [
+            {
+              "ac_rms_v": 0.3651422308064705,
+              "dc_v": 6.609584965202076e-05,
+              "frequency_hz": 9999.998434059515,
+              "peak_amplitude_v": 0.5208258331891723,
+              "peak_to_peak_v": 1.0399737145013135,
+              "sample_number": 1
+            },
+            {
+              "ac_rms_v": 0.36549255374068945,
+              "dc_v": 9.976050178757123e-05,
+              "frequency_hz": 10000.00264260446,
+              "peak_amplitude_v": 0.5231420932743421,
+              "peak_to_peak_v": 1.0438517504090856,
+              "sample_number": 2
+            },
+            {
+              "ac_rms_v": 0.3651309758891864,
+              "dc_v": 0.00033401037289747823,
+              "frequency_hz": 9999.99891068586,
+              "peak_amplitude_v": 0.5227162519271078,
+              "peak_to_peak_v": 1.0446768644320161,
+              "sample_number": 3
+            },
+            {
+              "ac_rms_v": 0.3653531864586881,
+              "dc_v": 0.0007499503518566289,
+              "frequency_hz": 9999.9991677403,
+              "peak_amplitude_v": 0.5193168646640374,
+              "peak_to_peak_v": 1.038571020662332,
+              "sample_number": 4
+            },
+            {
+              "ac_rms_v": 0.36544161996592317,
+              "dc_v": 0.0008295738550694001,
+              "frequency_hz": 9999.998443393872,
+              "peak_amplitude_v": 0.5213965645588331,
+              "peak_to_peak_v": 1.041706453949467,
+              "sample_number": 5
+            },
+            {
+              "ac_rms_v": 0.36524732520113523,
+              "dc_v": 0.0011972446636871292,
+              "frequency_hz": 9999.998389311611,
+              "peak_amplitude_v": 0.5187938248849018,
+              "peak_to_peak_v": 1.0342804277430946,
+              "sample_number": 6
+            },
+            {
+              "ac_rms_v": 0.36525931555522934,
+              "dc_v": 0.0015193691782391056,
+              "frequency_hz": 10000.000112541504,
+              "peak_amplitude_v": 0.5229114739049331,
+              "peak_to_peak_v": 1.0436042162022066,
+              "sample_number": 7
+            },
+            {
+              "ac_rms_v": 0.36531648555437163,
+              "dc_v": 0.0013665580611924191,
+              "frequency_hz": 9999.999900143122,
+              "peak_amplitude_v": 0.5235837768108167,
+              "peak_to_peak_v": 1.0452544442480671,
+              "sample_number": 8
+            },
+            {
+              "ac_rms_v": 0.3651178831208844,
+              "dc_v": 0.0013129256497019521,
+              "frequency_hz": 9999.999429157197,
+              "peak_amplitude_v": 0.5189095058709167,
+              "peak_to_peak_v": 1.032877733904113,
+              "sample_number": 9
+            },
+            {
+              "ac_rms_v": 0.36495663674623513,
+              "dc_v": 0.0011568965879658398,
+              "frequency_hz": 9999.996058721214,
+              "peak_amplitude_v": 0.5203211934527481,
+              "peak_to_peak_v": 1.038323486455453,
+              "sample_number": 10
+            },
+            {
+              "ac_rms_v": 0.3650120415776295,
+              "dc_v": 0.0010449286150542015,
+              "frequency_hz": 10000.003640958885,
+              "peak_amplitude_v": 0.5203742482844226,
+              "peak_to_peak_v": 1.0401387373058997,
+              "sample_number": 11
+            },
+            {
+              "ac_rms_v": 0.36464120414965784,
+              "dc_v": 0.00036940776448119193,
+              "frequency_hz": 9999.999111483452,
+              "peak_amplitude_v": 0.5116112898266961,
+              "peak_to_peak_v": 1.0231413884335359,
+              "sample_number": 12
+            },
+            {
+              "ac_rms_v": 0.36487064493874877,
+              "dc_v": 0.0002559545863282757,
+              "frequency_hz": 10000.000085462594,
+              "peak_amplitude_v": 0.5191727172442315,
+              "peak_to_peak_v": 1.035683121582076,
+              "sample_number": 13
+            },
+            {
+              "ac_rms_v": 0.36471453087415484,
+              "dc_v": 1.8569281931240633e-05,
+              "frequency_hz": 9999.997580921969,
+              "peak_amplitude_v": 0.5070536900096385,
+              "peak_to_peak_v": 1.0129099745492005,
+              "sample_number": 14
+            },
+            {
+              "ac_rms_v": 0.3646347001981551,
+              "dc_v": -0.00024579725101561765,
+              "frequency_hz": 9999.997262281548,
+              "peak_amplitude_v": 0.5012610595230589,
+              "peak_to_peak_v": 1.001523401032763,
+              "sample_number": 15
+            },
+            {
+              "ac_rms_v": 0.3647606543008356,
+              "dc_v": -6.930536151083256e-05,
+              "frequency_hz": 9999.999807465205,
+              "peak_amplitude_v": 0.5077084179868336,
+              "peak_to_peak_v": 1.014065134181303,
+              "sample_number": 16
+            },
+            {
+              "ac_rms_v": 0.36482985140768337,
+              "dc_v": 0.00022237244559501356,
+              "frequency_hz": 10000.005067040363,
+              "peak_amplitude_v": 0.5169113272415864,
+              "peak_to_peak_v": 1.0311449944559596,
+              "sample_number": 17
+            },
+            {
+              "ac_rms_v": 0.36457271513155487,
+              "dc_v": 0.0003526579498157081,
+              "frequency_hz": 10000.000219826423,
+              "peak_amplitude_v": 0.5060997756877288,
+              "peak_to_peak_v": 1.0102696096758237,
+              "sample_number": 18
+            },
+            {
+              "ac_rms_v": 0.36547332992041726,
+              "dc_v": 0.000589713208603569,
+              "frequency_hz": 9999.998327054916,
+              "peak_amplitude_v": 0.5220643293375906,
+              "peak_to_peak_v": 1.0407988285242438,
+              "sample_number": 19
+            },
+            {
+              "ac_rms_v": 0.3649414863455544,
+              "dc_v": 0.000787410528497662,
+              "frequency_hz": 9999.998973055734,
+              "peak_amplitude_v": 0.5193741275772287,
+              "peak_to_peak_v": 1.038488509260039,
+              "sample_number": 20
+            },
+            {
+              "ac_rms_v": 0.3650304107880486,
+              "dc_v": 0.001206650963548533,
+              "frequency_hz": 10000.000823556511,
+              "peak_amplitude_v": 0.5202884364260377,
+              "peak_to_peak_v": 1.0370858154210576,
+              "sample_number": 21
+            },
+            {
+              "ac_rms_v": 0.3645460189770843,
+              "dc_v": 0.0013003014051511243,
+              "frequency_hz": 10000.00136589527,
+              "peak_amplitude_v": 0.500991907328779,
+              "peak_to_peak_v": 1.0005332642052465,
+              "sample_number": 22
+            },
+            {
+              "ac_rms_v": 0.364632782703362,
+              "dc_v": 0.0013676307094222348,
+              "frequency_hz": 10000.001251643198,
+              "peak_amplitude_v": 0.5083852590198433,
+              "peak_to_peak_v": 1.0141476455835958,
+              "sample_number": 23
+            },
+            {
+              "ac_rms_v": 0.3648837645009297,
+              "dc_v": 0.001352201077193433,
+              "frequency_hz": 9999.997628902598,
+              "peak_amplitude_v": 0.5203514751373897,
+              "peak_to_peak_v": 1.0376633952371086,
+              "sample_number": 24
+            },
+            {
+              "ac_rms_v": 0.3653691898669602,
+              "dc_v": 0.0010186074777227222,
+              "frequency_hz": 10000.000219048654,
+              "peak_amplitude_v": 0.5245560086640354,
+              "peak_to_peak_v": 1.0456670012595324,
+              "sample_number": 25
+            },
+            {
+              "ac_rms_v": 0.36540004783486624,
+              "dc_v": 0.0005256018490218852,
+              "frequency_hz": 9999.998199381249,
+              "peak_amplitude_v": 0.5231553776101112,
+              "peak_to_peak_v": 1.0440992846159647,
+              "sample_number": 26
+            },
+            {
+              "ac_rms_v": 0.36477545975582215,
+              "dc_v": 0.0003066990987384932,
+              "frequency_hz": 9999.996864608242,
+              "peak_amplitude_v": 0.5111789300786806,
+              "peak_to_peak_v": 1.0222337630083125,
+              "sample_number": 27
+            },
+            {
+              "ac_rms_v": 0.3649922656682295,
+              "dc_v": 0.00014019108891116395,
+              "frequency_hz": 9999.998892847942,
+              "peak_amplitude_v": 0.5121259959542,
+              "peak_to_peak_v": 1.0227288314220708,
+              "sample_number": 28
+            },
+            {
+              "ac_rms_v": 0.36533824436760853,
+              "dc_v": -3.4238015536302015e-05,
+              "frequency_hz": 9999.997901859559,
+              "peak_amplitude_v": 0.5213578667111577,
+              "peak_to_peak_v": 1.0394786460875554,
+              "sample_number": 29
+            },
+            {
+              "ac_rms_v": 0.3653409034868065,
+              "dc_v": -0.00024109410108492192,
+              "frequency_hz": 9999.999849900725,
+              "peak_amplitude_v": 0.524121421108158,
+              "peak_to_peak_v": 1.0435217047999137,
+              "sample_number": 30
+            }
+          ]
+        },
+        "f3": {
+          "frequency_hz": 15000.0,
+          "start": {
+            "amplitude_v_peak": 1,
+            "frequency_hz": 15000,
+            "ok": true,
+            "peak_to_peak_v": 2,
+            "preset": "f3",
+            "service_payload": {
+              "amplitude": 1,
+              "frequency": 15000,
+              "status": "running"
+            },
+            "status": "running",
+            "timestamp": "30 Sep 2026 22:38:05"
+          },
+          "number_of_samples": 30,
+          "interval_s": 0.1,
+          "statistics": {
+            "ac_rms_v": {
+              "max": 0.5114669135271858,
+              "mean": 0.5113852019011167,
+              "min": 0.5112765862130073,
+              "std": 4.3429007859628727e-05
+            },
+            "dc_v": {
+              "max": 0.001421263120912701,
+              "mean": 0.000528569509124364,
+              "min": -0.0002566887561183016,
+              "std": 0.0005439809297731783
+            },
+            "frequency_hz": {
+              "max": 15000.006683397038,
+              "mean": 15000.00154254863,
+              "min": 14999.994428344004,
+              "std": 0.0026702807258318063
+            },
+            "peak_amplitude_v": {
+              "max": 0.7358095393978612,
+              "mean": 0.7289579768269133,
+              "min": 0.7209659031481502,
+              "std": 0.0036858370095350975
+            },
+            "peak_to_peak_v": {
+              "max": 1.4662276187470913,
+              "mean": 1.4550418229762339,
+              "min": 1.4417217322660625,
+              "std": 0.006505425685922282
+            }
+          },
+          "measurements": [
+            {
+              "ac_rms_v": 0.5113461250702529,
+              "dc_v": 6.605128598746734e-06,
+              "frequency_hz": 15000.00129055265,
+              "peak_amplitude_v": 0.7339480821621305,
+              "peak_to_peak_v": 1.4625971170461982,
+              "sample_number": 1
+            },
+            {
+              "ac_rms_v": 0.5114075043705711,
+              "dc_v": 0.0003187457634732731,
+              "frequency_hz": 14999.999074669598,
+              "peak_amplitude_v": 0.7304646982915257,
+              "peak_to_peak_v": 1.4538509084031372,
+              "sample_number": 2
+            },
+            {
+              "ac_rms_v": 0.5113802001759986,
+              "dc_v": 0.0005361633085154005,
+              "frequency_hz": 15000.004091740928,
+              "peak_amplitude_v": 0.7244937606645908,
+              "peak_to_peak_v": 1.4484876672540907,
+              "sample_number": 3
+            },
+            {
+              "ac_rms_v": 0.5113963026663413,
+              "dc_v": 0.0006794031028960939,
+              "frequency_hz": 15000.005669480328,
+              "peak_amplitude_v": 0.7291751275850881,
+              "peak_to_peak_v": 1.4559962048627562,
+              "sample_number": 4
+            },
+            {
+              "ac_rms_v": 0.5114669135271858,
+              "dc_v": 0.0008012724440828965,
+              "frequency_hz": 15000.002613696694,
+              "peak_amplitude_v": 0.7222835277313676,
+              "peak_to_peak_v": 1.4436194945188021,
+              "sample_number": 5
+            },
+            {
+              "ac_rms_v": 0.5113241372982364,
+              "dc_v": 0.001009696246275081,
+              "frequency_hz": 15000.003488528302,
+              "peak_amplitude_v": 0.7281027268894856,
+              "peak_to_peak_v": 1.4538509084031372,
+              "sample_number": 6
+            },
+            {
+              "ac_rms_v": 0.5114441804513249,
+              "dc_v": 0.00128792469480717,
+              "frequency_hz": 15000.001593617815,
+              "peak_amplitude_v": 0.7284634667403107,
+              "peak_to_peak_v": 1.4531908171847931,
+              "sample_number": 7
+            },
+            {
+              "ac_rms_v": 0.5114591241755931,
+              "dc_v": 0.001421263120912701,
+              "frequency_hz": 14999.998928551142,
+              "peak_amplitude_v": 0.7273591341320209,
+              "peak_to_peak_v": 1.4512930549320537,
+              "sample_number": 8
+            },
+            {
+              "ac_rms_v": 0.5113952858602434,
+              "dc_v": 0.0010923726713726952,
+              "frequency_hz": 15000.004282816133,
+              "peak_amplitude_v": 0.7337961786705091,
+              "peak_to_peak_v": 1.461854514425561,
+              "sample_number": 9
+            },
+            {
+              "ac_rms_v": 0.5113601591165596,
+              "dc_v": 0.0004920197082886307,
+              "frequency_hz": 15000.00538217858,
+              "peak_amplitude_v": 0.7322882002822017,
+              "peak_to_peak_v": 1.4599567521728214,
+              "sample_number": 10
+            },
+            {
+              "ac_rms_v": 0.5112765862130073,
+              "dc_v": 3.960968951595856e-05,
+              "frequency_hz": 15000.001608944249,
+              "peak_amplitude_v": 0.7334035069069966,
+              "peak_to_peak_v": 1.4630921854599563,
+              "sample_number": 11
+            },
+            {
+              "ac_rms_v": 0.5113664810465401,
+              "dc_v": 0.00013532291617587123,
+              "frequency_hz": 15000.00007868823,
+              "peak_amplitude_v": 0.7358095393978612,
+              "peak_to_peak_v": 1.464907436310403,
+              "sample_number": 12
+            },
+            {
+              "ac_rms_v": 0.5113431198648083,
+              "dc_v": -0.00019216483952514958,
+              "frequency_hz": 15000.003874047843,
+              "peak_amplitude_v": 0.725910728976169,
+              "peak_to_peak_v": 1.4487352014609698,
+              "sample_number": 13
+            },
+            {
+              "ac_rms_v": 0.5113808360942511,
+              "dc_v": -0.00016295580311342171,
+              "frequency_hz": 15000.003425344757,
+              "peak_amplitude_v": 0.7309638922753986,
+              "peak_to_peak_v": 1.4611944232072167,
+              "sample_number": 14
+            },
+            {
+              "ac_rms_v": 0.511396825069211,
+              "dc_v": 0.00012055337516541776,
+              "frequency_hz": 15000.002474176114,
+              "peak_amplitude_v": 0.730514040110097,
+              "peak_to_peak_v": 1.4598742407705285,
+              "sample_number": 15
+            },
+            {
+              "ac_rms_v": 0.5114585675344914,
+              "dc_v": 0.0005562960906749,
+              "frequency_hz": 15000.001702354886,
+              "peak_amplitude_v": 0.7209659031481502,
+              "peak_to_peak_v": 1.4417217322660625,
+              "sample_number": 16
+            },
+            {
+              "ac_rms_v": 0.5113457275953944,
+              "dc_v": 0.0010176173408952094,
+              "frequency_hz": 15000.000491298943,
+              "peak_amplitude_v": 0.7293483190185012,
+              "peak_to_peak_v": 1.4578114557132027,
+              "sample_number": 17
+            },
+            {
+              "ac_rms_v": 0.511373452450588,
+              "dc_v": 0.0012815713168306063,
+              "frequency_hz": 14999.999636148186,
+              "peak_amplitude_v": 0.728209579155455,
+              "peak_to_peak_v": 1.452613237368742,
+              "sample_number": 18
+            },
+            {
+              "ac_rms_v": 0.5114144725151465,
+              "dc_v": 0.0014107841728214867,
+              "frequency_hz": 15000.001442112753,
+              "peak_amplitude_v": 0.728421303413739,
+              "peak_to_peak_v": 1.4560787162650493,
+              "sample_number": 19
+            },
+            {
+              "ac_rms_v": 0.5113936053747828,
+              "dc_v": 0.0013702710742956121,
+              "frequency_hz": 14999.99893391687,
+              "peak_amplitude_v": 0.7261529824533014,
+              "peak_to_peak_v": 1.4493952926793139,
+              "sample_number": 20
+            },
+            {
+              "ac_rms_v": 0.5113791461585122,
+              "dc_v": 0.0012130043415251005,
+              "frequency_hz": 14999.998956622005,
+              "peak_amplitude_v": 0.729626217421424,
+              "peak_to_peak_v": 1.455996204862756,
+              "sample_number": 21
+            },
+            {
+              "ac_rms_v": 0.5113996101440036,
+              "dc_v": 0.0007761889777858173,
+              "frequency_hz": 14999.998025059815,
+              "peak_amplitude_v": 0.7228360240811217,
+              "peak_to_peak_v": 1.4431244261050438,
+              "sample_number": 22
+            },
+            {
+              "ac_rms_v": 0.5113482109492213,
+              "dc_v": 0.0005190834482407438,
+              "frequency_hz": 14999.99923073784,
+              "peak_amplitude_v": 0.7282722053097954,
+              "peak_to_peak_v": 1.452448214564156,
+              "sample_number": 23
+            },
+            {
+              "ac_rms_v": 0.5113911737740579,
+              "dc_v": 0.00029671521906103626,
+              "frequency_hz": 15000.006683397038,
+              "peak_amplitude_v": 0.7302776449425276,
+              "peak_to_peak_v": 1.4569863416902724,
+              "sample_number": 24
+            },
+            {
+              "ac_rms_v": 0.5113372381120573,
+              "dc_v": 0.00032328389059938813,
+              "frequency_hz": 15000.005760202177,
+              "peak_amplitude_v": 0.7297266337980147,
+              "peak_to_peak_v": 1.458224012724668,
+              "sample_number": 25
+            },
+            {
+              "ac_rms_v": 0.5114603288040328,
+              "dc_v": 0.00013862337226759226,
+              "frequency_hz": 15000.000845271436,
+              "peak_amplitude_v": 0.7342451232103854,
+              "peak_to_peak_v": 1.4662276187470913,
+              "sample_number": 26
+            },
+            {
+              "ac_rms_v": 0.5113553762255738,
+              "dc_v": -4.570710045502968e-05,
+              "frequency_hz": 14999.999350482583,
+              "peak_amplitude_v": 0.7300177340253045,
+              "peak_to_peak_v": 1.4599567521728214,
+              "sample_number": 27
+            },
+            {
+              "ac_rms_v": 0.5113899273179968,
+              "dc_v": -0.0002566887561183016,
+              "frequency_hz": 15000.002479298962,
+              "peak_amplitude_v": 0.7336022768751205,
+              "peak_to_peak_v": 1.4616894916209748,
+              "sample_number": 28
+            },
+            {
+              "ac_rms_v": 0.5113532567558883,
+              "dc_v": -0.00019645543244438534,
+              "frequency_hz": 15000.000434178006,
+              "peak_amplitude_v": 0.7254938813717846,
+              "peak_to_peak_v": 1.450550452311416,
+              "sample_number": 29
+            },
+            {
+              "ac_rms_v": 0.5114121823216276,
+              "dc_v": -0.00013333420969022214,
+              "frequency_hz": 14999.994428344004,
+              "peak_amplitude_v": 0.7245668657670226,
+              "peak_to_peak_v": 1.4459298137830068,
+              "sample_number": 30
+            }
+          ]
+        },
+        "f4": {
+          "frequency_hz": 20000.0,
+          "start": {
+            "amplitude_v_peak": 1,
+            "frequency_hz": 20000,
+            "ok": true,
+            "peak_to_peak_v": 2,
+            "preset": "f4",
+            "service_payload": {
+              "amplitude": 1,
+              "frequency": 20000,
+              "status": "running"
+            },
+            "status": "running",
+            "timestamp": "30 Sep 2026 22:38:11"
+          },
+          "number_of_samples": 30,
+          "interval_s": 0.1,
+          "statistics": {
+            "ac_rms_v": {
+              "max": 0.5604112831670156,
+              "mean": 0.5599806136580159,
+              "min": 0.5591937451491105,
+              "std": 0.00038800709713264286
+            },
+            "dc_v": {
+              "max": 0.0014678820632082637,
+              "mean": 0.0005800813775759009,
+              "min": -0.00021023483662732602,
+              "std": 0.0005551120215409748
+            },
+            "frequency_hz": {
+              "max": 20000.007274899956,
+              "mean": 19999.99953326406,
+              "min": 19999.99240774176,
+              "std": 0.003625393624536651
+            },
+            "peak_amplitude_v": {
+              "max": 0.8021891374285786,
+              "mean": 0.7841403182529942,
+              "min": 0.7594489736434112,
+              "std": 0.01309423472777501
+            },
+            "peak_to_peak_v": {
+              "max": 1.5210977012719544,
+              "mean": 1.4955274177013453,
+              "min": 1.4443620971394393,
+              "std": 0.021024701366627794
+            }
+          },
+          "measurements": [
+            {
+              "ac_rms_v": 0.5593266197154299,
+              "dc_v": 0.0011111027596932103,
+              "frequency_hz": 19999.99519203392,
+              "peak_amplitude_v": 0.7987513823634419,
+              "peak_to_peak_v": 1.4809146483552502,
+              "sample_number": 1
+            },
+            {
+              "ac_rms_v": 0.5593881533487545,
+              "dc_v": 0.0005921060392700711,
+              "frequency_hz": 19999.993491992238,
+              "peak_amplitude_v": 0.8017803759416189,
+              "peak_to_peak_v": 1.4717558827007242,
+              "sample_number": 2
+            },
+            {
+              "ac_rms_v": 0.5604112831670156,
+              "dc_v": 0.00018334455231041634,
+              "frequency_hz": 19999.998931447386,
+              "peak_amplitude_v": 0.7776490912270002,
+              "peak_to_peak_v": 1.5107012645830329,
+              "sample_number": 3
+            },
+            {
+              "ac_rms_v": 0.5591937451491105,
+              "dc_v": -0.0001483512849075499,
+              "frequency_hz": 19999.999628917572,
+              "peak_amplitude_v": 0.7902309249170548,
+              "peak_to_peak_v": 1.5006348735032837,
+              "sample_number": 4
+            },
+            {
+              "ac_rms_v": 0.5599627311708095,
+              "dc_v": -0.00012161759056461462,
+              "frequency_hz": 20000.003896735416,
+              "peak_amplitude_v": 0.7855451023808337,
+              "peak_to_peak_v": 1.5036877953881258,
+              "sample_number": 5
+            },
+            {
+              "ac_rms_v": 0.5594515490469266,
+              "dc_v": 6.0402562893805855e-05,
+              "frequency_hz": 20000.0040852606,
+              "peak_amplitude_v": 0.7617257107668828,
+              "peak_to_peak_v": 1.5176322223756475,
+              "sample_number": 6
+            },
+            {
+              "ac_rms_v": 0.5603178045253894,
+              "dc_v": 0.0005730459053403838,
+              "frequency_hz": 19999.997316756737,
+              "peak_amplitude_v": 0.782948716084879,
+              "peak_to_peak_v": 1.5056680690431583,
+              "sample_number": 7
+            },
+            {
+              "ac_rms_v": 0.5600818437611628,
+              "dc_v": 0.001151698369621379,
+              "frequency_hz": 20000.001519894853,
+              "peak_amplitude_v": 0.7950807801210343,
+              "peak_to_peak_v": 1.4593791723567704,
+              "sample_number": 8
+            },
+            {
+              "ac_rms_v": 0.5603995313207465,
+              "dc_v": 0.001335698796734833,
+              "frequency_hz": 20000.00277354612,
+              "peak_amplitude_v": 0.7599119451216774,
+              "peak_to_peak_v": 1.5155694373183217,
+              "sample_number": 9
+            },
+            {
+              "ac_rms_v": 0.5602765027101676,
+              "dc_v": 0.001330913135401833,
+              "frequency_hz": 19999.998081597354,
+              "peak_amplitude_v": 0.8021891374285786,
+              "peak_to_peak_v": 1.4854527754813667,
+              "sample_number": 10
+            },
+            {
+              "ac_rms_v": 0.5602584473593886,
+              "dc_v": 0.0011266149033242986,
+              "frequency_hz": 19999.997375511208,
+              "peak_amplitude_v": 0.7952708863919175,
+              "peak_to_peak_v": 1.4783567948841665,
+              "sample_number": 11
+            },
+            {
+              "ac_rms_v": 0.5593405156014505,
+              "dc_v": 0.0008261908875753899,
+              "frequency_hz": 19999.99668964622,
+              "peak_amplitude_v": 0.7740430954125881,
+              "peak_to_peak_v": 1.519777518835266,
+              "sample_number": 12
+            },
+            {
+              "ac_rms_v": 0.560272684739815,
+              "dc_v": 0.0006368272193128908,
+              "frequency_hz": 20000.00242110399,
+              "peak_amplitude_v": 0.7960492989611498,
+              "peak_to_peak_v": 1.4894133227914321,
+              "sample_number": 13
+            },
+            {
+              "ac_rms_v": 0.5594896378067166,
+              "dc_v": 0.00023095363143349246,
+              "frequency_hz": 20000.00113977265,
+              "peak_amplitude_v": 0.7594489736434112,
+              "peak_to_peak_v": 1.5157344601229077,
+              "sample_number": 14
+            },
+            {
+              "ac_rms_v": 0.5599924678774064,
+              "dc_v": -0.00021023483662732602,
+              "frequency_hz": 20000.00646144018,
+              "peak_amplitude_v": 0.7878615274888081,
+              "peak_to_peak_v": 1.5026151471583162,
+              "sample_number": 15
+            },
+            {
+              "ac_rms_v": 0.5602999832950334,
+              "dc_v": -4.0756416317444535e-05,
+              "frequency_hz": 20000.007274899956,
+              "peak_amplitude_v": 0.7650014134379158,
+              "peak_to_peak_v": 1.513589163663289,
+              "sample_number": 16
+            },
+            {
+              "ac_rms_v": 0.5603132007905447,
+              "dc_v": 0.0003083493267843505,
+              "frequency_hz": 20000.000275552607,
+              "peak_amplitude_v": 0.7934487870950805,
+              "peak_to_peak_v": 1.480419579941492,
+              "sample_number": 17
+            },
+            {
+              "ac_rms_v": 0.5601813464711296,
+              "dc_v": 0.0006133939810616706,
+              "frequency_hz": 19999.99730926755,
+              "peak_amplitude_v": 0.7931437424408032,
+              "peak_to_peak_v": 1.4808321369529573,
+              "sample_number": 18
+            },
+            {
+              "ac_rms_v": 0.5596007092455597,
+              "dc_v": 0.001083213905718169,
+              "frequency_hz": 20000.000020052335,
+              "peak_amplitude_v": 0.7640424659204663,
+              "peak_to_peak_v": 1.5169721311573032,
+              "sample_number": 19
+            },
+            {
+              "ac_rms_v": 0.5603873983170767,
+              "dc_v": 0.0013485705754925452,
+              "frequency_hz": 19999.999437257295,
+              "peak_amplitude_v": 0.786364605628408,
+              "peak_to_peak_v": 1.5066582058706746,
+              "sample_number": 20
+            },
+            {
+              "ac_rms_v": 0.5602350615340305,
+              "dc_v": 0.001454680238841379,
+              "frequency_hz": 19999.99561473393,
+              "peak_amplitude_v": 0.7811634168734648,
+              "peak_to_peak_v": 1.5059981146523307,
+              "sample_number": 21
+            },
+            {
+              "ac_rms_v": 0.5599515454676697,
+              "dc_v": 0.0014678820632082637,
+              "frequency_hz": 19999.998343458083,
+              "peak_amplitude_v": 0.7813152378536841,
+              "peak_to_peak_v": 1.5031927269743677,
+              "sample_number": 22
+            },
+            {
+              "ac_rms_v": 0.5592952077393579,
+              "dc_v": 0.0012117666704907072,
+              "frequency_hz": 19999.996611446393,
+              "peak_amplitude_v": 0.7733560229656941,
+              "peak_to_peak_v": 1.5210977012719544,
+              "sample_number": 23
+            },
+            {
+              "ac_rms_v": 0.5598618849561651,
+              "dc_v": 0.0007558086614194357,
+              "frequency_hz": 20000.002460991862,
+              "peak_amplitude_v": 0.7865654383815893,
+              "peak_to_peak_v": 1.5023676129514372,
+              "sample_number": 24
+            },
+            {
+              "ac_rms_v": 0.5602002681936449,
+              "dc_v": 0.000293579785773899,
+              "frequency_hz": 20000.001512665676,
+              "peak_amplitude_v": 0.7932985338315048,
+              "peak_to_peak_v": 1.48636040090659,
+              "sample_number": 25
+            },
+            {
+              "ac_rms_v": 0.5599614095691916,
+              "dc_v": 0.00028095554122306956,
+              "frequency_hz": 20000.002671524853,
+              "peak_amplitude_v": 0.7796142652954132,
+              "peak_to_peak_v": 1.5091335479394656,
+              "sample_number": 26
+            },
+            {
+              "ac_rms_v": 0.560258121695669,
+              "dc_v": 5.190388845762095e-05,
+              "frequency_hz": 20000.001159753356,
+              "peak_amplitude_v": 0.7972532228320074,
+              "peak_to_peak_v": 1.4443620971394393,
+              "sample_number": 27
+            },
+            {
+              "ac_rms_v": 0.5603446489701746,
+              "dc_v": -0.00017071187492896333,
+              "frequency_hz": 19999.99851839806,
+              "peak_amplitude_v": 0.7666103032712276,
+              "peak_to_peak_v": 1.5178797565825266,
+              "sample_number": 28
+            },
+            {
+              "ac_rms_v": 0.560159524205664,
+              "dc_v": -0.00010973594863441772,
+              "frequency_hz": 19999.99240774176,
+              "peak_amplitude_v": 0.7973323512668063,
+              "peak_to_peak_v": 1.4703531888617427,
+              "sample_number": 29
+            },
+            {
+              "ac_rms_v": 0.5602045819892744,
+              "dc_v": 0.00017484587787422855,
+              "frequency_hz": 19999.99337452171,
+              "peak_amplitude_v": 0.7972127922448838,
+              "peak_to_peak_v": 1.4493127812770208,
+              "sample_number": 30
+            }
+          ]
+        }
+      }
+    },
+    "signal_features": {
+      "f1_ac_rms_v_mean": 0.271709911,
+      "f1_ac_rms_v_std": 3.923e-05,
+      "f1_peak_amplitude_v_mean": 0.389791808,
+      "f1_peak_amplitude_v_std": 0.00148337,
+      "f1_peak_to_peak_v_mean": 0.777279413,
+      "f1_peak_to_peak_v_std": 0.002250503,
+      "f1_frequency_hz_mean": 8000.000633151,
+      "f1_frequency_hz_std": 0.001659257,
+      "f1_dc_v_mean": 0.000583673,
+      "f1_dc_v_std": 0.000560732,
+      "f2_ac_rms_v_mean": 0.365040615,
+      "f2_ac_rms_v_std": 0.000293501,
+      "f2_peak_amplitude_v_mean": 0.517002035,
+      "f2_peak_amplitude_v_std": 0.006853215,
+      "f2_peak_to_peak_v_mean": 1.031948105,
+      "f2_peak_to_peak_v_std": 0.013284078,
+      "f2_frequency_hz_mean": 9999.999485385,
+      "f2_frequency_hz_std": 0.001913004,
+      "f2_dc_v_mean": 0.000630028,
+      "f2_dc_v_std": 0.000546915,
+      "f3_ac_rms_v_mean": 0.511385202,
+      "f3_ac_rms_v_std": 4.3429e-05,
+      "f3_peak_amplitude_v_mean": 0.728957977,
+      "f3_peak_amplitude_v_std": 0.003685837,
+      "f3_peak_to_peak_v_mean": 1.455041823,
+      "f3_peak_to_peak_v_std": 0.006505426,
+      "f3_frequency_hz_mean": 15000.001542549,
+      "f3_frequency_hz_std": 0.002670281,
+      "f3_dc_v_mean": 0.00052857,
+      "f3_dc_v_std": 0.000543981,
+      "f4_ac_rms_v_mean": 0.559980614,
+      "f4_ac_rms_v_std": 0.000388007,
+      "f4_peak_amplitude_v_mean": 0.784140318,
+      "f4_peak_amplitude_v_std": 0.013094235,
+      "f4_peak_to_peak_v_mean": 1.495527418,
+      "f4_peak_to_peak_v_std": 0.021024701,
+      "f4_frequency_hz_mean": 19999.999533264,
+      "f4_frequency_hz_std": 0.003625394,
+      "f4_dc_v_mean": 0.000580081,
+      "f4_dc_v_std": 0.000555112
+    },
+    "air_comparison": {
+      "f1": {
+        "frequency_hz": 8000.0,
+        "air_ac_rms_v": 0.317939412,
+        "material_ac_rms_v": 0.271709911,
+        "delta_ac_rms_v": -0.046229501,
+        "delta_pct": -14.540349
+      },
+      "f2": {
+        "frequency_hz": 10000.0,
+        "air_ac_rms_v": 0.425242705,
+        "material_ac_rms_v": 0.365040615,
+        "delta_ac_rms_v": -0.06020209,
+        "delta_pct": -14.157113
+      },
+      "f3": {
+        "frequency_hz": 15000.0,
+        "air_ac_rms_v": 0.58292844,
+        "material_ac_rms_v": 0.511385202,
+        "delta_ac_rms_v": -0.071543239,
+        "delta_pct": -12.273074
+      },
+      "f4": {
+        "frequency_hz": 20000.0,
+        "air_ac_rms_v": 0.627565566,
+        "material_ac_rms_v": 0.559980614,
+        "delta_ac_rms_v": -0.067584952,
+        "delta_pct": -10.769385
+      }
+    },
+    "frequency_order": [
+      "f1",
+      "f2",
+      "f3",
+      "f4"
+    ],
+    "frequency_presets_hz": {
+      "f1": 8000.0,
+      "f2": 10000.0,
+      "f3": 15000.0,
+      "f4": 20000.0
+    },
+    "amplitude_v_peak": 1.0,
+    "peak_to_peak_v": 2.0,
+    "samples_per_frequency": 30,
+    "sample_interval_s": 0.1,
+    "calibration_used": "2026-09-30T20:01:03+08:00",
+    "status": "Reference sample · F1-F4 captured",
+    "feature_version": 4,
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000.0,
+        "channels": {
+          "signal": {
+            "rms": 0.271709911,
+            "std": 3.923e-05,
+            "unit": "V",
+            "sample_count": 30,
+            "source": "signal_service"
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000.0,
+        "channels": {
+          "signal": {
+            "rms": 0.365040615,
+            "std": 0.000293501,
+            "unit": "V",
+            "sample_count": 30,
+            "source": "signal_service"
+          }
+        }
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000.0,
+        "channels": {
+          "signal": {
+            "rms": 0.511385202,
+            "std": 4.3429e-05,
+            "unit": "V",
+            "sample_count": 30,
+            "source": "signal_service"
+          }
+        }
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000.0,
+        "channels": {
+          "signal": {
+            "rms": 0.559980614,
+            "std": 0.000388007,
+            "unit": "V",
+            "sample_count": 30,
+            "source": "signal_service"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "T-214604",
     "date": "27 Sep 2026",
     "time": "21:46",
