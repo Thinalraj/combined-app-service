@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 # CONFIGURATION
 # ============================================================
 
-PORT = "COM5"
+PORT = "COM4"
 BAUDRATE = 9600
 
 READ_COMMAND = b"SI\r\n"
