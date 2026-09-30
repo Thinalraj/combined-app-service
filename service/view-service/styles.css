@@ -1614,29 +1614,127 @@ output {
 
 .load-cell-grid {
   grid-template-columns: repeat(3, 1fr);
-  margin-top: 14px;
+  margin-top: 6px;
+  width: 100%;
 }
 
 #loadCellScreen .settings-panel {
   align-content: start;
-  padding: 22px;
+  gap: 7px;
+  padding: 14px 18px;
 }
 
-#loadCellScreen .button-row {
-  gap: 8px;
-  grid-template-columns: 0.7fr 1.3fr 1.2fr 0.9fr;
-  margin-bottom: 14px;
+#loadCellScreen .settings-panel h2 {
+  font-size: 28px;
 }
 
-#loadCellScreen .button-row button {
-  font-size: 15px;
-  min-height: 48px;
-  padding: 0 8px;
+#loadCellScreen .metric-card.compact {
+  min-height: 64px;
+}
+
+#loadCellScreen .metric-card.compact strong {
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.load-cell-result-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+}
+
+.load-cell-result-grid div {
+  background: #0b0e12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.load-cell-result-grid span {
+  color: var(--dim);
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.load-cell-result-grid strong {
+  color: var(--text);
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.load-cell-response {
+  align-items: center;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: 1fr auto;
+  width: 100%;
+}
+
+.load-cell-response > span {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#loadCellUpdated {
+  color: var(--dim);
+  text-align: right;
+}
+
+#loadCellResultJson {
+  background: #080a0d;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #cbd4df;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 10px;
+  grid-column: 1 / -1;
+  height: 54px;
+  margin: 0;
+  overflow: auto;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+#loadCellScreen .button-row.load-cell-actions {
+  gap: 6px;
+  grid-template-columns: 0.65fr 0.75fr 0.75fr 1.35fr 0.95fr 1fr;
+  margin-bottom: 8px;
+  margin-top: 8px;
+}
+
+#loadCellScreen .button-row.load-cell-actions button {
+  font-size: 12px;
+  line-height: 1.1;
+  min-height: 48px;
+  padding: 0 6px;
+  white-space: normal;
+}
+
 #loadCellZeroButton {
-  box-shadow: 0 0 18px rgba(255, 214, 75, 0.22);
+  border-color: rgba(255, 216, 77, 0.58);
+  color: var(--yellow);
+}
+
+#loadCellTareButton {
+  border-color: rgba(255, 159, 26, 0.58);
+  color: var(--orange);
 }
 
 #frequencyModeScreen .calibration-note button {

@@ -82,7 +82,8 @@ ADMIN_PIN = "242218"
 LOAD_CELL_PORT = "/dev/ttyUSB0"
 LOAD_CELL_BAUD = 9600
 LOAD_CELL_READ_COMMAND = "SI"
-LOAD_CELL_ZERO_COMMAND = "TI"
+LOAD_CELL_ZERO_COMMAND = "ZI"
+LOAD_CELL_TARE_COMMAND = "TI"
 LOAD_CELL_READ_WAIT_SECONDS = 0.25
 LOAD_CELL_STABLE_RETRY_SECONDS = 0.5
 LOAD_CELL_STABLE_MAX_ATTEMPTS = 8
@@ -517,6 +518,7 @@ def normalize_weight_service_payload(payload: dict) -> dict:
         weight = parse_float(payload.get("weight"))
     if weight is None:
         ok = False
+
     sample_count = int(parse_float(payload.get("samples_valid"), parse_float(payload.get("sample_count"), 0)) or 0)
     minimum = parse_float(payload.get("minimum"), parse_float(payload.get("min_g")))
     maximum = parse_float(payload.get("maximum"), parse_float(payload.get("max_g")))
@@ -524,6 +526,25 @@ def normalize_weight_service_payload(payload: dict) -> dict:
     std_g = parse_float(payload.get("std_g"))
     if std_g is None and range_value is not None:
         std_g = range_value / 2.0
+
+    service_status = str(payload.get("status") or payload.get("scale_status") or "").strip().upper()
+    dynamic_samples = int(parse_float(payload.get("dynamic_samples"), 0) or 0)
+    if service_status in {"S", "STABLE"}:
+        stable = True
+    elif service_status in {"D", "DYNAMIC"}:
+        stable = False
+    else:
+        stable = dynamic_samples == 0
+
+    if sample_count > 1 or "average" in payload:
+        status = "stable" if stable else "dynamic"
+    elif service_status in {"S", "STABLE"}:
+        status = "stable"
+    elif service_status in {"D", "DYNAMIC"}:
+        status = "dynamic"
+    else:
+        status = str(payload.get("status") or "reading")
+
     return {
         "ok": ok,
         "weight_g": round(weight, 3) if weight is not None else None,
@@ -531,37 +552,84 @@ def normalize_weight_service_payload(payload: dict) -> dict:
         "min_g": round(minimum, 3) if minimum is not None else None,
         "max_g": round(maximum, 3) if maximum is not None else None,
         "unit": payload.get("unit", "g"),
-        "stable": int(parse_float(payload.get("dynamic_samples"), 0) or 0) == 0,
-        "status": "service_average",
+        "stable": stable,
+        "status": status,
         "sample_count": sample_count,
         "requested_sample_count": int(parse_float(payload.get("samples_requested"), sample_count) or sample_count),
-        "stable_sample_count": int(parse_float(payload.get("stable_samples"), 0) or 0),
-        "dynamic_sample_count": int(parse_float(payload.get("dynamic_samples"), 0) or 0),
-        "raw_response": payload.get("raw", ""),
+        "stable_sample_count": int(parse_float(payload.get("stable_samples"), 1 if stable and weight is not None else 0) or 0),
+        "dynamic_sample_count": dynamic_samples if sample_count > 1 else (0 if stable else (1 if weight is not None else 0)),
+        "raw_response": payload.get("raw", payload.get("response", "")),
+        "port": payload.get("port", load_settings().get("weight_service_url", "")),
         "source": "weight_service",
         "service_payload": payload,
         "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
     }
 
 
-def read_weight_service_average(sample_count: int = 10) -> dict:
+def read_weight_service_single() -> dict:
+    payload = service_json_request("GET", service_base_url("weight"), "/weight", timeout=5.0)
+    return normalize_weight_service_payload(payload)
+
+
+def read_weight_service_average(sample_count: int = 30) -> dict:
     del sample_count
     payload = service_json_request("GET", service_base_url("weight"), "/weight/average", timeout=20.0)
     return normalize_weight_service_payload(payload)
 
 
-def tare_weight_service() -> dict:
-    payload = service_json_request("POST", service_base_url("weight"), "/tare", timeout=5.0)
+def weight_service_command(path: str, command: str, success_message: str) -> dict:
+    payload = service_json_request("POST", service_base_url("weight"), path, timeout=5.0)
     ok = bool(payload.get("success", payload.get("ok", True)))
+    response_text = payload.get("response", payload.get("raw_response", ""))
     return {
         "ok": ok,
-        "zero_command": "TI",
-        "zero_response": payload.get("response", payload.get("raw_response", "")),
-        "zero_error": "" if ok else payload.get("detail", "Unable to tare load cell"),
-        "message": "Tare command sent" if ok else "Unable to tare load cell",
+        "command": command,
+        "raw_response": response_text,
+        "error": "" if ok else payload.get("detail", f"Unable to send {command}"),
+        "message": success_message if ok else f"Unable to send {command}",
         "source": "weight_service",
-        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
         "service_payload": payload,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }
+
+
+def zero_weight_service() -> dict:
+    return weight_service_command("/zero", "ZI", "Zero command sent")
+
+
+def tare_weight_service() -> dict:
+    return weight_service_command("/tare", "TI", "Tare command sent")
+
+
+def get_weight_service_status() -> dict:
+    try:
+        payload = service_json_request("GET", service_base_url("weight"), "/status", timeout=5.0)
+    except RuntimeError as exc:
+        # Backward-compatible health check only when an older service has no /status route.
+        if "HTTP 404" not in str(exc):
+            raise
+        payload = service_json_request("GET", service_base_url("weight"), "/", timeout=5.0)
+
+    connected = payload.get("connected")
+    ok = bool(payload.get("success", payload.get("ok", True)))
+    if connected is False:
+        ok = False
+    weight = parse_float(payload.get("weight"), parse_float(payload.get("weight_g")))
+    scale_status = str(payload.get("scale_status") or payload.get("status") or "online")
+    return {
+        "ok": ok,
+        "connected": connected,
+        "weight_g": round(weight, 3) if weight is not None else None,
+        "unit": payload.get("unit", "g"),
+        "status": scale_status,
+        "stable": scale_status.upper() in {"S", "STABLE"},
+        "raw_response": payload.get("raw", ""),
+        "port": payload.get("port", service_base_url("weight")),
+        "baud": payload.get("baudrate"),
+        "service": payload.get("service", "WKC Weighing Scale API"),
+        "source": "weight_service",
+        "service_payload": payload,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
     }
 
 
@@ -5453,70 +5521,122 @@ def set_daq_frequency():
 
 @app.get("/api/load-cell/latest")
 def get_load_cell_latest():
+    if service_mode_enabled():
+        try:
+            reading = read_weight_service_single()
+            return jsonify(reading), 200 if reading.get("ok") else 503
+        except RuntimeError as exc:
+            return jsonify({
+                "ok": False,
+                "error": str(exc),
+                "source": "weight_service",
+                "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+            }), 503
+
     reading = read_load_cell(stable_only=False, max_attempts=1, retry_seconds=0.0)
-    status_code = 200 if reading.get("ok") else 503
-    return jsonify(reading), status_code
+    return jsonify(reading), 200 if reading.get("ok") else 503
 
 
 @app.get("/api/load-cell/average")
 def get_load_cell_average():
     try:
-        sample_count = int(request.args.get("samples", "10"))
+        sample_count = int(request.args.get("samples", "30"))
     except (TypeError, ValueError):
-        sample_count = 10
+        sample_count = 30
     sample_count = max(1, min(30, sample_count))
+
     if service_mode_enabled():
         try:
             reading = read_weight_service_average(sample_count=sample_count)
-            status_code = 200 if reading.get("ok") else 503
-            return jsonify(reading), status_code
+            return jsonify(reading), 200 if reading.get("ok") else 503
         except RuntimeError as exc:
-            return jsonify(
-                {
-                    "ok": False,
-                    "error": str(exc),
-                    "source": "weight_service",
-                    "fallback_available": True,
-                    "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
-                }
-            ), 503
+            return jsonify({
+                "ok": False,
+                "error": str(exc),
+                "source": "weight_service",
+                "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+            }), 503
+
     reading = read_load_cell_average(sample_count=sample_count, stable_only=False)
-    status_code = 200 if reading.get("ok") else 503
-    return jsonify(reading), status_code
+    return jsonify(reading), 200 if reading.get("ok") else 503
 
 
 @app.post("/api/load-cell/zero")
 def zero_load_cell():
     if service_mode_enabled():
         try:
+            result = zero_weight_service()
+            return jsonify(result), 200 if result.get("ok") else 503
+        except RuntimeError as exc:
+            return jsonify({
+                "ok": False,
+                "command": "ZI",
+                "error": str(exc),
+                "message": "Unable to zero load cell. Ensure the weight service includes POST /zero.",
+                "source": "weight_service",
+                "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+            }), 503
+
+    result = send_load_cell_command(LOAD_CELL_ZERO_COMMAND, wait_seconds=0.1, require_weight=False)
+    ok = bool(result.get("ok"))
+    return jsonify({
+        "ok": ok,
+        "command": LOAD_CELL_ZERO_COMMAND,
+        "raw_response": result.get("raw_response", ""),
+        "error": result.get("error", ""),
+        "message": "Zero command sent" if ok else "Unable to zero load cell",
+        "port": LOAD_CELL_PORT,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }), 200 if ok else 503
+
+
+@app.post("/api/load-cell/tare")
+def tare_load_cell():
+    if service_mode_enabled():
+        try:
             result = tare_weight_service()
             return jsonify(result), 200 if result.get("ok") else 503
         except RuntimeError as exc:
-            return jsonify(
-                {
-                    "ok": False,
-                    "zero_command": "TI",
-                    "zero_response": "",
-                    "zero_error": str(exc),
-                    "message": "Unable to tare load cell",
-                    "source": "weight_service",
-                    "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
-                }
-            ), 503
-    result = send_load_cell_command(LOAD_CELL_ZERO_COMMAND, wait_seconds=0.1, require_weight=False)
+            return jsonify({
+                "ok": False,
+                "command": "TI",
+                "error": str(exc),
+                "message": "Unable to tare load cell",
+                "source": "weight_service",
+                "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+            }), 503
+
+    result = send_load_cell_command(LOAD_CELL_TARE_COMMAND, wait_seconds=0.1, require_weight=False)
     ok = bool(result.get("ok"))
-    status_code = 200 if ok else 503
-    return jsonify(
-        {
-            "ok": ok,
-            "zero_command": LOAD_CELL_ZERO_COMMAND,
-            "zero_response": result.get("raw_response", ""),
-            "zero_error": result.get("error", ""),
-            "message": "Tare command sent" if ok else "Unable to tare load cell",
-            "port": LOAD_CELL_PORT,
-            "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
-        }
-    ), status_code
+    return jsonify({
+        "ok": ok,
+        "command": LOAD_CELL_TARE_COMMAND,
+        "raw_response": result.get("raw_response", ""),
+        "error": result.get("error", ""),
+        "message": "Tare command sent" if ok else "Unable to tare load cell",
+        "port": LOAD_CELL_PORT,
+        "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+    }), 200 if ok else 503
+
+
+@app.get("/api/load-cell/status")
+def get_load_cell_status():
+    if service_mode_enabled():
+        try:
+            result = get_weight_service_status()
+            return jsonify(result), 200 if result.get("ok") else 503
+        except RuntimeError as exc:
+            return jsonify({
+                "ok": False,
+                "connected": False,
+                "error": str(exc),
+                "source": "weight_service",
+                "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
+            }), 503
+
+    reading = read_load_cell(stable_only=False, max_attempts=1, retry_seconds=0.0)
+    reading["connected"] = bool(reading.get("ok"))
+    return jsonify(reading), 200 if reading.get("ok") else 503
 
 
 @app.get("/api/vision/size")

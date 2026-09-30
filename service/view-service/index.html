@@ -150,7 +150,7 @@
             </div>
           </div>
           <div class="selection-panel compact-panel" id="measurementScalePanel">
-            <p class="eyebrow">Automatic Scale</p>
+            <p class="eyebrow">Step 5 of 9 · Weight Measurement</p>
             <h2>Average 10 Readings</h2>
             <p>The measured weight is taken from the load cell and saved with the verification record.</p>
             <div class="scale-progress" id="measurementWeightProgress" aria-live="polite">
@@ -253,7 +253,7 @@
 
       <section class="screen" id="otherShapeScreen">
         <div class="selection-panel">
-          <p class="eyebrow">Other Shape</p>
+          <p class="eyebrow">Step 4 of 9 · Other Shape</p>
           <div class="material-grid shape-select-grid" id="otherShapeGrid">
             <button type="button" data-other-shape="Pendant">Pendant</button>
             <button type="button" data-other-shape="Bracelet">Bracelet</button>
@@ -507,32 +507,41 @@
 
       <section class="screen" id="loadCellScreen">
         <div class="settings-panel">
-          <p class="eyebrow">Load Cell Settings</p>
-          <h2>Scale Reading</h2>
+          <p class="eyebrow">Load Cell Engineering</p>
+          <h2>Weight Service</h2>
           <div class="engineering-grid load-cell-grid">
-            <article class="metric-card yellow">
-              <span>Current Weight</span>
+            <article class="metric-card compact yellow">
+              <span>Weight / Average</span>
               <strong id="loadCellWeight">-- g</strong>
             </article>
-            <article class="metric-card green">
-              <span>Status</span>
-              <strong id="loadCellStatus">--</strong>
+            <article class="metric-card compact green">
+              <span>Scale Status</span>
+              <strong id="loadCellStatus">Ready</strong>
             </article>
-            <article class="metric-card cyan">
-              <span>Port</span>
-              <strong id="loadCellPort">/dev/ttyUSB0</strong>
+            <article class="metric-card compact cyan">
+              <span>Service / Port</span>
+              <strong id="loadCellPort">127.0.0.1:8002</strong>
             </article>
           </div>
-          <div class="calibration-note">
-            <span id="loadCellRaw">Raw: --</span>
+          <div class="load-cell-result-grid">
+            <div><span>Last Action</span><strong id="loadCellAction">Get Status</strong></div>
+            <div><span>Samples</span><strong id="loadCellSamples">--</strong></div>
+            <div><span>Range</span><strong id="loadCellRange">--</strong></div>
+            <div><span>Stable / Dynamic</span><strong id="loadCellStability">--</strong></div>
+          </div>
+          <div class="load-cell-response">
+            <span id="loadCellRaw">Response: --</span>
             <span id="loadCellUpdated">Updated: --</span>
+            <pre id="loadCellResultJson">Press an action button to call the weight service.</pre>
           </div>
         </div>
-        <div class="button-row">
+        <div class="button-row load-cell-actions">
           <button class="secondary" id="loadCellBackButton" type="button">Back</button>
-          <button class="secondary" id="loadCellSingleButton" type="button">Set Single Weight</button>
-          <button class="secondary" id="loadCellAverageButton" type="button">Get Average</button>
-          <button class="primary" id="loadCellTareButton" type="button">Tare</button>
+          <button class="secondary" id="loadCellZeroButton" type="button">Zero</button>
+          <button class="secondary" id="loadCellTareButton" type="button">Tare</button>
+          <button class="secondary" id="loadCellSingleButton" type="button">Single Measurement</button>
+          <button class="secondary" id="loadCellAverageButton" type="button">Sampling</button>
+          <button class="primary" id="loadCellStatusButton" type="button">Get Status</button>
         </div>
       </section>
 
@@ -664,8 +673,9 @@
             </div>
             <div class="guide-arrow"></div>
           </div>
-          <h2>Place Known Sample</h2>
-          <p>The scale has been zeroed. Place the certified object, then continue to capture the measured weight.</p>
+          <p class="eyebrow">Step 1 of 9 · Placement</p>
+          <h2>Place Item &amp; Close Door</h2>
+          <p>The scale has been zeroed. Place the known item in the sensing area, close the door completely, then press Continue.</p>
         </div>
         <div class="button-row">
           <button class="secondary" id="teachingPlaceBackButton" type="button">Back</button>
@@ -675,7 +685,7 @@
 
       <section class="screen" id="teachingMaterialScreen">
         <div class="selection-panel">
-          <p class="eyebrow">First, select the type of metal</p>
+          <p class="eyebrow">Step 2 of 9 · Material Type</p>
           <div class="material-grid" id="teachingMaterialGrid">
             <button type="button" data-material="Gold">Gold</button>
             <button type="button" data-material="Silver">Silver</button>
@@ -698,13 +708,15 @@
 
       <section class="screen" id="teachingShapeScreen">
         <div class="selection-panel">
-          <p class="eyebrow">Sample Shape</p>
+          <p class="eyebrow">Step 4 of 9 · Item Shape</p>
           <div class="material-grid shape-select-grid" id="teachingShapeGrid">
             <button type="button" data-teaching-shape="Ring">Ring</button>
             <button type="button" data-teaching-shape="Coin">Coin</button>
             <button type="button" data-teaching-shape="Chain">Chain</button>
             <button type="button" data-teaching-shape="Bar">Bar</button>
             <button type="button" data-teaching-shape="Bangle">Bangle</button>
+            <button type="button" data-teaching-shape="Bracelet">Bracelet</button>
+            <button type="button" data-teaching-shape="Pendant">Pendant</button>
             <button type="button" data-teaching-shape="Other">Other</button>
           </div>
         </div>
@@ -716,7 +728,7 @@
 
       <section class="screen" id="teachingOtherMaterialScreen">
         <div class="selection-panel">
-          <p class="eyebrow">Other Material</p>
+          <p class="eyebrow">Step 2 of 9 · Material Details</p>
           <div class="material-grid" id="teachingOtherMaterialGrid">
             <button type="button" data-other-material="Brass">Brass</button>
             <button type="button" data-other-material="Bronze">Bronze</button>
@@ -735,7 +747,7 @@
 
       <section class="screen" id="teachingPurityScreen">
         <div class="selection-panel">
-          <p class="eyebrow" id="teachingPurityEyebrow">Purity / Grade</p>
+          <p class="eyebrow" id="teachingPurityEyebrow">Step 3 of 9 · Purity / Grade</p>
           <div class="material-grid shape-select-grid" id="teachingPurityGrid">
             <button type="button" data-purity="24K / 999">24K / 999</button>
             <button type="button" data-purity="22K / 916">22K / 916</button>
@@ -774,7 +786,7 @@
 
       <section class="screen" id="teachingOtherShapeScreen">
         <div class="selection-panel">
-          <p class="eyebrow">Other Shape</p>
+          <p class="eyebrow">Step 4 of 9 · Other Shape</p>
           <div class="material-grid shape-select-grid" id="teachingOtherShapeGrid">
             <button type="button" data-other-shape="Pendant">Pendant</button>
             <button type="button" data-other-shape="Bracelet">Bracelet</button>
@@ -794,7 +806,7 @@
       <section class="screen" id="teachingWeightScreen">
         <div class="weight-layout">
           <div class="value-panel">
-            <p class="label">Measured Weight</p>
+            <p class="label">Weight Measurement</p>
             <output id="teachingWeightDisplay">0</output>
             <span>grams</span>
             <div class="dimension-meta">
@@ -805,7 +817,7 @@
           <div class="selection-panel compact-panel" id="teachingKeypad">
             <p class="eyebrow">Automatic Scale</p>
             <h2>Average 10 Readings</h2>
-            <p>The measured weight is taken from the load cell and saved with the teaching record.</p>
+            <p>Capture the item weight before image sizing. The average load-cell reading is saved with the teaching record.</p>
             <div class="scale-progress" id="teachingWeightProgress" aria-live="polite">
               <div class="scale-progress-header">
                 <span id="teachingWeightProgressLabel">Waiting to sample</span>
@@ -825,6 +837,7 @@
       </section>
 
       <section class="screen" id="teachingDimensionScreen">
+        <p class="eyebrow">Step 6 of 9 · Vision Size &amp; Dimensions</p>
         <div class="dimension-tabs" role="tablist" aria-label="Teaching sample details">
           <button class="mode-toggle active" id="teachingDimensionsTabButton" type="button" role="tab" aria-selected="true">Dimensions</button>
           <button class="mode-toggle" id="teachingImageTabButton" type="button" role="tab" aria-selected="false">Detected Image</button>
@@ -851,7 +864,10 @@
               </button>
             </div>
             <div class="dimension-meta">
-              <span>Sample area <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Selected shape <strong id="teachingVisionShapeDisplay">--</strong></span>
+              <span>Vision diameter <strong id="teachingVisionDiameterDisplay">--</strong></span>
+              <span>Vision area <strong id="teachingVisionAreaDisplay">--</strong></span>
+              <span>Geometry area <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
               <span>Contact ratio <strong id="teachingContactRatioDisplay">0.00%</strong></span>
             </div>
           </div>
@@ -895,8 +911,9 @@
             <strong id="teachingProgressText">0%</strong>
           </div>
           <div class="measure-copy">
-            <h2 id="teachingStage">Recording Reference</h2>
-            <p>Keep the known sample still during teaching capture.</p>
+            <p class="eyebrow">Step 7 of 9 · Signal Capture</p>
+            <h2 id="teachingStage">Signal Measurements</h2>
+            <p>Keep the known sample still while F1, F2 and F3 signal measurements are captured.</p>
             <div class="progress-bar">
               <span id="teachingProgressBar"></span>
             </div>
@@ -922,8 +939,9 @@
               <span class="guide-bar"></span>
             </div>
           </div>
-          <h2>Remove Material</h2>
-          <p>Remove the sample from the sensing area before viewing the result.</p>
+          <p class="eyebrow">Step 8 of 9 · Removal</p>
+          <h2>Remove Item</h2>
+          <p>Open the door and remove the item from the sensing area. Confirm removal to view the teaching result.</p>
         </div>
         <div class="button-row">
           <button class="secondary" id="teachingRemoveBackButton" type="button">Back</button>
@@ -933,7 +951,7 @@
 
       <section class="screen" id="teachingSavedScreen">
         <div class="history-detail-panel left-scroll-panel">
-          <p class="eyebrow" id="teachingSavedEyebrow">Teaching Record Saved</p>
+          <p class="eyebrow" id="teachingSavedEyebrow">Step 9 of 9 · Teaching Result</p>
           <h2 id="teachingSavedMaterial">Gold 916</h2>
           <div class="calibration-frequency-list" id="teachingSavedFrequencyCards">
             <article class="calibration-frequency-card">
@@ -964,8 +982,8 @@
           </div>
         </div>
         <div class="button-row">
-          <button class="secondary" id="teachingSavedAgainButton" type="button">Run Again</button>
-          <button class="primary" id="teachingSavedDoneButton" type="button">Done</button>
+          <button class="secondary" id="teachingSavedAgainButton" type="button">Scan New Material</button>
+          <button class="primary" id="teachingSavedDoneButton" type="button">Exit</button>
         </div>
       </section>
 

@@ -384,7 +384,22 @@ function applyVisionToTeaching(payload) {
     if (Number.isFinite(width) && width > 0) teachingState.widthMm = width.toFixed(2);
     if (Number.isFinite(length) && length > 0) teachingState.lengthMm = length.toFixed(2);
   }
+  updateTeachingVisionSummary();
   updateTeachingDimensionDisplay();
+}
+
+function updateTeachingVisionSummary() {
+  const shapeNode = document.getElementById("teachingVisionShapeDisplay");
+  const diameterNode = document.getElementById("teachingVisionDiameterDisplay");
+  const areaNode = document.getElementById("teachingVisionAreaDisplay");
+  if (!shapeNode || !diameterNode || !areaNode) return;
+
+  const payload = teachingState.visionMeasurement || {};
+  const diameter = Number.parseFloat(payload.diameter_mm);
+  const area = Number.parseFloat(payload.surface_area_mm2);
+  shapeNode.textContent = getTeachingShapeLabel() || "--";
+  diameterNode.textContent = Number.isFinite(diameter) && diameter > 0 ? `${diameter.toFixed(2)} mm` : "--";
+  areaNode.textContent = Number.isFinite(area) && area > 0 ? `${area.toFixed(2)} mm²` : "--";
 }
 
 async function fetchVisionSize(shape, kind = "measurement") {
@@ -623,6 +638,7 @@ function resetTeachingInputs() {
   teachingState.activeDimensionField = "width";
   teachingState.latestRecord = null;
   resetTeachingWeight();
+  updateTeachingVisionSummary();
   updateTeachingDimensionDisplay();
   updateTeachingMaterialSelection();
   updateTeachingOtherMaterialSelection();
@@ -1241,12 +1257,26 @@ function updateTeachingPuritySelection() {
 }
 
 function configureTeachingPurityScreen() {
-  const isGold = teachingState.material === "Gold";
+  const material = getTeachingMaterialLabel();
+  const isGold = material === "Gold";
+  const isSilver = material === "Silver";
   const eyebrow = document.getElementById("teachingPurityEyebrow");
-  eyebrow.textContent = isGold ? "Gold purity — select carat / 9xx or enter below" : "Silver purity — select 9xx or enter below";
+
+  if (isGold) {
+    eyebrow.textContent = "Step 3 of 9 · Gold purity — select carat / fineness or enter the known value";
+  } else if (isSilver) {
+    eyebrow.textContent = "Step 3 of 9 · Silver purity — select fineness or enter the known value";
+  } else {
+    eyebrow.textContent = `Step 3 of 9 · ${material} purity / grade — select a known value or enter it below`;
+  }
+
   document.querySelectorAll("#teachingPurityGrid button").forEach((button) => {
     const purity = button.dataset.purity || "";
-    button.hidden = isGold ? purity.includes("/") : !/^\d{3}$/.test(purity);
+    if (isGold) {
+      button.hidden = !purity.includes("/");
+    } else {
+      button.hidden = !/^\d{3}$/.test(purity);
+    }
   });
   updateTeachingPuritySelection();
 }
@@ -1323,7 +1353,7 @@ function buildTeachingDimensionPayload() {
 }
 
 function getTeachingMaterialLabel() {
-  return teachingState.material;
+  return teachingState.material === "Other" ? teachingState.otherMaterial : teachingState.material;
 }
 
 function getTeachingShapeLabel() {
@@ -1480,8 +1510,8 @@ async function saveTeachingRecord(options = {}) {
 
 function renderTeachingSaved(record) {
   const validateMode = teachingState.mode === "validate";
-  document.getElementById("teachingSavedEyebrow").textContent = validateMode ? "Validation Result" : "Teaching Record Saved";
-  document.getElementById("teachingSavedAgainButton").textContent = validateMode ? "Validate Again" : "Teach Again";
+  document.getElementById("teachingSavedEyebrow").textContent = validateMode ? "Step 9 of 9 · Validation Result" : "Step 9 of 9 · Teaching Result";
+  document.getElementById("teachingSavedAgainButton").textContent = validateMode ? "Scan New Validation" : "Scan New Material";
   document.getElementById("teachingSavedMaterial").textContent = record.material;
   document.getElementById("teachingSavedShape").textContent = record.shape;
   document.getElementById("teachingSavedWeight").textContent = record.weight;
@@ -1908,117 +1938,137 @@ async function startLiveViewMonitor() {
   state.engineeringTimer = setInterval(refreshLiveViewReadings, state.acquisitionMode === "daq" ? 1800 : 600);
 }
 
-function renderLoadCellReading(payload) {
+function loadCellDisplayPayload(payload) {
+  return payload?.service_payload && typeof payload.service_payload === "object"
+    ? payload.service_payload
+    : payload;
+}
+
+function setLoadCellBusy(action) {
+  document.getElementById("loadCellAction").textContent = action;
+  document.getElementById("loadCellStatus").textContent = "Working...";
+  document.getElementById("loadCellRaw").textContent = `Calling weight service: ${action}`;
+}
+
+function renderLoadCellReading(payload, action = "Result") {
   const weight = document.getElementById("loadCellWeight");
   const status = document.getElementById("loadCellStatus");
   const statusCard = status.closest(".metric-card");
   const port = document.getElementById("loadCellPort");
   const raw = document.getElementById("loadCellRaw");
   const updated = document.getElementById("loadCellUpdated");
+  const resultJson = document.getElementById("loadCellResultJson");
+  const actionNode = document.getElementById("loadCellAction");
+  const samplesNode = document.getElementById("loadCellSamples");
+  const rangeNode = document.getElementById("loadCellRange");
+  const stabilityNode = document.getElementById("loadCellStability");
+
+  actionNode.textContent = action;
+  resultJson.textContent = JSON.stringify(loadCellDisplayPayload(payload || {}), null, 2);
 
   if (!payload?.ok) {
     weight.textContent = "-- g";
     status.textContent = "Error";
     statusCard.classList.remove("green");
     statusCard.classList.add("orange");
-    port.textContent = payload?.port || "/dev/ttyUSB0";
-    raw.textContent = `Error: ${payload?.error || "Unable to read load cell"}`;
-    updated.textContent = state.loadCellHeld ? "Held" : `Updated: ${payload?.timestamp || "--"}`;
+    port.textContent = payload?.port || "127.0.0.1:8002";
+    samplesNode.textContent = "--";
+    rangeNode.textContent = "--";
+    stabilityNode.textContent = "--";
+    raw.textContent = `Error: ${payload?.error || payload?.message || "Unable to contact weight service"}`;
+    updated.textContent = `Updated: ${payload?.timestamp || new Date().toLocaleTimeString()}`;
     return;
   }
 
   const weightValue = Number(payload.weight_g);
-  weight.textContent = Number.isFinite(weightValue) ? `${weightValue.toFixed(3)} ${payload.unit || "g"}` : "-- g";
-  if (payload.status === "zeroing") {
-    status.textContent = "Zeroing";
+  weight.textContent = Number.isFinite(weightValue)
+    ? `${weightValue.toFixed(3)} ${payload.unit || "g"}`
+    : "-- g";
+
+  const normalizedStatus = String(payload.status || "OK").toLowerCase();
+  if (normalizedStatus === "dynamic" || normalizedStatus === "d") {
+    status.textContent = "Dynamic";
+    statusCard.classList.remove("green");
+    statusCard.classList.add("orange");
+  } else if (normalizedStatus === "stable" || normalizedStatus === "s") {
+    status.textContent = "Stable";
+    statusCard.classList.add("green");
+    statusCard.classList.remove("orange");
+  } else if (payload.connected === false) {
+    status.textContent = "Offline";
     statusCard.classList.remove("green");
     statusCard.classList.add("orange");
   } else {
-    status.textContent = payload.stable ? "Stable" : "Dynamic";
-    statusCard.classList.toggle("green", Boolean(payload.stable));
-    statusCard.classList.toggle("orange", !payload.stable);
+    status.textContent = payload.message || payload.status || "OK";
+    statusCard.classList.add("green");
+    statusCard.classList.remove("orange");
   }
-  port.textContent = payload.port || "/dev/ttyUSB0";
-  raw.textContent = `Raw: ${payload.raw_response || "--"}`;
-  updated.textContent = state.loadCellHeld ? "Held" : `Updated: ${payload.timestamp || "--"}`;
+
+  const portText = payload.port || payload.service || "127.0.0.1:8002";
+  port.textContent = payload.baud ? `${portText} @ ${payload.baud}` : portText;
+
+  const count = Number(payload.sample_count || payload.requested_sample_count || 0);
+  samplesNode.textContent = count > 0 ? String(count) : "--";
+  if (Number.isFinite(Number(payload.min_g)) && Number.isFinite(Number(payload.max_g))) {
+    rangeNode.textContent = `${Number(payload.min_g).toFixed(3)}–${Number(payload.max_g).toFixed(3)} g`;
+  } else {
+    rangeNode.textContent = "--";
+  }
+
+  const stableCount = Number(payload.stable_sample_count || 0);
+  const dynamicCount = Number(payload.dynamic_sample_count || 0);
+  stabilityNode.textContent = count > 1 ? `${stableCount} / ${dynamicCount}` : (payload.stable ? "Stable" : (weightValue ? "Dynamic" : "--"));
+  raw.textContent = `Response: ${payload.raw_response || payload.message || "OK"}`;
+  updated.textContent = `Updated: ${payload.timestamp || new Date().toLocaleTimeString()}`;
 }
 
-async function refreshLoadCellReading() {
-  if (state.loadCellHeld) return;
+async function callLoadCellApi(action, endpoint, options = {}) {
+  setLoadCellBusy(action);
   try {
-    const response = await fetch("/api/load-cell/latest", { cache: "no-store" });
+    const response = await fetch(endpoint, { cache: "no-store", ...options });
     const payload = await response.json().catch(() => ({}));
-    renderLoadCellReading(payload);
+    if (!response.ok || !payload.ok) {
+      throw Object.assign(new Error(payload.error || payload.message || `${action} failed`), { payload });
+    }
+    renderLoadCellReading(payload, action);
+    return payload;
   } catch (error) {
-    renderLoadCellReading({ ok: false, error: "Cannot contact Flask load cell API" });
+    renderLoadCellReading({
+      ok: false,
+      ...(error.payload || {}),
+      error: error.message || `${action} failed`,
+      timestamp: new Date().toLocaleTimeString()
+    }, action);
+    return null;
   }
 }
 
 async function readSingleLoadCell() {
-  const status = document.getElementById("loadCellStatus");
-  status.textContent = "Reading...";
-  try {
-    const response = await fetch("/api/load-cell/latest", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Unable to read load cell");
-    renderLoadCellReading(payload);
-    document.getElementById("loadCellRaw").textContent = `Single reading: ${payload.raw_response || "--"}`;
-  } catch (error) {
-    renderLoadCellReading({ ok: false, error: error.message || "Unable to read load cell" });
-  }
+  return callLoadCellApi("Single Measurement", "/api/load-cell/latest");
 }
 
 async function readAverageLoadCell() {
-  const status = document.getElementById("loadCellStatus");
-  status.textContent = "Averaging...";
-  try {
-    const response = await fetch("/api/load-cell/average?samples=10", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Unable to average load cell");
-    renderLoadCellReading({ ...payload, raw_response: `Average of ${payload.sample_count || 10} samples` });
-    document.getElementById("loadCellRaw").textContent = `Average: ${payload.weight_g ?? "--"} g | Std: ${payload.std_g ?? "--"} g`;
-  } catch (error) {
-    renderLoadCellReading({ ok: false, error: error.message || "Unable to average load cell" });
-  }
+  return callLoadCellApi("Sampling (30 readings)", "/api/load-cell/average?samples=30");
 }
 
 async function zeroLoadCell() {
-  const status = document.getElementById("loadCellStatus");
-  status.textContent = "Zeroing";
-  const wasHeld = state.loadCellHeld;
-  state.loadCellHeld = false;
-  updateLoadCellHoldButton();
-  try {
-    const response = await fetch("/api/load-cell/zero", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.ok) {
-      throw new Error(payload.zero_error || payload.error || "Unable to zero load cell");
-    }
-    renderLoadCellReading({
-      ok: true,
-      weight_g: null,
-      unit: "g",
-      stable: false,
-      status: "zeroing",
-      raw_response: payload.zero_response || "TI",
-      port: payload.port || "/dev/ttyUSB0",
-      timestamp: payload.timestamp || "--"
-    });
-    setTimeout(() => {
-      if (!state.loadCellHeld) {
-        refreshLoadCellReading();
-      }
-    }, 800);
-  } catch (error) {
-    renderLoadCellReading({ ok: false, error: "Unable to zero load cell" });
-  } finally {
-    state.loadCellHeld = wasHeld;
-    updateLoadCellHoldButton();
-  }
+  return callLoadCellApi("Zero (ZI)", "/api/load-cell/zero", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+}
+
+async function tareLoadCell() {
+  return callLoadCellApi("Tare (TI)", "/api/load-cell/tare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+}
+
+async function getLoadCellStatus() {
+  return callLoadCellApi("Get Status", "/api/load-cell/status");
 }
 
 async function prepareTeachingScale() {
@@ -2029,10 +2079,11 @@ async function prepareTeachingScale() {
 async function prepareTeachingDimensionsFromVision() {
   const status = document.getElementById("teachingWeightStatus");
   const raw = document.getElementById("teachingWeightRaw");
-  status.textContent = "Capturing image dimensions...";
-  raw.textContent = "Calling vision service on port 8003";
+  const selectedShape = getTeachingShapeLabel();
+  status.textContent = `Capturing ${selectedShape} dimensions...`;
+  raw.textContent = `Calling vision service on port 8003 with shape=${selectedShape}`;
   try {
-    const vision = await fetchVisionSize(getTeachingShapeLabel(), "teaching");
+    const vision = await fetchVisionSize(selectedShape, "teaching");
     raw.textContent = vision.message || "Vision dimensions captured";
   } catch (error) {
     raw.textContent = `${error.message || "Vision unavailable"}; enter dimensions manually`;
@@ -2180,6 +2231,7 @@ async function sampleTeachingWeight() {
 
 function updateLoadCellHoldButton() {
   const button = document.getElementById("loadCellHoldButton");
+  if (!button) return;
   button.textContent = state.loadCellHeld ? "Resume" : "Hold";
   button.classList.toggle("primary", state.loadCellHeld);
   button.classList.toggle("secondary", !state.loadCellHeld);
@@ -2199,7 +2251,7 @@ function toggleLoadCellHold() {
 async function startLoadCellMonitor() {
   state.loadCellHeld = false;
   clearInterval(state.loadCellTimer);
-  await readSingleLoadCell();
+  await getLoadCellStatus();
 }
 
 document.getElementById("startButton").addEventListener("click", () => {
@@ -2299,9 +2351,11 @@ document.getElementById("liveDeltaTabButton").addEventListener("click", () => {
 document.getElementById("daqSettingsBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("daqSettingsDoneButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("loadCellBackButton").addEventListener("click", () => showScreen("engineering"));
+document.getElementById("loadCellZeroButton").addEventListener("click", zeroLoadCell);
+document.getElementById("loadCellTareButton").addEventListener("click", tareLoadCell);
 document.getElementById("loadCellSingleButton").addEventListener("click", readSingleLoadCell);
 document.getElementById("loadCellAverageButton").addEventListener("click", readAverageLoadCell);
-document.getElementById("loadCellTareButton").addEventListener("click", zeroLoadCell);
+document.getElementById("loadCellStatusButton").addEventListener("click", getLoadCellStatus);
 document.getElementById("detectorSettingsCancelButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("detectorSettingsSaveButton").addEventListener("click", saveDetectorSettings);
 document.getElementById("frequencySlot1Button").addEventListener("click", () => selectFrequencySlot(1));
@@ -2344,26 +2398,30 @@ document.getElementById("teachingRecordButton").addEventListener("click", async 
 });
 document.getElementById("teachingMaterialBackButton").addEventListener("click", () => showScreen("teachingPlace"));
 document.getElementById("teachingMaterialNextButton").addEventListener("click", () => {
-  const needsPurity = teachingState.material === "Gold" || teachingState.material === "Silver";
-  if (needsPurity) {
-    configureTeachingPurityScreen();
-    showScreen("teachingPurity");
-  } else {
-    prepareTeachingScale();
+  if (!teachingState.material) return;
+  if (teachingState.material === "Other") {
+    showScreen("teachingOtherMaterial");
+    return;
   }
+  configureTeachingPurityScreen();
+  showScreen("teachingPurity");
 });
 document.getElementById("teachingOtherMaterialBackButton").addEventListener("click", () => showScreen("teachingMaterial"));
-document.getElementById("teachingOtherMaterialNextButton").addEventListener("click", () => showScreen("teachingPurity"));
-document.getElementById("teachingPurityBackButton").addEventListener("click", () => showScreen("teachingMaterial"));
+document.getElementById("teachingOtherMaterialNextButton").addEventListener("click", () => {
+  if (!teachingState.otherMaterial) return;
+  configureTeachingPurityScreen();
+  showScreen("teachingPurity");
+});
+document.getElementById("teachingPurityBackButton").addEventListener("click", () => {
+  showScreen(teachingState.material === "Other" ? "teachingOtherMaterial" : "teachingMaterial");
+});
 document.getElementById("teachingPurityNextButton").addEventListener("click", () => {
   if (!teachingState.purity) return;
-  prepareTeachingScale();
+  showScreen("teachingShape");
 });
-document.getElementById("teachingShapeBackButton").addEventListener("click", () => {
-  const needsPurity = teachingState.material === "Gold" || teachingState.material === "Silver";
-  showScreen(needsPurity ? "teachingPurity" : "teachingMaterial");
-});
+document.getElementById("teachingShapeBackButton").addEventListener("click", () => showScreen("teachingPurity"));
 document.getElementById("teachingShapeNextButton").addEventListener("click", () => {
+  if (!teachingState.shape) return;
   if (teachingState.shape === "Other") {
     showScreen("teachingOtherShape");
     return;
@@ -2372,6 +2430,7 @@ document.getElementById("teachingShapeNextButton").addEventListener("click", () 
 });
 document.getElementById("teachingOtherShapeBackButton").addEventListener("click", () => showScreen("teachingShape"));
 document.getElementById("teachingOtherShapeNextButton").addEventListener("click", () => {
+  if (!teachingState.otherShape) return;
   prepareTeachingScale();
 });
 document.getElementById("teachingDimensionBackButton").addEventListener("click", () => {
@@ -2387,10 +2446,9 @@ document.getElementById("teachingRefreshImageButton").addEventListener("click", 
 document.getElementById("teachingRemoveBackButton").addEventListener("click", () => showScreen("teaching"));
 document.getElementById("teachingRemoveNextButton").addEventListener("click", () => showScreen("teachingSaved"));
 document.getElementById("teachingSavedAgainButton").addEventListener("click", () => {
-  resetTeachingInputs();
-  showScreen("teachingPlace");
+  zeroTeachingScaleBeforePlacement(teachingState.mode);
 });
-document.getElementById("teachingSavedDoneButton").addEventListener("click", () => showScreen("teaching"));
+document.getElementById("teachingSavedDoneButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("teachingRecordsBackButton").addEventListener("click", () => showScreen("teaching"));
 document.getElementById("teachingRecordsHomeButton").addEventListener("click", () => showScreen("home"));
 document.getElementById("teachingDetailBackButton").addEventListener("click", () => showScreen("teachingRecords"));
