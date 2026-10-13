@@ -68,9 +68,14 @@ const state = {
   signalLiveTimer: null,
   signalLiveBusy: false,
   signalLiveRunning: false,
+  signalLiveVpp: 2,
+  signalLiveUnit: "V",
+  signalLiveMode: "raw",
+  signalLiveLatest: null,
+  signalLiveDeltaBaseline: null,
   loadCellTimer: null,
   loadCellHeld: false,
-  acquisitionMode: "simulator",
+  acquisitionMode: "daq",
   calibrationRecord: {},
   confidenceThresholdPct: 40,
   detectorConfidenceInput: "40",
@@ -1364,7 +1369,9 @@ function configureTeachingPurityScreen() {
 
   document.querySelectorAll("#teachingPurityGrid button").forEach((button) => {
     const purity = button.dataset.purity || "";
-    if (isGold) {
+    if (purity === "N/A") {
+      button.hidden = false;
+    } else if (isGold) {
       button.hidden = !purity.includes("/");
     } else {
       button.hidden = !/^\d{3}$/.test(purity);
@@ -1943,13 +1950,14 @@ function sensorsAreValid(sensors) {
 }
 
 function updateAcquisitionModeDisplay() {
+  // Simulator switching has been retired from the kiosk UI. Keep this helper
+  // null-safe because older cached pages may still contain the legacy fields.
   const modeValue = document.getElementById("modeValue");
   const modeToggle = document.getElementById("modeToggleButton");
-  const isDaq = state.acquisitionMode === "daq";
-
-  modeValue.textContent = isDaq ? "DAQ" : "Simulator";
-  modeToggle.textContent = isDaq ? "Switch to Simulator" : "Switch to DAQ";
-  modeToggle.classList.toggle("active", isDaq);
+  if (!modeValue || !modeToggle) return;
+  modeValue.textContent = "DAQ";
+  modeToggle.textContent = "DAQ Active";
+  modeToggle.classList.add("active");
 }
 
 function updateDetectorConfidenceDisplay() {
@@ -1961,7 +1969,7 @@ async function loadAcquisitionMode() {
     const response = await fetch("/api/settings", { cache: "no-store" });
     if (!response.ok) throw new Error("Unable to read settings");
     const settings = await response.json();
-    state.acquisitionMode = settings.acquisition_mode === "daq" ? "daq" : "simulator";
+    state.acquisitionMode = "daq";
     const threshold = Number(settings.confidence_threshold_pct);
     state.confidenceThresholdPct = Number.isFinite(threshold) ? threshold : 40;
     state.detectorConfidenceInput = String(Math.round(state.confidenceThresholdPct));
@@ -1973,7 +1981,7 @@ async function loadAcquisitionMode() {
     const slot = Number.parseInt(settings.active_frequency_slot, 10);
     state.activeFrequencySlot = slot >= 1 && slot <= 3 ? slot : 1;
   } catch (error) {
-    state.acquisitionMode = "simulator";
+    state.acquisitionMode = "daq";
     state.confidenceThresholdPct = 40;
     state.detectorConfidenceInput = "40";
     state.multiFrequenciesKhz = [10, 20, 30];
@@ -2087,6 +2095,16 @@ function signalLiveMetric(value, digits = 6, unit = "V") {
   return Number.isFinite(number) ? `${number.toFixed(digits)} ${unit}` : `-- ${unit}`;
 }
 
+function signalLiveVoltageMetric(value, digitsV = 6) {
+  const number = Number(value);
+  const useMv = state.signalLiveUnit === "mV";
+  const unit = useMv ? "mV" : "V";
+  if (!Number.isFinite(number)) return `-- ${unit}`;
+  const scaled = useMv ? number * 1000 : number;
+  const digits = useMv ? Math.max(2, digitsV - 3) : digitsV;
+  return `${scaled.toFixed(digits)} ${unit}`;
+}
+
 function updateSignalLivePresetUi() {
   const preset = SIGNAL_PRESETS[state.signalPreset] || SIGNAL_PRESETS.f1;
   document.querySelectorAll("#liveSignalPresetGrid button[data-signal-preset]").forEach((button) => {
@@ -2094,6 +2112,27 @@ function updateSignalLivePresetUi() {
   });
   const label = document.getElementById("liveSelectedFrequency");
   if (label) label.textContent = `${preset.label} · ${(preset.frequencyHz / 1000).toFixed(2)} kHz`;
+}
+
+function updateSignalLiveOptionsUi() {
+  document.querySelectorAll("#liveAmplitudeToggle button[data-live-vpp]").forEach((button) => {
+    button.classList.toggle("selected", Number(button.dataset.liveVpp) === Number(state.signalLiveVpp));
+  });
+  document.querySelectorAll("#liveUnitToggle button[data-live-unit]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.liveUnit === state.signalLiveUnit);
+  });
+  document.querySelectorAll("#liveModeToggle button[data-live-mode]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.liveMode === state.signalLiveMode);
+  });
+
+  const selectedAmplitude = document.getElementById("liveSelectedAmplitude");
+  if (selectedAmplitude) selectedAmplitude.textContent = `${Number(state.signalLiveVpp).toFixed(2)} Vpp`;
+
+  const rawPanel = document.getElementById("liveRawPanel");
+  const deltaPanel = document.getElementById("liveDeltaPanel");
+  const isDelta = state.signalLiveMode === "delta";
+  if (rawPanel) rawPanel.hidden = isDelta;
+  if (deltaPanel) deltaPanel.hidden = !isDelta;
 }
 
 function setSignalLiveRunning(running) {
@@ -2108,18 +2147,53 @@ function setSignalLiveRunning(running) {
   if (stopButton) stopButton.disabled = !state.signalLiveRunning;
 }
 
+function resetSignalLiveDeltaBaseline(useCurrent = false) {
+  const current = Number(state.signalLiveLatest?.ac_rms_v);
+  state.signalLiveDeltaBaseline = useCurrent && Number.isFinite(current) && current !== 0 ? current : null;
+  renderSignalLiveDelta(useCurrent ? (state.signalLiveLatest || {}) : {});
+}
+
+function renderSignalLiveDelta(payload) {
+  const dropNode = document.getElementById("liveDeltaDrop");
+  const referenceNode = document.getElementById("liveDeltaReference");
+  if (!dropNode || !referenceNode) return;
+
+  const current = Number(payload?.ac_rms_v);
+  if (state.signalLiveMode !== "delta") return;
+
+  if (state.signalLiveDeltaBaseline === null && Number.isFinite(current) && current !== 0) {
+    state.signalLiveDeltaBaseline = current;
+  }
+
+  const baseline = Number(state.signalLiveDeltaBaseline);
+  if (!Number.isFinite(current) || !Number.isFinite(baseline) || baseline === 0) {
+    dropNode.textContent = "--%";
+    referenceNode.textContent = "Waiting for a valid AC RMS reading to establish the 100% reference.";
+    return;
+  }
+
+  const dropPct = ((baseline - current) / baseline) * 100;
+  dropNode.textContent = `${dropPct.toFixed(2)}%`;
+  const baseText = signalLiveVoltageMetric(baseline, 6);
+  referenceNode.textContent = `100% reference: ${baseText} AC RMS · current signal is ${Math.max(0, 100 - dropPct).toFixed(2)}% of reference`;
+}
+
 function renderSignalLiveMeasurement(payload) {
   const hasMeasurement = payload.ac_rms_v !== undefined || payload.peak_amplitude_v !== undefined || payload.dc_v !== undefined;
   if (hasMeasurement) {
-    document.getElementById("liveAcRms").textContent = signalLiveMetric(payload.ac_rms_v, 6, "V");
-    document.getElementById("livePeakAmplitude").textContent = signalLiveMetric(payload.peak_amplitude_v, 6, "V");
-    document.getElementById("livePeakToPeak").textContent = signalLiveMetric(payload.peak_to_peak_v, 6, "V");
+    state.signalLiveLatest = { ...(state.signalLiveLatest || {}), ...payload };
+    document.getElementById("liveAcRms").textContent = signalLiveVoltageMetric(payload.ac_rms_v, 6);
+    document.getElementById("livePeakAmplitude").textContent = signalLiveVoltageMetric(payload.peak_amplitude_v, 6);
+    document.getElementById("livePeakToPeak").textContent = signalLiveVoltageMetric(payload.peak_to_peak_v, 6);
     document.getElementById("liveMeasuredFrequency").textContent = signalLiveMetric(payload.frequency_hz, 2, "Hz");
-    document.getElementById("liveDcVoltage").textContent = signalLiveMetric(payload.dc_v, 6, "V");
+    document.getElementById("liveDcVoltage").textContent = signalLiveVoltageMetric(payload.dc_v, 6);
     document.getElementById("liveAdcSampleRate").textContent = signalLiveMetric(payload.adc_sample_rate_hz, 0, "Hz");
     document.getElementById("liveAdcPoints").textContent = Number.isFinite(Number(payload.adc_points)) ? String(payload.adc_points) : "--";
     document.getElementById("liveSignalUpdated").textContent = new Date().toLocaleTimeString();
-    document.getElementById("liveSignalMessage").textContent = "Live measurement received from the ADP2230 signal service.";
+    document.getElementById("liveSignalMessage").textContent = state.signalLiveMode === "delta"
+      ? "Delta is referenced to the AC RMS value captured as 100%."
+      : "Live measurement received from the ADP2230 signal service.";
+    renderSignalLiveDelta(payload);
   }
 
   const commandedFrequency = payload.frequency_set_hz ?? payload.frequency_hz;
@@ -2128,7 +2202,12 @@ function renderSignalLiveMeasurement(payload) {
     document.getElementById("liveCommandedFrequency").textContent = signalLiveMetric(commandedFrequency, 0, "Hz");
   }
   if (Number.isFinite(Number(commandedAmplitude))) {
-    document.getElementById("liveCommandedAmplitude").textContent = signalLiveMetric(commandedAmplitude, 3, "Vpk");
+    document.getElementById("liveCommandedAmplitude").textContent = signalLiveVoltageMetric(commandedAmplitude, 3).replace(/ (m?V)$/, " $1pk");
+    const actualVpp = Number(commandedAmplitude) * 2;
+    if (Math.abs(actualVpp - 1) < 0.05 || Math.abs(actualVpp - 2) < 0.05) {
+      state.signalLiveVpp = Math.abs(actualVpp - 1) < Math.abs(actualVpp - 2) ? 1 : 2;
+      updateSignalLiveOptionsUi();
+    }
   }
 
   const frequencySet = Number(commandedFrequency);
@@ -2182,6 +2261,7 @@ function stopSignalLivePolling() {
 
 async function loadSignalLiveStatus() {
   updateSignalLivePresetUi();
+  updateSignalLiveOptionsUi();
   try {
     const response = await fetch("/api/signal/status", { cache: "no-store" });
     const payload = await response.json().catch(() => ({}));
@@ -2191,16 +2271,24 @@ async function loadSignalLiveStatus() {
 
     const running = payload.signal_running ?? (String(payload.status || "").toLowerCase() === "running");
     const frequency = Number(payload.frequency_set_hz ?? payload.frequency_hz);
+    const amplitude = Number(payload.amplitude_v_peak ?? payload.amplitude_set_v);
     if (Number.isFinite(frequency)) {
       const matched = Object.entries(SIGNAL_PRESETS).find(([, item]) => item.frequencyHz === Math.round(frequency));
       if (matched) state.signalPreset = matched[0];
     }
+    if (Number.isFinite(amplitude)) {
+      const vpp = amplitude * 2;
+      if (Math.abs(vpp - 1) < 0.05 || Math.abs(vpp - 2) < 0.05) {
+        state.signalLiveVpp = Math.abs(vpp - 1) < Math.abs(vpp - 2) ? 1 : 2;
+      }
+    }
     updateSignalLivePresetUi();
+    updateSignalLiveOptionsUi();
     updateSignalPresetSelection();
     setSignalLiveRunning(running);
     document.getElementById("liveSignalMessage").textContent = running
       ? "Signal is already running. Live polling has started."
-      : "Select F1–F4 and press Start. Live measurements will update every 0.5 s.";
+      : "Select F1–F4, output level and display mode, then press Start.";
     if (running) startSignalLivePolling();
   } catch (error) {
     setSignalLiveRunning(false);
@@ -2211,13 +2299,14 @@ async function loadSignalLiveStatus() {
 
 async function startSignalLive() {
   stopSignalLivePolling();
+  if (state.signalLiveMode === "delta") resetSignalLiveDeltaBaseline(false);
   document.getElementById("liveSignalStatus").textContent = "Starting...";
-  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at 1.00 V peak...`;
+  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at ${Number(state.signalLiveVpp).toFixed(0)} Vpp...`;
   try {
     const response = await fetch("/api/signal/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ preset: state.signalPreset })
+      body: JSON.stringify({ preset: state.signalPreset, peak_to_peak_v: state.signalLiveVpp })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.ok === false) {
@@ -2225,7 +2314,9 @@ async function startSignalLive() {
     }
     setSignalLiveRunning(true);
     renderSignalLiveMeasurement(payload);
-    document.getElementById("liveSignalMessage").textContent = "Signal started. Reading live values every 0.5 s.";
+    document.getElementById("liveSignalMessage").textContent = state.signalLiveMode === "delta"
+      ? "Signal started. The first valid AC RMS reading becomes the 100% reference."
+      : "Signal started. Reading live values every 0.5 s.";
     startSignalLivePolling();
   } catch (error) {
     setSignalLiveRunning(false);
@@ -2260,19 +2351,51 @@ async function stopSignalLive() {
 async function selectSignalLivePreset(preset) {
   if (!SIGNAL_PRESETS[preset] || preset === state.signalPreset) return;
   const wasRunning = state.signalLiveRunning;
-  if (wasRunning) {
-    await stopSignalLive();
-  }
+  if (wasRunning) await stopSignalLive();
   state.signalPreset = preset;
+  resetSignalLiveDeltaBaseline(false);
   updateSignalLivePresetUi();
   updateSignalPresetSelection();
   const selected = SIGNAL_PRESETS[preset];
   document.getElementById("liveSignalMessage").textContent = wasRunning
     ? `Changing to ${selected.label} ${(selected.frequencyHz / 1000).toFixed(0)} kHz...`
     : `${selected.label} selected. Press Start to output ${(selected.frequencyHz / 1000).toFixed(0)} kHz.`;
-  if (wasRunning) {
-    await startSignalLive();
+  if (wasRunning) await startSignalLive();
+}
+
+async function selectSignalLiveAmplitude(vpp) {
+  const next = Number(vpp);
+  if (![1, 2].includes(next) || next === Number(state.signalLiveVpp)) return;
+  const wasRunning = state.signalLiveRunning;
+  if (wasRunning) await stopSignalLive();
+  state.signalLiveVpp = next;
+  resetSignalLiveDeltaBaseline(false);
+  updateSignalLiveOptionsUi();
+  document.getElementById("liveSignalMessage").textContent = wasRunning
+    ? `Changing output to ${next.toFixed(0)} Vpp...`
+    : `${next.toFixed(0)} Vpp selected (${(next / 2).toFixed(1)} V peak).`;
+  if (wasRunning) await startSignalLive();
+}
+
+function selectSignalLiveUnit(unit) {
+  if (!["V", "mV"].includes(unit) || unit === state.signalLiveUnit) return;
+  state.signalLiveUnit = unit;
+  updateSignalLiveOptionsUi();
+  if (state.signalLiveLatest) renderSignalLiveMeasurement(state.signalLiveLatest);
+  else renderSignalLiveDelta({});
+}
+
+function selectSignalLiveMode(mode) {
+  if (!["raw", "delta"].includes(mode)) return;
+  if (mode === "delta") {
+    state.signalLiveMode = "delta";
+    resetSignalLiveDeltaBaseline(true);
+  } else {
+    state.signalLiveMode = "raw";
+    state.signalLiveDeltaBaseline = null;
   }
+  updateSignalLiveOptionsUi();
+  if (state.signalLiveLatest) renderSignalLiveMeasurement(state.signalLiveLatest);
 }
 
 async function startLiveViewMonitor() {
@@ -2866,7 +2989,8 @@ document.getElementById("menuExitButton").addEventListener("click", () => {
   window.open("", "_self");
   window.close();
 });
-document.getElementById("modeToggleButton").addEventListener("click", toggleAcquisitionMode);
+const legacyModeToggleButton = document.getElementById("modeToggleButton");
+if (legacyModeToggleButton) legacyModeToggleButton.addEventListener("click", toggleAcquisitionMode);
 document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));
 document.getElementById("engineeringCalibrationButton").addEventListener("click", () => showScreen("calibration"));
 document.getElementById("engineeringTeachingButton").addEventListener("click", () => showScreen("teaching"));
@@ -2895,6 +3019,21 @@ document.getElementById("liveSignalPresetGrid").addEventListener("click", (event
   const button = event.target.closest("button[data-signal-preset]");
   if (!button) return;
   selectSignalLivePreset(button.dataset.signalPreset);
+});
+document.getElementById("liveAmplitudeToggle").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-live-vpp]");
+  if (!button) return;
+  selectSignalLiveAmplitude(button.dataset.liveVpp);
+});
+document.getElementById("liveUnitToggle").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-live-unit]");
+  if (!button) return;
+  selectSignalLiveUnit(button.dataset.liveUnit);
+});
+document.getElementById("liveModeToggle").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-live-mode]");
+  if (!button) return;
+  selectSignalLiveMode(button.dataset.liveMode);
 });
 document.getElementById("daqSettingsBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("daqSettingsDoneButton").addEventListener("click", () => showScreen("engineering"));
@@ -3176,8 +3315,12 @@ document.getElementById("teachingPurityGrid").addEventListener("click", (event) 
 document.getElementById("teachingPurityKeypad").addEventListener("click", (event) => {
   const key = event.target.dataset.teachingPurityKey;
   if (!key) return;
-  if (key === "clear") teachingState.purity = "";
-  else if (teachingState.purity.length < 4) teachingState.purity += key;
+  if (key === "clear") {
+    teachingState.purity = "";
+  } else {
+    if (teachingState.purity === "N/A") teachingState.purity = "";
+    if (teachingState.purity.length < 4) teachingState.purity += key;
+  }
   updateTeachingPuritySelection();
 });
 

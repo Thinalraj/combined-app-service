@@ -838,22 +838,26 @@ def get_signal_service_status() -> dict:
     }
 
 
-def start_signal_service(preset: str) -> dict:
+def start_signal_service(preset: str, amplitude_v_peak: float = SIGNAL_AMPLITUDE_V_PEAK) -> dict:
     key, frequency_hz = signal_preset_frequency(preset)
+    amplitude_v_peak = float(amplitude_v_peak)
+    if amplitude_v_peak not in (0.5, 1.0):
+        raise ValueError("Live signal amplitude must be 0.5 V peak (1 Vpp) or 1.0 V peak (2 Vpp)")
     payload = service_json_request(
         "POST",
         service_base_url("signal"),
         "/api/start",
-        payload={"frequency": frequency_hz, "amplitude": SIGNAL_AMPLITUDE_V_PEAK},
+        payload={"frequency": frequency_hz, "amplitude": amplitude_v_peak},
         timeout=10.0,
     )
+    actual_amplitude = parse_float(payload.get("amplitude"), amplitude_v_peak)
     return {
         "ok": True,
         "preset": key,
         "status": payload.get("status", "running"),
         "frequency_hz": parse_float(payload.get("frequency"), frequency_hz),
-        "amplitude_v_peak": parse_float(payload.get("amplitude"), SIGNAL_AMPLITUDE_V_PEAK),
-        "peak_to_peak_v": parse_float(payload.get("peak_to_peak_v"), SIGNAL_PEAK_TO_PEAK_V),
+        "amplitude_v_peak": actual_amplitude,
+        "peak_to_peak_v": parse_float(payload.get("peak_to_peak_v"), actual_amplitude * 2.0),
         "service_payload": payload,
         "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
     }
@@ -6252,9 +6256,13 @@ def signal_start_api():
     payload = request.get_json(silent=True) or {}
     preset = payload.get("preset", "f1")
     try:
+        peak_to_peak_v = float(payload.get("peak_to_peak_v", SIGNAL_PEAK_TO_PEAK_V))
+        if peak_to_peak_v not in (1.0, 2.0):
+            raise ValueError("peak_to_peak_v must be 1.0 or 2.0 Vpp")
+        amplitude_v_peak = peak_to_peak_v / 2.0
         with SIGNAL_SERVICE_LOCK:
-            return jsonify(start_signal_service(preset))
-    except (RuntimeError, ValueError) as exc:
+            return jsonify(start_signal_service(preset, amplitude_v_peak=amplitude_v_peak))
+    except (RuntimeError, ValueError, TypeError) as exc:
         return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 400
 
 
