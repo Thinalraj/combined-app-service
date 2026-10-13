@@ -36,7 +36,7 @@
         <div class="showcase" aria-hidden="true">
           <div class="carousel-stage">
             <div class="orbit">
-              <div class="sample-card gold active" data-rate-label="Gold 999" data-rate-price="RM 580.65/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
+              <div class="sample-card gold active" data-rate-label="Gold 999" data-metal="XAU" data-purity=".999" >
                 <div class="object gold-stack bars-3">
                   <img src="assets/gold-24k-display.png" alt="">
                   <span></span>
@@ -44,7 +44,7 @@
                   <span></span>
                 </div>
               </div>
-              <div class="sample-card gold" data-rate-label="Gold 916" data-rate-price="RM 530.54/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
+              <div class="sample-card gold" data-rate-label="Gold 916" data-metal="XAU" data-purity=".916" >
                 <div class="object gold-stack bars-2">
                   <img src="assets/gold-22k-display.png" alt="">
                   <span></span>
@@ -52,7 +52,7 @@
                   <span></span>
                 </div>
               </div>
-              <div class="sample-card gold" data-rate-label="Gold 750" data-rate-price="RM 424.42/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
+              <div class="sample-card gold" data-rate-label="Gold 750" data-metal="XAU" data-purity=".750" >
                 <div class="object gold-stack bars-1">
                   <img src="assets/gold-18k-display.png" alt="">
                   <span></span>
@@ -60,7 +60,7 @@
                   <span></span>
                 </div>
               </div>
-              <div class="sample-card silver" data-rate-label="Silver 999" data-rate-price="RM 9.62/g" data-rate-move="▲ 2.30%" data-rate-trend="up" data-rate-source="WorldForexRates">
+              <div class="sample-card silver" data-rate-label="Silver 999" data-metal="XAG" data-purity=".999" >
                 <div class="object silver-stack bars-3">
                   <img src="assets/silver-999-display.png" alt="">
                   <span></span>
@@ -68,7 +68,7 @@
                   <span></span>
                 </div>
               </div>
-              <div class="sample-card silver" data-rate-label="Silver 925" data-rate-price="RM 8.91/g" data-rate-move="▲ 2.30%" data-rate-trend="up" data-rate-source="WorldForexRates">
+              <div class="sample-card silver" data-rate-label="Silver 925" data-metal="XAG" data-purity=".925" >
                 <div class="object silver-stack bars-2">
                   <img src="assets/silver-925-display.png" alt="">
                   <span></span>
@@ -76,7 +76,7 @@
                   <span></span>
                 </div>
               </div>
-              <div class="sample-card palladium" data-rate-label="Palladium" data-rate-price="RM 452.00/g" data-rate-move="— 0.00%" data-rate-trend="flat" data-rate-source="Configured source">
+              <div class="sample-card palladium" data-rate-label="Palladium" data-metal="XPD" data-purity="1" >
                 <div class="object palladium-stack bars-1">
                   <img src="assets/palladium-display.png" alt="">
                   <span></span>
@@ -88,19 +88,22 @@
           </div>
         </div>
 
+        <!-- REV 2026-10-02 / RATES-01: no fabricated prices or update dates. -->
         <section class="rates-panel" aria-label="Reference metal rates">
           <div class="rates-head">
             <p class="eyebrow">Reference Metal Rates</p>
+            <!-- RATES-02: manual override of the daily midnight schedule. -->
+            <button id="refreshRatesButton" type="button">Refresh</button>
           </div>
           <div class="active-rate-card" id="activeRateCard">
             <span id="activeRateLabel">Gold 999</span>
-            <strong id="activeRatePrice">RM 580.65/g</strong>
-            <em class="down" id="activeRateMove">▼ 0.02%</em>
+            <strong id="activeRatePrice">—</strong>
+            <em class="flat" id="activeRateMove">Loading</em>
           </div>
           <p class="source-line">
-            <span id="activeRateSource">GoldBullion Malaysia</span>
-            <span>Updated 09 May 2026 15:41 MYT</span>
-            <span>Indicative only</span>
+            <span id="activeRateSource">Gold API + Frankfurter</span>
+            <span id="activeRateUpdated">Waiting for quote</span>
+            <span>Estimated metal value · Auto 12am MYT</span>
           </p>
         </section>
 
@@ -114,6 +117,20 @@
           <span class="divider"></span>
           <span id="bottomMessage">Verify your sample now</span>
         </footer>
+      </section>
+
+      <!-- REV 2026-10-02 / SCALE-01: shared by user verification and engineer teaching.
+           Item removal is confirmed BEFORE a zero command, including repeat-item loops. -->
+      <section class="screen" id="scalePrepareScreen">
+        <div class="instruction-panel">
+          <h2>Empty the Platform</h2>
+          <p>Do not place the next item yet.</p>
+          <p id="scalePrepareStatus" role="status">Remove the previous item before zeroing.</p>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="scalePrepareCancelButton" type="button">Cancel</button>
+          <button class="primary" id="scalePrepareZeroButton" type="button">Platform Empty — Zero</button>
+        </div>
       </section>
 
       <section class="screen" id="placeScreen">
@@ -340,25 +357,46 @@
         </div>
       </section>
 
-      <section class="screen" id="engineeringScreen">
-        <div class="engineering-grid menu-grid">
-          <article class="metric-card orange">
-            <span>Acquisition</span>
-            <strong id="modeValue">Simulator</strong>
-            <button class="mode-toggle" id="modeToggleButton" type="button">Switch to DAQ</button>
-          </article>
+      <section class="screen engineering-screen" id="engineeringScreen">
+        <div class="engineering-header">
+          <div>
+            <p class="eyebrow">Engineering</p>
+            <h2>System Tools</h2>
+          </div>
+          <p>Touch a module to inspect, calibrate, teach, or review the system.</p>
         </div>
         <div class="engineering-actions">
-          <button type="button" id="engineeringLiveViewButton">Live View</button>
-          <button type="button" id="engineeringCalibrationButton">Calibration</button>
-          <button type="button" id="engineeringTeachingButton">Teaching</button>
-          <button type="button" id="engineeringLoadCellButton">Load Cell</button>
-          <button type="button" id="engineeringDetectorSettingsButton">Detector Settings</button>
-          <button type="button" id="engineeringClassifierButton">Classifier</button>
-          <button type="button" id="engineeringHistoryButton">History</button>
+          <button class="engineering-action-card" type="button" id="engineeringLiveViewButton">
+            <strong>Live View</strong>
+            <span>Live signal measurements</span>
+          </button>
+          <button class="engineering-action-card" type="button" id="engineeringCalibrationButton">
+            <strong>Calibration</strong>
+            <span>Air baseline &amp; validation</span>
+          </button>
+          <button class="engineering-action-card" type="button" id="engineeringTeachingButton">
+            <strong>Teaching</strong>
+            <span>Capture material references</span>
+          </button>
+          <button class="engineering-action-card" type="button" id="engineeringLoadCellButton">
+            <strong>Load Cell</strong>
+            <span>Weight service controls</span>
+          </button>
+          <button class="engineering-action-card" type="button" id="engineeringDetectorSettingsButton">
+            <strong>Detector Settings</strong>
+            <span>Detection configuration</span>
+          </button>
+          <button class="engineering-action-card" type="button" id="engineeringClassifierButton">
+            <strong>Classifier</strong>
+            <span>Model status &amp; training</span>
+          </button>
+          <button class="engineering-action-card engineering-history-card" type="button" id="engineeringHistoryButton">
+            <strong>History</strong>
+            <span>Review saved measurements</span>
+          </button>
         </div>
-        <div class="button-row">
-          <button class="primary" id="engineeringExitButton" type="button">Exit</button>
+        <div class="engineering-footer">
+          <button class="secondary engineering-exit-button" id="engineeringExitButton" type="button">Exit Engineering</button>
         </div>
       </section>
 
@@ -446,41 +484,72 @@
             </div>
           </div>
 
-          <div class="signal-live-fixed-note">
-            <span id="liveSelectedFrequency">F1 · 8.00 kHz</span>
-            <span>Amplitude fixed: 1.00 Vpk · 2.00 Vpp</span>
-            <span>Live refresh: 0.5 s</span>
+          <div class="signal-live-options" aria-label="Live signal display controls">
+            <div class="signal-live-option-group">
+              <span>Output</span>
+              <div class="signal-live-segment" id="liveAmplitudeToggle">
+                <button type="button" data-live-vpp="1">1 Vpp</button>
+                <button class="selected" type="button" data-live-vpp="2">2 Vpp</button>
+              </div>
+            </div>
+            <div class="signal-live-option-group">
+              <span>Unit</span>
+              <div class="signal-live-segment" id="liveUnitToggle">
+                <button class="selected" type="button" data-live-unit="V">V</button>
+                <button type="button" data-live-unit="mV">mV</button>
+              </div>
+            </div>
+            <div class="signal-live-option-group">
+              <span>View</span>
+              <div class="signal-live-segment" id="liveModeToggle">
+                <button class="selected" type="button" data-live-mode="raw">Raw</button>
+                <button type="button" data-live-mode="delta">Δ Drop</button>
+              </div>
+            </div>
+            <div class="signal-live-current">
+              <span id="liveSelectedFrequency">F1 · 8.00 kHz</span>
+              <strong id="liveSelectedAmplitude">2.00 Vpp</strong>
+              <small>0.5 s refresh</small>
+            </div>
           </div>
 
-          <div class="signal-live-metrics">
-            <article class="metric-card yellow compact">
-              <span>AC RMS</span>
-              <strong id="liveAcRms">-- V</strong>
-            </article>
-            <article class="metric-card cyan compact">
-              <span>Peak Amplitude</span>
-              <strong id="livePeakAmplitude">-- V</strong>
-            </article>
-            <article class="metric-card orange compact">
-              <span>Peak-to-Peak</span>
-              <strong id="livePeakToPeak">-- V</strong>
-            </article>
-            <article class="metric-card green compact">
-              <span>Measured Frequency</span>
-              <strong id="liveMeasuredFrequency">-- Hz</strong>
-            </article>
-            <article class="metric-card cyan compact">
-              <span>DC Voltage</span>
-              <strong id="liveDcVoltage">-- V</strong>
-            </article>
+          <div id="liveRawPanel">
+            <div class="signal-live-metrics">
+              <article class="metric-card yellow compact">
+                <span>AC RMS</span>
+                <strong id="liveAcRms">-- V</strong>
+              </article>
+              <article class="metric-card cyan compact">
+                <span>Peak Amplitude</span>
+                <strong id="livePeakAmplitude">-- V</strong>
+              </article>
+              <article class="metric-card orange compact">
+                <span>Peak-to-Peak</span>
+                <strong id="livePeakToPeak">-- V</strong>
+              </article>
+              <article class="metric-card green compact">
+                <span>Measured Frequency</span>
+                <strong id="liveMeasuredFrequency">-- Hz</strong>
+              </article>
+              <article class="metric-card cyan compact">
+                <span>DC Voltage</span>
+                <strong id="liveDcVoltage">-- V</strong>
+              </article>
+            </div>
+
+            <div class="signal-live-details">
+              <div><span>Commanded Frequency</span><strong id="liveCommandedFrequency">-- Hz</strong></div>
+              <div><span>Commanded Amplitude</span><strong id="liveCommandedAmplitude">1.000 Vpk</strong></div>
+              <div><span>ADC Sample Rate</span><strong id="liveAdcSampleRate">-- Hz</strong></div>
+              <div><span>ADC Points</span><strong id="liveAdcPoints">--</strong></div>
+              <div><span>Last Update</span><strong id="liveSignalUpdated">--</strong></div>
+            </div>
           </div>
 
-          <div class="signal-live-details">
-            <div><span>Commanded Frequency</span><strong id="liveCommandedFrequency">-- Hz</strong></div>
-            <div><span>Commanded Amplitude</span><strong id="liveCommandedAmplitude">1.000 Vpk</strong></div>
-            <div><span>ADC Sample Rate</span><strong id="liveAdcSampleRate">-- Hz</strong></div>
-            <div><span>ADC Points</span><strong id="liveAdcPoints">--</strong></div>
-            <div><span>Last Update</span><strong id="liveSignalUpdated">--</strong></div>
+          <div class="signal-live-delta-panel" id="liveDeltaPanel" hidden>
+            <span>AC RMS drop from 100% reference</span>
+            <strong id="liveDeltaDrop">0.00%</strong>
+            <small id="liveDeltaReference">Reference will be captured from the current reading.</small>
           </div>
 
           <div class="signal-live-message" id="liveSignalMessage">
@@ -837,6 +906,7 @@
             <button type="button" data-purity="700">700</button>
             <button type="button" data-purity="600">600</button>
             <button type="button" data-purity="500">500</button>
+            <button type="button" class="purity-na-button" data-purity="N/A">N/A</button>
           </div>
           <div class="purity-keypad" id="teachingPurityKeypad">
             <output id="teachingPurityDisplay">--</output>

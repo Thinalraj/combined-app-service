@@ -1,5 +1,6 @@
 const screens = {
   home: document.getElementById("homeScreen"),
+  scalePrepare: document.getElementById("scalePrepareScreen"),
   place: document.getElementById("placeScreen"),
   weight: document.getElementById("weightScreen"),
   dimension: document.getElementById("dimensionScreen"),
@@ -68,9 +69,14 @@ const state = {
   signalLiveTimer: null,
   signalLiveBusy: false,
   signalLiveRunning: false,
+  signalLiveVpp: 2,
+  signalLiveUnit: "V",
+  signalLiveMode: "raw",
+  signalLiveLatest: null,
+  signalLiveDeltaBaseline: null,
   loadCellTimer: null,
   loadCellHeld: false,
-  acquisitionMode: "simulator",
+  acquisitionMode: "daq",
   calibrationRecord: {},
   confidenceThresholdPct: 40,
   detectorConfidenceInput: "40",
@@ -196,7 +202,16 @@ const bottomMessages = [
   "Buatan Malaysia"
 ];
 
+// REV 2026-10-02 / SCALE-01: all new-item paths share an explicit empty-pan gate.
+// A net reading of zero cannot prove the platform is empty after a previous tare.
+// The operator confirms removal; stable readings then verify the zero operation.
+const SCALE_ZERO_TOLERANCE_G = 0.01; // Workflow band, not accuracy; verify against your scale's resolution.
+const SCALE_SETUP_TIMEOUT_MS = 15000;
+const scalePreparation = { target: "place", cancel: "home", busy: false };
+
 function showScreen(name) {
+  // Do not navigate away while a physical zero is in flight. Setup has a deadline.
+  if (scalePreparation.busy && name !== "scalePrepare") return;
   Object.values(screens).forEach((screen) => screen.classList.remove("active"));
   screens[name].classList.add("active");
   document.getElementById("menuPanel").classList.remove("open");
@@ -248,13 +263,57 @@ function selectTeachingDimensionPanel(panel) {
   if (!dimensionsActive) loadTeachingDetectedImage();
 }
 
+// VISUAL-01: keep the IMG fallback; use a sibling HTML viewer when present.
+// Request tokens prevent a slow old record response replacing a newer image.
+function resetImageOverlay(image) {
+  image.dataset.overlayRequest = String(Number(image.dataset.overlayRequest || 0) + 1);
+  document.getElementById(`${image.id}Overlay`)?.remove();
+}
+
+async function tryImageOverlay(image, url, status = null) {
+  resetImageOverlay(image);
+  const token = image.dataset.overlayRequest;
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(url, {cache: "no-store", signal: controller.signal});
+    if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return;
+    // The viewer URL has a relative raw-image reference, so use src rather
+    // than srcdoc. Sandboxing blocks scripts in any imported old HTML file.
+    if (image.dataset.overlayRequest !== token) return;
+    const frame = document.createElement("iframe");
+    frame.id = `${image.id}Overlay`;
+    frame.className = "annotation-viewer";
+    frame.title = "Raw sample image with separate annotation";
+    frame.setAttribute("sandbox", "");
+    frame.src = url;
+    image.insertAdjacentElement("afterend", frame);
+    image.hidden = true;
+    if (status) status.textContent = "Raw image with separate overlay";
+  } catch (_) {
+    // Missing sidecar or an older backend retains the existing image display.
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+function loadSavedImageOverlay(image, info) {
+  resetImageOverlay(image);
+  if (!info?.url) return;
+  const url = info.overlay_url || info.url.replace(/\.(jpg|jpeg|png|webp)(?=\?|$)/i, ".html");
+  if (url !== info.url) tryImageOverlay(image, `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`);
+}
+
 function loadTeachingDetectedImage() {
   const image = document.getElementById("teachingDetectedImage");
   const status = document.getElementById("teachingDetectedImageStatus");
+  resetImageOverlay(image);
+  image.hidden = false;
   status.textContent = "Loading detected image...";
-  image.onload = () => { status.textContent = "Latest detected item image"; };
-  image.onerror = () => { status.textContent = "No detected image available yet. Capture or detect an image first."; };
+  image.onload = () => { if (!image.hidden) status.textContent = "Latest detected item image"; };
+  image.onerror = () => { if (!image.hidden) status.textContent = "No detected image available yet. Capture or detect an image first."; };
   image.src = `/api/vision/image/detected?t=${Date.now()}`;
+  tryImageOverlay(image, `/api/vision/image/view?t=${Date.now()}`, status);
 }
 
 async function captureTeachingImageSnapshot() {
@@ -286,14 +345,21 @@ function setWeight(value) {
   document.querySelector("#weightScreen .value-panel").classList.remove("error");
 }
 
-function calculateGeometry(widthValue, lengthValue, thicknessValue) {
+function calculateGeometry(widthValue, lengthValue, thicknessValue, mode = "standard") {
   const width = Number.parseFloat(widthValue || "0");
   const length = Number.parseFloat(lengthValue || "0");
   const thickness = Number.parseFloat(thicknessValue || "0");
   const safeWidth = Number.isFinite(width) ? width : 0;
   const safeLength = Number.isFinite(length) ? length : 0;
   const safeThickness = Number.isFinite(thickness) ? thickness : 0;
-  const sampleArea = safeWidth * safeLength;
+  // REV 2026-10-02 / RING-01: both workflows use the same shape formula.
+  // For rings/bangles width=INNER diameter and length=OUTER diameter.
+  let sampleArea = safeWidth * safeLength;
+  if (mode === "coin") sampleArea = Math.PI * (safeWidth / 2) ** 2;
+  if (mode === "ring" || mode === "bangle") {
+    sampleArea = safeWidth > 0 && safeLength > safeWidth
+      ? Math.PI * (safeLength ** 2 - safeWidth ** 2) / 4 : 0;
+  }
   const coilArea = Math.PI * 35 * 35;
   const contactRatio = coilArea > 0 ? (sampleArea / coilArea) * 100 : 0;
   return { safeWidth, safeLength, safeThickness, sampleArea, contactRatio };
@@ -316,7 +382,7 @@ function getMeasurementDimensionConfig() {
   if (shape === "ring" || shape === "bangle") {
     return {
       mode: shape,
-      labels: { width: "Inner Dia.", length: "Outer Dia.", thickness: "Thickness" },
+      labels: { width: "Inner Diameter", length: "Outer Diameter", thickness: "Thickness" },
       required: ["width", "length", "thickness"],
       hideLength: false
     };
@@ -350,16 +416,7 @@ function calculateGeometryForMeasurement() {
   const width = Number.parseFloat(state.widthMm || "0") || 0;
   const length = Number.parseFloat(state.lengthMm || "0") || 0;
   const thickness = Number.parseFloat(state.thicknessMm || "0") || 0;
-  if (config.mode === "coin") return calculateGeometry(width, width, thickness);
-  if (config.mode === "ring" || config.mode === "bangle") {
-    const innerRadius = width / 2;
-    const outerRadius = length / 2;
-    const sampleArea = Math.max(0, Math.PI * ((outerRadius * outerRadius) - (innerRadius * innerRadius)));
-    const coilArea = Math.PI * 35 * 35;
-    const contactRatio = coilArea > 0 ? (sampleArea / coilArea) * 100 : 0;
-    return { safeWidth: width, safeLength: length, safeThickness: thickness, sampleArea, contactRatio };
-  }
-  return calculateGeometry(width, length, thickness);
+  return calculateGeometry(width, config.mode === "coin" ? width : length, thickness, config.mode);
 }
 
 function buildMeasurementDimensionPayload() {
@@ -381,7 +438,9 @@ function applyVisionToMeasurement(payload) {
   const diameter = Number.parseFloat(payload?.diameter_mm);
   const width = Number.parseFloat(payload?.width_mm);
   const length = Number.parseFloat(payload?.length_mm);
-  if (config.mode === "coin" && Number.isFinite(diameter) && diameter > 0) {
+  if (config.mode === "ring" || config.mode === "bangle") {
+    applyRingDiameters(state, payload);
+  } else if (config.mode === "coin" && Number.isFinite(diameter) && diameter > 0) {
     state.widthMm = diameter.toFixed(2);
     state.lengthMm = diameter.toFixed(2);
   } else {
@@ -397,7 +456,9 @@ function applyVisionToTeaching(payload) {
   const diameter = Number.parseFloat(payload?.diameter_mm);
   const width = Number.parseFloat(payload?.width_mm);
   const length = Number.parseFloat(payload?.length_mm);
-  if (config.mode === "coin" && Number.isFinite(diameter) && diameter > 0) {
+  if (config.mode === "ring" || config.mode === "bangle") {
+    applyRingDiameters(teachingState, payload);
+  } else if (config.mode === "coin" && Number.isFinite(diameter) && diameter > 0) {
     teachingState.widthMm = diameter.toFixed(2);
     teachingState.lengthMm = diameter.toFixed(2);
   } else {
@@ -408,6 +469,19 @@ function applyVisionToTeaching(payload) {
   updateTeachingDimensionDisplay();
 }
 
+function applyRingDiameters(target, payload) {
+  // Explicit fields only: legacy bounding-box width/height are not diameters.
+  const inner = Number(payload?.inner_diameter_mm);
+  const outer = Number(payload?.outer_diameter_mm);
+  target.widthMm = "";
+  target.lengthMm = "";
+  if (payload?.geometry_ok === true && Number.isFinite(inner) && Number.isFinite(outer)
+      && inner > 0 && outer > inner) {
+    target.widthMm = inner.toFixed(2);
+    target.lengthMm = outer.toFixed(2);
+  }
+}
+
 function updateTeachingVisionSummary() {
   const shapeNode = document.getElementById("teachingVisionShapeDisplay");
   const diameterNode = document.getElementById("teachingVisionDiameterDisplay");
@@ -416,13 +490,23 @@ function updateTeachingVisionSummary() {
 
   const payload = teachingState.visionMeasurement || {};
   const diameter = Number.parseFloat(payload.diameter_mm);
+  const inner = Number.parseFloat(payload.inner_diameter_mm);
+  const outer = Number.parseFloat(payload.outer_diameter_mm);
   const area = Number.parseFloat(payload.surface_area_mm2);
   shapeNode.textContent = getTeachingShapeLabel() || "--";
-  diameterNode.textContent = Number.isFinite(diameter) && diameter > 0 ? `${diameter.toFixed(2)} mm` : "--";
+  diameterNode.textContent = payload.geometry_ok && inner > 0 && outer > inner
+    ? `${inner.toFixed(2)} / ${outer.toFixed(2)} mm (I/O)`
+    : (Number.isFinite(diameter) && diameter > 0 ? `${diameter.toFixed(2)} mm` : "--");
   areaNode.textContent = Number.isFinite(area) && area > 0 ? `${area.toFixed(2)} mm²` : "--";
 }
 
 async function fetchVisionSize(shape, kind = "measurement") {
+  // Clear previous auto-fill before a fresh ring capture, including API failure.
+  // Manual entry remains available if the current hole/depth cannot be measured.
+  if (["ring", "bangle"].includes(String(shape).toLowerCase())) {
+    if (kind === "teaching") applyVisionToTeaching(null);
+    else applyVisionToMeasurement(null);
+  }
   const response = await fetch(`/api/vision/size?shape=${encodeURIComponent(shape)}`, { cache: "no-store" });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.ok) {
@@ -619,7 +703,8 @@ function dimensionsAreValid() {
     length: state.lengthMm,
     thickness: state.thicknessMm
   };
-  return config.required.every((field) => Number.parseFloat(values[field] || "0") > 0);
+  return config.required.every((field) => Number.isFinite(Number(values[field])) && Number(values[field]) > 0)
+    && (!["ring", "bangle"].includes(config.mode) || Number(values.length) > Number(values.width));
 }
 
 function weightIsValidTeaching() {
@@ -633,7 +718,8 @@ function teachingDimensionsAreValid() {
     length: teachingState.lengthMm,
     thickness: teachingState.thicknessMm
   };
-  return config.required.every((field) => Number.parseFloat(values[field] || "0") > 0);
+  return config.required.every((field) => Number.isFinite(Number(values[field])) && Number(values[field]) > 0)
+    && (!["ring", "bangle"].includes(config.mode) || Number(values.length) > Number(values.width));
 }
 
 function resetTeachingWeight() {
@@ -947,6 +1033,7 @@ function showTeachingDetail(id) {
   const imageNode = document.getElementById("teachingDetailImage");
   const imageMessage = document.getElementById("teachingDetailImageMessage");
   const imageStatus = document.getElementById("teachingDetailImageStatus");
+  loadSavedImageOverlay(imageNode, imageInfo);
   if (imageInfo?.url) {
     imageNode.hidden = false;
     imageNode.src = `${imageInfo.url}?t=${Date.now()}`;
@@ -1364,7 +1451,9 @@ function configureTeachingPurityScreen() {
 
   document.querySelectorAll("#teachingPurityGrid button").forEach((button) => {
     const purity = button.dataset.purity || "";
-    if (isGold) {
+    if (purity === "N/A") {
+      button.hidden = false;
+    } else if (isGold) {
       button.hidden = !purity.includes("/");
     } else {
       button.hidden = !/^\d{3}$/.test(purity);
@@ -1398,7 +1487,7 @@ function getTeachingDimensionConfig() {
   if (shape === "ring" || shape === "bangle") {
     return {
       mode: shape,
-      labels: { width: "Inner Dia.", length: "Outer Dia.", thickness: "Thickness" },
+      labels: { width: "Inner Diameter", length: "Outer Diameter", thickness: "Thickness" },
       required: ["width", "length", "thickness"]
     };
   }
@@ -1428,8 +1517,7 @@ function calculateGeometryForTeaching() {
   const width = Number.parseFloat(teachingState.widthMm || "0") || 0;
   const length = Number.parseFloat(teachingState.lengthMm || "0") || 0;
   const thickness = Number.parseFloat(teachingState.thicknessMm || "0") || 0;
-  if (config.mode === "coin") return calculateGeometry(width, width, thickness);
-  return calculateGeometry(width, length, thickness);
+  return calculateGeometry(width, config.mode === "coin" ? width : length, thickness, config.mode);
 }
 
 function buildTeachingDimensionPayload() {
@@ -1751,6 +1839,7 @@ function renderTeachingSaved(record) {
   const savedImageInfo = record.image || null;
   const savedImageNode = document.getElementById("teachingSavedImage");
   const savedImageMessage = document.getElementById("teachingSavedImageMessage");
+  loadSavedImageOverlay(savedImageNode, savedImageInfo);
   document.getElementById("teachingSavedImageStatus").textContent = savedImageInfo?.url ? "Saved" : "Not available";
   if (savedImageInfo?.url) {
     savedImageNode.hidden = false;
@@ -1943,13 +2032,14 @@ function sensorsAreValid(sensors) {
 }
 
 function updateAcquisitionModeDisplay() {
+  // Simulator switching has been retired from the kiosk UI. Keep this helper
+  // null-safe because older cached pages may still contain the legacy fields.
   const modeValue = document.getElementById("modeValue");
   const modeToggle = document.getElementById("modeToggleButton");
-  const isDaq = state.acquisitionMode === "daq";
-
-  modeValue.textContent = isDaq ? "DAQ" : "Simulator";
-  modeToggle.textContent = isDaq ? "Switch to Simulator" : "Switch to DAQ";
-  modeToggle.classList.toggle("active", isDaq);
+  if (!modeValue || !modeToggle) return;
+  modeValue.textContent = "DAQ";
+  modeToggle.textContent = "DAQ Active";
+  modeToggle.classList.add("active");
 }
 
 function updateDetectorConfidenceDisplay() {
@@ -1961,7 +2051,7 @@ async function loadAcquisitionMode() {
     const response = await fetch("/api/settings", { cache: "no-store" });
     if (!response.ok) throw new Error("Unable to read settings");
     const settings = await response.json();
-    state.acquisitionMode = settings.acquisition_mode === "daq" ? "daq" : "simulator";
+    state.acquisitionMode = "daq";
     const threshold = Number(settings.confidence_threshold_pct);
     state.confidenceThresholdPct = Number.isFinite(threshold) ? threshold : 40;
     state.detectorConfidenceInput = String(Math.round(state.confidenceThresholdPct));
@@ -1973,7 +2063,7 @@ async function loadAcquisitionMode() {
     const slot = Number.parseInt(settings.active_frequency_slot, 10);
     state.activeFrequencySlot = slot >= 1 && slot <= 3 ? slot : 1;
   } catch (error) {
-    state.acquisitionMode = "simulator";
+    state.acquisitionMode = "daq";
     state.confidenceThresholdPct = 40;
     state.detectorConfidenceInput = "40";
     state.multiFrequenciesKhz = [10, 20, 30];
@@ -2087,6 +2177,16 @@ function signalLiveMetric(value, digits = 6, unit = "V") {
   return Number.isFinite(number) ? `${number.toFixed(digits)} ${unit}` : `-- ${unit}`;
 }
 
+function signalLiveVoltageMetric(value, digitsV = 6) {
+  const number = Number(value);
+  const useMv = state.signalLiveUnit === "mV";
+  const unit = useMv ? "mV" : "V";
+  if (!Number.isFinite(number)) return `-- ${unit}`;
+  const scaled = useMv ? number * 1000 : number;
+  const digits = useMv ? Math.max(2, digitsV - 3) : digitsV;
+  return `${scaled.toFixed(digits)} ${unit}`;
+}
+
 function updateSignalLivePresetUi() {
   const preset = SIGNAL_PRESETS[state.signalPreset] || SIGNAL_PRESETS.f1;
   document.querySelectorAll("#liveSignalPresetGrid button[data-signal-preset]").forEach((button) => {
@@ -2094,6 +2194,27 @@ function updateSignalLivePresetUi() {
   });
   const label = document.getElementById("liveSelectedFrequency");
   if (label) label.textContent = `${preset.label} · ${(preset.frequencyHz / 1000).toFixed(2)} kHz`;
+}
+
+function updateSignalLiveOptionsUi() {
+  document.querySelectorAll("#liveAmplitudeToggle button[data-live-vpp]").forEach((button) => {
+    button.classList.toggle("selected", Number(button.dataset.liveVpp) === Number(state.signalLiveVpp));
+  });
+  document.querySelectorAll("#liveUnitToggle button[data-live-unit]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.liveUnit === state.signalLiveUnit);
+  });
+  document.querySelectorAll("#liveModeToggle button[data-live-mode]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.liveMode === state.signalLiveMode);
+  });
+
+  const selectedAmplitude = document.getElementById("liveSelectedAmplitude");
+  if (selectedAmplitude) selectedAmplitude.textContent = `${Number(state.signalLiveVpp).toFixed(2)} Vpp`;
+
+  const rawPanel = document.getElementById("liveRawPanel");
+  const deltaPanel = document.getElementById("liveDeltaPanel");
+  const isDelta = state.signalLiveMode === "delta";
+  if (rawPanel) rawPanel.hidden = isDelta;
+  if (deltaPanel) deltaPanel.hidden = !isDelta;
 }
 
 function setSignalLiveRunning(running) {
@@ -2108,18 +2229,53 @@ function setSignalLiveRunning(running) {
   if (stopButton) stopButton.disabled = !state.signalLiveRunning;
 }
 
+function resetSignalLiveDeltaBaseline(useCurrent = false) {
+  const current = Number(state.signalLiveLatest?.ac_rms_v);
+  state.signalLiveDeltaBaseline = useCurrent && Number.isFinite(current) && current !== 0 ? current : null;
+  renderSignalLiveDelta(useCurrent ? (state.signalLiveLatest || {}) : {});
+}
+
+function renderSignalLiveDelta(payload) {
+  const dropNode = document.getElementById("liveDeltaDrop");
+  const referenceNode = document.getElementById("liveDeltaReference");
+  if (!dropNode || !referenceNode) return;
+
+  const current = Number(payload?.ac_rms_v);
+  if (state.signalLiveMode !== "delta") return;
+
+  if (state.signalLiveDeltaBaseline === null && Number.isFinite(current) && current !== 0) {
+    state.signalLiveDeltaBaseline = current;
+  }
+
+  const baseline = Number(state.signalLiveDeltaBaseline);
+  if (!Number.isFinite(current) || !Number.isFinite(baseline) || baseline === 0) {
+    dropNode.textContent = "--%";
+    referenceNode.textContent = "Waiting for a valid AC RMS reading to establish the 100% reference.";
+    return;
+  }
+
+  const dropPct = ((baseline - current) / baseline) * 100;
+  dropNode.textContent = `${dropPct.toFixed(2)}%`;
+  const baseText = signalLiveVoltageMetric(baseline, 6);
+  referenceNode.textContent = `100% reference: ${baseText} AC RMS · current signal is ${Math.max(0, 100 - dropPct).toFixed(2)}% of reference`;
+}
+
 function renderSignalLiveMeasurement(payload) {
   const hasMeasurement = payload.ac_rms_v !== undefined || payload.peak_amplitude_v !== undefined || payload.dc_v !== undefined;
   if (hasMeasurement) {
-    document.getElementById("liveAcRms").textContent = signalLiveMetric(payload.ac_rms_v, 6, "V");
-    document.getElementById("livePeakAmplitude").textContent = signalLiveMetric(payload.peak_amplitude_v, 6, "V");
-    document.getElementById("livePeakToPeak").textContent = signalLiveMetric(payload.peak_to_peak_v, 6, "V");
+    state.signalLiveLatest = { ...(state.signalLiveLatest || {}), ...payload };
+    document.getElementById("liveAcRms").textContent = signalLiveVoltageMetric(payload.ac_rms_v, 6);
+    document.getElementById("livePeakAmplitude").textContent = signalLiveVoltageMetric(payload.peak_amplitude_v, 6);
+    document.getElementById("livePeakToPeak").textContent = signalLiveVoltageMetric(payload.peak_to_peak_v, 6);
     document.getElementById("liveMeasuredFrequency").textContent = signalLiveMetric(payload.frequency_hz, 2, "Hz");
-    document.getElementById("liveDcVoltage").textContent = signalLiveMetric(payload.dc_v, 6, "V");
+    document.getElementById("liveDcVoltage").textContent = signalLiveVoltageMetric(payload.dc_v, 6);
     document.getElementById("liveAdcSampleRate").textContent = signalLiveMetric(payload.adc_sample_rate_hz, 0, "Hz");
     document.getElementById("liveAdcPoints").textContent = Number.isFinite(Number(payload.adc_points)) ? String(payload.adc_points) : "--";
     document.getElementById("liveSignalUpdated").textContent = new Date().toLocaleTimeString();
-    document.getElementById("liveSignalMessage").textContent = "Live measurement received from the ADP2230 signal service.";
+    document.getElementById("liveSignalMessage").textContent = state.signalLiveMode === "delta"
+      ? "Delta is referenced to the AC RMS value captured as 100%."
+      : "Live measurement received from the ADP2230 signal service.";
+    renderSignalLiveDelta(payload);
   }
 
   const commandedFrequency = payload.frequency_set_hz ?? payload.frequency_hz;
@@ -2128,7 +2284,12 @@ function renderSignalLiveMeasurement(payload) {
     document.getElementById("liveCommandedFrequency").textContent = signalLiveMetric(commandedFrequency, 0, "Hz");
   }
   if (Number.isFinite(Number(commandedAmplitude))) {
-    document.getElementById("liveCommandedAmplitude").textContent = signalLiveMetric(commandedAmplitude, 3, "Vpk");
+    document.getElementById("liveCommandedAmplitude").textContent = signalLiveVoltageMetric(commandedAmplitude, 3).replace(/ (m?V)$/, " $1pk");
+    const actualVpp = Number(commandedAmplitude) * 2;
+    if (Math.abs(actualVpp - 1) < 0.05 || Math.abs(actualVpp - 2) < 0.05) {
+      state.signalLiveVpp = Math.abs(actualVpp - 1) < Math.abs(actualVpp - 2) ? 1 : 2;
+      updateSignalLiveOptionsUi();
+    }
   }
 
   const frequencySet = Number(commandedFrequency);
@@ -2182,6 +2343,7 @@ function stopSignalLivePolling() {
 
 async function loadSignalLiveStatus() {
   updateSignalLivePresetUi();
+  updateSignalLiveOptionsUi();
   try {
     const response = await fetch("/api/signal/status", { cache: "no-store" });
     const payload = await response.json().catch(() => ({}));
@@ -2191,16 +2353,24 @@ async function loadSignalLiveStatus() {
 
     const running = payload.signal_running ?? (String(payload.status || "").toLowerCase() === "running");
     const frequency = Number(payload.frequency_set_hz ?? payload.frequency_hz);
+    const amplitude = Number(payload.amplitude_v_peak ?? payload.amplitude_set_v);
     if (Number.isFinite(frequency)) {
       const matched = Object.entries(SIGNAL_PRESETS).find(([, item]) => item.frequencyHz === Math.round(frequency));
       if (matched) state.signalPreset = matched[0];
     }
+    if (Number.isFinite(amplitude)) {
+      const vpp = amplitude * 2;
+      if (Math.abs(vpp - 1) < 0.05 || Math.abs(vpp - 2) < 0.05) {
+        state.signalLiveVpp = Math.abs(vpp - 1) < Math.abs(vpp - 2) ? 1 : 2;
+      }
+    }
     updateSignalLivePresetUi();
+    updateSignalLiveOptionsUi();
     updateSignalPresetSelection();
     setSignalLiveRunning(running);
     document.getElementById("liveSignalMessage").textContent = running
       ? "Signal is already running. Live polling has started."
-      : "Select F1–F4 and press Start. Live measurements will update every 0.5 s.";
+      : "Select F1–F4, output level and display mode, then press Start.";
     if (running) startSignalLivePolling();
   } catch (error) {
     setSignalLiveRunning(false);
@@ -2211,13 +2381,14 @@ async function loadSignalLiveStatus() {
 
 async function startSignalLive() {
   stopSignalLivePolling();
+  if (state.signalLiveMode === "delta") resetSignalLiveDeltaBaseline(false);
   document.getElementById("liveSignalStatus").textContent = "Starting...";
-  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at 1.00 V peak...`;
+  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at ${Number(state.signalLiveVpp).toFixed(0)} Vpp...`;
   try {
     const response = await fetch("/api/signal/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ preset: state.signalPreset })
+      body: JSON.stringify({ preset: state.signalPreset, peak_to_peak_v: state.signalLiveVpp })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.ok === false) {
@@ -2225,7 +2396,9 @@ async function startSignalLive() {
     }
     setSignalLiveRunning(true);
     renderSignalLiveMeasurement(payload);
-    document.getElementById("liveSignalMessage").textContent = "Signal started. Reading live values every 0.5 s.";
+    document.getElementById("liveSignalMessage").textContent = state.signalLiveMode === "delta"
+      ? "Signal started. The first valid AC RMS reading becomes the 100% reference."
+      : "Signal started. Reading live values every 0.5 s.";
     startSignalLivePolling();
   } catch (error) {
     setSignalLiveRunning(false);
@@ -2260,19 +2433,51 @@ async function stopSignalLive() {
 async function selectSignalLivePreset(preset) {
   if (!SIGNAL_PRESETS[preset] || preset === state.signalPreset) return;
   const wasRunning = state.signalLiveRunning;
-  if (wasRunning) {
-    await stopSignalLive();
-  }
+  if (wasRunning) await stopSignalLive();
   state.signalPreset = preset;
+  resetSignalLiveDeltaBaseline(false);
   updateSignalLivePresetUi();
   updateSignalPresetSelection();
   const selected = SIGNAL_PRESETS[preset];
   document.getElementById("liveSignalMessage").textContent = wasRunning
     ? `Changing to ${selected.label} ${(selected.frequencyHz / 1000).toFixed(0)} kHz...`
     : `${selected.label} selected. Press Start to output ${(selected.frequencyHz / 1000).toFixed(0)} kHz.`;
-  if (wasRunning) {
-    await startSignalLive();
+  if (wasRunning) await startSignalLive();
+}
+
+async function selectSignalLiveAmplitude(vpp) {
+  const next = Number(vpp);
+  if (![1, 2].includes(next) || next === Number(state.signalLiveVpp)) return;
+  const wasRunning = state.signalLiveRunning;
+  if (wasRunning) await stopSignalLive();
+  state.signalLiveVpp = next;
+  resetSignalLiveDeltaBaseline(false);
+  updateSignalLiveOptionsUi();
+  document.getElementById("liveSignalMessage").textContent = wasRunning
+    ? `Changing output to ${next.toFixed(0)} Vpp...`
+    : `${next.toFixed(0)} Vpp selected (${(next / 2).toFixed(1)} V peak).`;
+  if (wasRunning) await startSignalLive();
+}
+
+function selectSignalLiveUnit(unit) {
+  if (!["V", "mV"].includes(unit) || unit === state.signalLiveUnit) return;
+  state.signalLiveUnit = unit;
+  updateSignalLiveOptionsUi();
+  if (state.signalLiveLatest) renderSignalLiveMeasurement(state.signalLiveLatest);
+  else renderSignalLiveDelta({});
+}
+
+function selectSignalLiveMode(mode) {
+  if (!["raw", "delta"].includes(mode)) return;
+  if (mode === "delta") {
+    state.signalLiveMode = "delta";
+    resetSignalLiveDeltaBaseline(true);
+  } else {
+    state.signalLiveMode = "raw";
+    state.signalLiveDeltaBaseline = null;
   }
+  updateSignalLiveOptionsUi();
+  if (state.signalLiveLatest) renderSignalLiveMeasurement(state.signalLiveLatest);
 }
 
 async function startLiveViewMonitor() {
@@ -2648,25 +2853,95 @@ async function prepareTeachingDimensionsFromVision() {
   showScreen("teachingDimension");
 }
 
-async function zeroMeasurementScaleBeforePlacement() {
-  const button = document.getElementById("startButton");
-  const originalText = button.textContent;
-  button.textContent = "Zeroing Scale...";
-  button.disabled = true;
+function zeroMeasurementScaleBeforePlacement() {
+  if (scalePreparation.busy) return;
   resetMeasurementInputs();
-  try {
-    await fetch("/api/load-cell/zero", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-  } catch (error) {
-    // Continue to placement; the weight page reports scale read errors.
-  } finally {
-    button.textContent = originalText;
-    button.disabled = false;
+  beginScalePreparation("place", "home");
+}
+
+function beginScalePreparation(target, cancel) {
+  scalePreparation.target = target;
+  scalePreparation.cancel = cancel;
+  document.getElementById("scalePrepareStatus").textContent =
+    "Remove the previous item. Leave the platform empty, then press Platform Empty — Zero.";
+  showScreen("scalePrepare"); // No hardware command is sent by Start / Scan New Material.
+}
+
+async function scaleSetupRequest(url, signal, method = "GET") {
+  const response = await fetch(url, {
+    method, signal, cache: "no-store",
+    ...(method === "POST" ? {
+      headers: { "Content-Type": "application/json" }, body: "{}"
+    } : {})
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.message || payload.error || "Scale service did not confirm success.");
   }
-  showScreen("place");
+  return payload;
+}
+
+async function waitForStableScale(signal, requireZero) {
+  let consecutive = 0;
+  while (!signal.aborted) {
+    const reading = await scaleSetupRequest("/api/load-cell/latest", signal);
+    // Reject unsupported units instead of treating kilograms as grams.
+    if (String(reading.unit || "").trim().toLowerCase() !== "g") {
+      throw new Error("Set the scale unit to grams, then retry.");
+    }
+    if (typeof reading.weight_g !== "number" || !Number.isFinite(reading.weight_g)) {
+      throw new Error("Scale returned an invalid weight.");
+    }
+    // Use the device's explicit S/D status; the legacy adapter guesses stable
+    // when a service omits its status, which is not adequate for this check.
+    const status = String(reading.service_payload?.status ?? reading.status ?? "").toUpperCase();
+    const stable = status === "S" || status === "STABLE";
+    const inBand = !requireZero || Math.abs(reading.weight_g) <= SCALE_ZERO_TOLERANCE_G;
+    consecutive = stable && inBand ? consecutive + 1 : 0;
+    document.getElementById("scalePrepareStatus").textContent =
+      `${requireZero ? "Checking zero" : "Waiting for the empty platform to settle"}: ` +
+      `${reading.weight_g.toFixed(3)} g · ${stable ? "stable" : "moving"} · ${consecutive}/3`;
+    if (consecutive >= 3) return;
+    await delayMs(250);
+  }
+  throw new Error("Scale setup timed out. Keep the platform empty and retry.");
+}
+
+async function confirmEmptyPlatformAndZero() {
+  if (scalePreparation.busy || !screens.scalePrepare.classList.contains("active")) return;
+  scalePreparation.busy = true;
+  const button = document.getElementById("scalePrepareZeroButton");
+  const cancel = document.getElementById("scalePrepareCancelButton");
+  const menu = document.getElementById("menuButton");
+  button.disabled = cancel.disabled = menu.disabled = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SCALE_SETUP_TIMEOUT_MS);
+  let ready = false;
+  try {
+    await waitForStableScale(controller.signal, false);
+    document.getElementById("scalePrepareStatus").textContent = "Zeroing the empty platform...";
+    const result = await scaleSetupRequest("/api/load-cell/zero", controller.signal, "POST");
+    // MT-SICS ZI replies S/D mean stable/dynamic zero. HTTP 200 alone is not
+    // proof: the current scale API also returns success for rejected commands.
+    const reply = String(result.raw_response || "").trim();
+    if (!/^ZI\s+S$/i.test(reply)) {
+      throw new Error(/^ZI\s+D$/i.test(reply)
+        ? "Zero occurred while the platform was moving. Leave it empty, let it settle and retry."
+        : `Zero not confirmed (${reply || "no device reply"}). Keep the platform empty and retry.`);
+    }
+    await waitForStableScale(controller.signal, true);
+    ready = true;
+  } catch (error) {
+    document.getElementById("scalePrepareStatus").textContent = controller.signal.aborted
+      ? "Scale setup timed out. Keep the platform empty and retry."
+      : (error.message || "Unable to prepare scale. Keep the platform empty and retry.");
+  } finally {
+    clearTimeout(timeout);
+    scalePreparation.busy = false;
+    button.disabled = cancel.disabled = menu.disabled = false;
+  }
+  // Only a confirmed, stable zero opens the place-next-item screen.
+  if (ready) showScreen(scalePreparation.target);
 }
 
 async function prepareMeasurementScale() {
@@ -2724,31 +2999,14 @@ async function sampleMeasurementWeight() {
   }
 }
 
-async function zeroTeachingScaleBeforePlacement(mode) {
+function zeroTeachingScaleBeforePlacement(mode) {
+  if (scalePreparation.busy) return;
   teachingState.mode = mode;
-  const button = mode === "validate"
-    ? document.getElementById("teachingValidateButton")
-    : document.getElementById("teachingStartButton");
-  const originalText = button.textContent;
-  button.textContent = "Zeroing...";
-  button.disabled = true;
   resetTeachingInputs();
-  try {
-    await fetch("/api/load-cell/zero", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-  } catch (error) {
-    // Continue anyway; the weight screen can still report scale read errors.
-  } finally {
-    button.textContent = originalText;
-    button.disabled = false;
-  }
   document.getElementById("teachingStage").textContent = "F1 · 8 kHz";
   document.querySelector("#teachingRecordScreen .measure-copy p").textContent = "F1–F4 will be sampled sequentially after dimensions are confirmed.";
   document.getElementById("teachingRecordButton").textContent = "Next";
-  showScreen("teachingPlace");
+  beginScalePreparation("teachingPlace", "teaching");
 }
 
 async function sampleTeachingWeight() {
@@ -2812,6 +3070,10 @@ async function startLoadCellMonitor() {
 document.getElementById("startButton").addEventListener("click", () => {
   zeroMeasurementScaleBeforePlacement();
 });
+document.getElementById("scalePrepareZeroButton").addEventListener("click", confirmEmptyPlatformAndZero);
+document.getElementById("scalePrepareCancelButton").addEventListener("click", () => {
+  if (!scalePreparation.busy) showScreen(scalePreparation.cancel);
+});
 document.getElementById("placeContinueButton").addEventListener("click", () => showScreen("shape"));
 document.getElementById("weightBackButton").addEventListener("click", () => showScreen("shape"));
 document.getElementById("measurementWeightSampleButton").addEventListener("click", sampleMeasurementWeight);
@@ -2866,7 +3128,8 @@ document.getElementById("menuExitButton").addEventListener("click", () => {
   window.open("", "_self");
   window.close();
 });
-document.getElementById("modeToggleButton").addEventListener("click", toggleAcquisitionMode);
+const legacyModeToggleButton = document.getElementById("modeToggleButton");
+if (legacyModeToggleButton) legacyModeToggleButton.addEventListener("click", toggleAcquisitionMode);
 document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));
 document.getElementById("engineeringCalibrationButton").addEventListener("click", () => showScreen("calibration"));
 document.getElementById("engineeringTeachingButton").addEventListener("click", () => showScreen("teaching"));
@@ -2895,6 +3158,21 @@ document.getElementById("liveSignalPresetGrid").addEventListener("click", (event
   const button = event.target.closest("button[data-signal-preset]");
   if (!button) return;
   selectSignalLivePreset(button.dataset.signalPreset);
+});
+document.getElementById("liveAmplitudeToggle").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-live-vpp]");
+  if (!button) return;
+  selectSignalLiveAmplitude(button.dataset.liveVpp);
+});
+document.getElementById("liveUnitToggle").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-live-unit]");
+  if (!button) return;
+  selectSignalLiveUnit(button.dataset.liveUnit);
+});
+document.getElementById("liveModeToggle").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-live-mode]");
+  if (!button) return;
+  selectSignalLiveMode(button.dataset.liveMode);
 });
 document.getElementById("daqSettingsBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("daqSettingsDoneButton").addEventListener("click", () => showScreen("engineering"));
@@ -3176,8 +3454,12 @@ document.getElementById("teachingPurityGrid").addEventListener("click", (event) 
 document.getElementById("teachingPurityKeypad").addEventListener("click", (event) => {
   const key = event.target.dataset.teachingPurityKey;
   if (!key) return;
-  if (key === "clear") teachingState.purity = "";
-  else if (teachingState.purity.length < 4) teachingState.purity += key;
+  if (key === "clear") {
+    teachingState.purity = "";
+  } else {
+    if (teachingState.purity === "N/A") teachingState.purity = "";
+    if (teachingState.purity.length < 4) teachingState.purity += key;
+  }
   updateTeachingPuritySelection();
 });
 
@@ -3301,27 +3583,77 @@ function updateCarousel() {
   updateActiveRate(cards[state.carouselIndex]);
 }
 
+// REV 2026-10-02 / RATES-01: prices are spot metal estimates, not retail
+// jewellery prices. Purity scales the metal content; workmanship is excluded.
+let referenceRates = null;
+let referenceRatesBusy = false;
+let referenceRatesOffline = false;
+
 function updateActiveRate(card) {
   const rateCard = document.getElementById("activeRateCard");
   const rateMove = document.getElementById("activeRateMove");
-
+  const priceDisplay = document.getElementById("activeRatePrice");
+  const updatedDisplay = document.getElementById("activeRateUpdated");
+  const quote = referenceRates?.metals?.[card.dataset.metal];
   document.getElementById("activeRateLabel").textContent = card.dataset.rateLabel;
-  document.getElementById("activeRatePrice").textContent = card.dataset.ratePrice;
-  document.getElementById("activeRateSource").textContent = `Source: ${card.dataset.rateSource}`;
-  rateMove.textContent = card.dataset.rateMove;
-
+  document.getElementById("activeRateSource").textContent = "Gold API + Frankfurter";
   rateCard.classList.remove("gold-rate", "silver-rate", "palladium-rate");
+  rateCard.classList.add(card.classList.contains("silver") ? "silver-rate" : card.classList.contains("palladium") ? "palladium-rate" : "gold-rate");
   rateMove.classList.remove("up", "down", "flat");
-
-  if (card.classList.contains("silver")) {
-    rateCard.classList.add("silver-rate");
-  } else if (card.classList.contains("palladium")) {
-    rateCard.classList.add("palladium-rate");
-  } else {
-    rateCard.classList.add("gold-rate");
+  const price = quote?.myr_per_g;
+  if (!Number.isFinite(price) || price <= 0) {
+    priceDisplay.textContent = "—";
+    rateMove.textContent = referenceRatesOffline ? "Unavailable" : referenceRates?.pending ? "Loading" : "Unavailable";
+    rateMove.classList.add("flat");
+    updatedDisplay.textContent = "No quote available";
+    return;
   }
+  priceDisplay.textContent = `RM ${(price * Number(card.dataset.purity)).toFixed(2)}/g`;
+  const stale = referenceRatesOffline || quote.stale;
+  const change = quote.change_pct;
+  if (stale || !Number.isFinite(change)) {
+    rateMove.textContent = stale ? "STALE" : "Trend pending";
+    rateMove.classList.add("flat");
+  } else {
+    rateMove.textContent = `${change > 0 ? "▲" : change < 0 ? "▼" : "—"} ${Math.abs(change).toFixed(2)}% since previous update`;
+    rateMove.classList.add(change > 0 ? "up" : change < 0 ? "down" : "flat");
+  }
+  const timestamp = new Date(quote.updated_at);
+  const label = Number.isNaN(timestamp.getTime()) ? "Unknown quote time" : timestamp.toLocaleString("en-MY", {timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false}) + " MYT";
+  updatedDisplay.textContent = `${stale ? "Last quote" : "Quote"}: ${label} · FX ${quote.fx_date}`;
+  rateMove.title = quote.baseline_at ? `Compared with quote at ${quote.baseline_at}` : "A second successful quote is needed";
+}
 
-  rateMove.classList.add(card.dataset.rateTrend || "flat");
+// RATES-02: GET only reads the daily cache; POST explicitly requests an update.
+async function refreshReferenceRates(manual = false) {
+  if (referenceRatesBusy) return;
+  referenceRatesBusy = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(manual ? "/api/metal-rates/refresh" : "/api/metal-rates", {
+      method: manual ? "POST" : "GET", cache: "no-store", signal: controller.signal});
+    if (!response.ok) throw new Error("Rates unavailable");
+    const data = await response.json();
+    if (data.currency !== "MYR" || data.unit !== "g" || !data.metals) throw new Error("Invalid rates response");
+    referenceRates = data;
+    referenceRatesOffline = false;
+    const button = document.getElementById("refreshRatesButton");
+    const seconds = data.manual_retry_after || 0;
+    button.disabled = data.pending || seconds > 0;
+    button.textContent = data.pending ? "Refreshing…" : seconds > 0 ? `Wait ${seconds}s` : "Refresh";
+  } catch (_) {
+    // Keep a last-known quote, but never present it as fresh after an error.
+    referenceRatesOffline = true;
+    const button = document.getElementById("refreshRatesButton");
+    button.disabled = false;
+    button.textContent = "Retry refresh";
+  } finally {
+    clearTimeout(timeout);
+    referenceRatesBusy = false;
+    updateCarousel();
+    if (referenceRates?.pending && !referenceRatesOffline) setTimeout(() => refreshReferenceRates(), 5000);
+  }
 }
 
 setInterval(() => {
@@ -3362,3 +3694,21 @@ loadCalibration();
 loadTeachingRecords();
 updateDetectorConfidenceDisplay();
 loadAcquisitionMode();
+
+// REV 2026-10-02 / DISPLAY-01: use the actual viewport, including browser
+// zoom and window resizing, instead of assuming a particular kiosk monitor.
+function fitTouchDisplay() {
+  const viewport = window.visualViewport;
+  const width = viewport ? viewport.width : window.innerWidth;
+  const height = viewport ? viewport.height : window.innerHeight;
+  const scale = Math.min(width / 800, height / 480);
+  document.documentElement.style.setProperty("--ui-scale", String(scale));
+}
+fitTouchDisplay();
+window.addEventListener("resize", fitTouchDisplay);
+window.visualViewport?.addEventListener("resize", fitTouchDisplay);
+
+refreshReferenceRates();
+// Poll our local cache for completion/cooldown; this does not call the providers.
+setInterval(() => refreshReferenceRates(), 60000);
+document.getElementById("refreshRatesButton").addEventListener("click", () => refreshReferenceRates(true));

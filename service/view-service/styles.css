@@ -1360,6 +1360,11 @@ output {
   padding: 12px;
 }
 
+/* VISUAL-01: separate HTML annotation viewer; preserve custom button styles. */
+.annotation-viewer { width: 100%; height: 260px; min-height: 160px; border: 0; display: block; flex-shrink: 0; background: #111827; }
+.teaching-detected-image[hidden] { display: none; }
+.detected-image-panel:has(.annotation-viewer) { justify-content: flex-start; overflow: auto; }
+
 .teaching-detected-image {
   background: #111;
   border: 1px solid var(--border);
@@ -2225,96 +2230,6 @@ output {
   margin-bottom: 12px;
 }
 
-@media (max-width: 799px), (max-height: 479px) {
-  .app-shell {
-    height: 100vh;
-    min-height: 0;
-    transform-origin: top left;
-    width: 100vw;
-  }
-}
-
-/*
- * The kiosk is displayed on a 1920x1080 panel with Chromium at 150% zoom.
- * At that zoom Chromium exposes a 1280x720 CSS viewport. Keep the original
- * 800x480 touch layout, but enlarge it to 1200x720 CSS pixels so it fills the
- * available height without changing the service/API contract.
- */
-@media (min-width: 1200px) and (min-height: 600px) {
-  /* Effective Chromium viewport: 1280x720 at Windows 150% display scale. */
-  button {
-    min-height: 42px;
-  }
-
-  .app-shell {
-    height: 480px;
-    max-height: none;
-    max-width: none;
-    min-height: 480px;
-    width: 800px;
-    zoom: 1.5;
-  }
-
-  .top-bar {
-    height: 60px;
-    padding-bottom: 8px;
-  }
-
-  .screen {
-    height: 406px;
-    padding-top: 10px;
-  }
-
-  .button-row {
-    gap: 8px;
-    margin-top: 8px;
-  }
-
-  .button-row button,
-  .menu-panel button {
-    min-height: 42px;
-  }
-
-  .menu-button {
-    height: 44px;
-    min-height: 44px;
-    width: 54px;
-  }
-
-  .weight-layout,
-  .password-layout {
-    gap: 10px;
-    grid-template-columns: minmax(0, 1fr) 270px;
-  }
-
-  .keypad {
-    gap: 6px;
-    min-width: 270px;
-    width: 270px;
-  }
-
-  .keypad button,
-  .shape-option,
-  .engineering-actions button {
-    font-size: 18px;
-    min-height: 42px;
-  }
-
-  .engineering-actions {
-    gap: 4px;
-    margin-top: 8px;
-  }
-
-  .engineering-actions button {
-    font-size: 11px;
-    min-height: 52px;
-  }
-
-  #teachingScreen .button-row button {
-    min-height: 46px;
-  }
-}
-
 /* ============================================================
    Signal Service Engineering
    ============================================================ */
@@ -2667,3 +2582,562 @@ output {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ============================================================
+   10-inch kiosk refinements: Engineering + Teaching
+   Target: 1920x1080 display at Windows/Chromium 150% scaling
+   (layout is fitted to the current viewport by DISPLAY-01)
+   ============================================================ */
+
+#engineeringScreen.engineering-screen {
+  padding-top: 8px;
+}
+
+.engineering-header {
+  align-items: flex-end;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 2px 4px;
+}
+
+.engineering-header h2 {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.engineering-header > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  max-width: 330px;
+  padding-bottom: 2px;
+  text-align: right;
+}
+
+#engineeringScreen .engineering-actions {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 6px;
+  width: 100%;
+}
+
+#engineeringScreen .engineering-actions .engineering-action-card {
+  align-items: flex-start;
+  background: linear-gradient(180deg, rgba(28, 33, 40, 0.98), rgba(16, 19, 24, 0.98));
+  border-color: rgba(0, 213, 255, 0.24);
+  box-shadow: inset 4px 0 0 rgba(255, 159, 26, 0.86);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 56px;
+  padding: 8px 14px 8px 18px;
+  text-align: left;
+  white-space: normal;
+}
+
+#engineeringScreen .engineering-actions .engineering-action-card:active {
+  border-color: rgba(255, 159, 26, 0.82);
+  background: rgba(255, 159, 26, 0.08);
+}
+
+#engineeringScreen .engineering-action-card strong {
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.05;
+}
+
+#engineeringScreen .engineering-action-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.15;
+  margin-top: 4px;
+}
+
+#engineeringScreen .engineering-history-card {
+  grid-column: 1 / -1;
+}
+
+.engineering-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding: 9px 0 7px;
+}
+
+.engineering-exit-button {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+  min-height: 46px;
+  width: 250px;
+}
+
+.purity-na-button {
+  border-color: rgba(0, 213, 255, 0.48) !important;
+  color: var(--cyan);
+}
+
+.purity-na-button.selected {
+  background: rgba(0, 213, 255, 0.11) !important;
+  border-color: var(--cyan) !important;
+  box-shadow: inset 0 0 0 2px rgba(0, 213, 255, 0.5) !important;
+  color: var(--cyan) !important;
+}
+
+/* Keep the teaching dimension keypad and thickness field inside the 720px kiosk viewport. */
+#teachingDimensionScreen {
+  gap: 4px;
+  padding-top: 6px;
+}
+
+#teachingDimensionScreen > .eyebrow {
+  margin-bottom: 0;
+}
+
+#teachingDimensionScreen .dimension-tabs {
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+#teachingDimensionScreen .dimension-tabs .mode-toggle {
+  min-height: 38px;
+}
+
+#teachingDimensionScreen .weight-layout {
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 242px;
+}
+
+#teachingDimensionScreen .dimension-panel {
+  padding: 9px 10px;
+}
+
+#teachingDimensionScreen .dimension-panel .label {
+  font-size: 15px;
+}
+
+#teachingDimensionScreen .dimension-field-row {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+#teachingDimensionScreen .dimension-field-button {
+  gap: 3px;
+  min-height: 72px;
+  padding: 7px 8px;
+}
+
+#teachingDimensionScreen .dimension-field-button span,
+#teachingDimensionScreen .dimension-field-button em {
+  font-size: 11px;
+}
+
+#teachingDimensionScreen .dimension-field-button strong {
+  font-size: 24px;
+}
+
+#teachingDimensionScreen .dimension-meta {
+  gap: 4px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 7px;
+}
+
+#teachingDimensionScreen .dimension-meta span {
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 4px;
+  font-size: 10px;
+  min-width: 0;
+  padding: 3px 5px;
+}
+
+#teachingDimensionScreen .dimension-meta strong {
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+#teachingDimensionScreen #teachingDimensionKeypad {
+  gap: 4px;
+  min-width: 242px;
+  width: 242px;
+}
+
+#teachingDimensionScreen #teachingDimensionKeypad button {
+  font-size: 18px;
+  min-height: 38px;
+}
+
+#teachingDimensionScreen > .button-row {
+  gap: 8px;
+  margin-top: 5px;
+}
+
+#teachingDimensionScreen > .button-row button {
+  min-height: 42px;
+}
+
+/* Verification dimension entry uses the same kiosk-safe sizing. */
+#dimensionScreen {
+  gap: 5px;
+  padding-top: 8px;
+}
+
+#dimensionScreen .weight-layout {
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 250px;
+}
+
+#dimensionScreen .dimension-panel {
+  padding: 10px 12px;
+}
+
+#dimensionScreen .dimension-field-row {
+  gap: 6px;
+  margin-top: 8px;
+}
+
+#dimensionScreen .dimension-field-button {
+  gap: 3px;
+  min-height: 82px;
+  padding: 8px;
+}
+
+#dimensionScreen .dimension-field-button strong {
+  font-size: 26px;
+}
+
+#dimensionScreen .dimension-meta {
+  gap: 6px;
+  margin-top: 9px;
+}
+
+#dimensionScreen #dimensionKeypad {
+  gap: 5px;
+  min-width: 250px;
+  width: 250px;
+}
+
+#dimensionScreen #dimensionKeypad button {
+  font-size: 19px;
+  min-height: 40px;
+}
+
+#dimensionScreen > .button-row {
+  margin-top: 6px;
+}
+
+/* ============================================================
+   Live signal compact controls: 1/2 Vpp, V/mV, Raw/Delta
+   ============================================================ */
+.signal-live-options {
+  align-items: stretch;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1.05fr 0.72fr 0.92fr 1fr;
+}
+
+.signal-live-option-group,
+.signal-live-current {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 5px 6px;
+}
+
+.signal-live-option-group > span,
+.signal-live-current small {
+  color: var(--muted);
+  display: block;
+  font-size: 9px;
+  line-height: 1.05;
+  margin-bottom: 3px;
+}
+
+.signal-live-segment {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.signal-live-segment button {
+  background: #0d1014;
+  border-color: var(--border);
+  font-size: 11px;
+  min-height: 30px;
+  padding: 3px 5px;
+  white-space: nowrap;
+}
+
+.signal-live-segment button.selected {
+  background: rgba(0, 213, 255, 0.11);
+  border-color: rgba(0, 213, 255, 0.72);
+  color: var(--cyan);
+}
+
+.signal-live-current {
+  align-content: center;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  line-height: 1.05;
+}
+
+.signal-live-current span {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.signal-live-current strong {
+  color: var(--yellow);
+  font-size: 12px;
+  text-align: right;
+}
+
+.signal-live-current small {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+}
+
+#liveRawPanel {
+  display: grid;
+  gap: 7px;
+}
+
+#liveRawPanel[hidden],
+#liveDeltaPanel[hidden] {
+  display: none !important;
+}
+
+.signal-live-delta-panel {
+  align-items: center;
+  background: rgba(255, 216, 77, 0.045);
+  border: 1px solid rgba(255, 216, 77, 0.30);
+  border-radius: 10px;
+  display: grid;
+  flex: 1;
+  justify-items: center;
+  min-height: 126px;
+  padding: 12px 18px;
+  text-align: center;
+}
+
+.signal-live-delta-panel > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.signal-live-delta-panel > strong {
+  color: var(--yellow);
+  font-size: 54px;
+  line-height: 1;
+}
+
+.signal-live-delta-panel > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* Keep the extra live-view controls inside the fixed kiosk viewport. */
+#liveViewScreen .signal-live-shell {
+  gap: 7px;
+}
+
+#liveViewScreen .signal-live-controlbar {
+  gap: 7px;
+}
+
+#liveViewScreen .signal-live-presets {
+  gap: 6px;
+}
+
+#liveViewScreen .signal-live-presets button,
+#liveViewScreen .signal-live-run-controls .compact-action {
+  min-height: 50px;
+}
+
+#liveViewScreen .signal-live-metrics,
+#liveViewScreen .signal-live-details {
+  gap: 6px;
+}
+
+#liveViewScreen .signal-live-metrics .metric-card.compact {
+  min-height: 62px;
+  padding: 7px 8px;
+}
+
+#liveViewScreen .signal-live-metrics .metric-card.compact span {
+  min-height: 17px;
+}
+
+#liveViewScreen .signal-live-details div {
+  padding: 6px 8px;
+}
+
+#liveViewScreen .signal-live-details span {
+  min-height: 18px;
+}
+
+#liveViewScreen .signal-live-message {
+  padding: 6px 8px;
+}
+
+/* ============================================================
+   Air calibration kiosk fit
+   ============================================================ */
+#calibrationScreen {
+  gap: 6px;
+  padding-top: 8px;
+}
+
+#calibrationScreen .calibration-start-panel {
+  gap: 14px;
+  grid-template-columns: 145px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px 16px;
+}
+
+#calibrationScreen .calibration-empty-icon {
+  height: 122px;
+}
+
+#calibrationScreen .empty-plate {
+  height: 96px;
+  width: 96px;
+}
+
+#calibrationScreen .empty-plate::after {
+  inset: 27px;
+}
+
+#calibrationScreen .empty-cross {
+  height: 64px;
+  width: 64px;
+}
+
+#calibrationScreen .empty-cross::before {
+  height: 64px;
+  width: 6px;
+}
+
+#calibrationScreen .empty-cross::after {
+  height: 6px;
+  width: 64px;
+}
+
+#calibrationScreen .calibration-copy h2 {
+  font-size: 30px;
+  line-height: 1;
+}
+
+#calibrationScreen .calibration-copy p:not(.eyebrow) {
+  font-size: 15px;
+  line-height: 1.25;
+  margin-top: 6px;
+}
+
+#calibrationScreen .calibration-note {
+  gap: 5px;
+  margin-top: 9px;
+}
+
+#calibrationScreen .calibration-note span {
+  font-size: 10px;
+  padding: 5px 7px;
+}
+
+#calibrationScreen > .button-row {
+  gap: 7px;
+  margin-top: 0;
+}
+
+#calibrationScreen > .button-row button {
+  font-size: 12px;
+  min-height: 46px;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
+
+/* REV 2026-10-02 / DISPLAY-01: fit one 800x480 touch canvas to the
+ * actual CSS viewport. Browser/Windows zoom is already reflected in that
+ * viewport; applying another fixed zoom can crop the bottom of the UI. */
+.app-shell {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+  width: 800px;
+  height: 480px;
+  min-height: 480px;
+  max-height: none;
+  max-width: none;
+  zoom: 1;
+  transform-origin: 0 0;
+  transform: scale(var(--ui-scale, 1)) translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+}
+.app-shell .top-bar { flex: 0 0 68px; }
+.app-shell .screen {
+  height: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+/* Reserve space for navigation. Only the content above it scrolls when
+ * service responses, record lists or instructions exceed the canvas. */
+.app-shell .screen > .button-row { flex: 0 0 auto; }
+.app-shell .screen > :is(.settings-panel, .calibration-start-panel,
+  .instruction-panel, .selection-panel, .result-panel, .history-panel,
+  .history-detail-panel, .live-view-shell, .weight-layout, .password-layout,
+  .teaching-dimension-panel.active, .shape-grid) {
+  min-height: 0;
+  overflow: auto;
+  flex-shrink: 1;
+}
+.app-shell .screen > .settings-panel {
+  grid-auto-rows: max-content;
+  align-content: start;
+}
+.app-shell .instruction-panel,
+.app-shell .result-panel { justify-content: safe center; }
+.app-shell .instruction-panel > *,
+.app-shell .result-panel > * { flex-shrink: 0; }
+.app-shell .screen > .button-row button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Ring I/O summaries and long device messages must remain readable. */
+.app-shell .dimension-meta span { flex-wrap: wrap; gap: 3px; }
+.app-shell .dimension-meta strong {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  max-width: 100%;
+}
+
+/* REV 2026-10-02 / RATES-01: source dates and trend labels may wrap. */
+.source-line { flex-wrap: wrap; white-space: normal; line-height: 1.25; gap: 3px 10px; }
+#activeRateMove { white-space: normal; font-size: 12px; max-width: 240px; text-align: right; }
+
+/* RATES-02: keep manual refresh within the existing rates header. */
+.rates-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#refreshRatesButton { padding: 4px 10px; font-size: 12px; min-height: 28px; flex-shrink: 0; }
+#refreshRatesButton:disabled { opacity: .6; }
+
+/* RATES-03: green manual refresh button with readable white text. */
+#refreshRatesButton {
+  background: #15803d;
+  background-image: none;
+  color: #ffffff;
+  border: 1px solid #22c55e;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#refreshRatesButton:hover:not(:disabled) { background: #166534; }
+#refreshRatesButton:disabled { cursor: wait; }

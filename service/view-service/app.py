@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import base64
+from annotation_view import decode_bundle, viewer_html, yolo_text
 import json
 import math
 import os
@@ -17,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
+from metal_rates import MetalRates
 
 from brass_classifier import (
     CH1_F1_RULE_PARAMS,
@@ -255,6 +258,27 @@ DEFAULT_DAQ_OFFSET = {
 }
 
 app = Flask(__name__, static_folder=None)
+
+# REV 2026-10-02 / RATES-01: reference rates are separate from sensor state.
+# RATES-02: persistent daily cache; midnight schedule uses Malaysia time.
+metal_rates = MetalRates(cache_path=Path(__file__).with_name("metal_rates_cache.json"))
+metal_rates.start_daily_scheduler()
+
+
+@app.get("/api/metal-rates")
+def get_metal_rates():
+    response = jsonify(metal_rates.snapshot())
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/metal-rates/refresh")
+def refresh_metal_rates():
+    # RATES-02: explicit refresh shares the same worker and cooldown as the scheduler.
+    response = jsonify(metal_rates.snapshot(manual=True))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 
 def save_daq_offset_settings(data: dict) -> None:
@@ -658,6 +682,18 @@ def vision_type_for_shape(shape: str) -> str:
     return "ornament"
 
 
+def valid_ring_diameters(inner: float | None, outer: float | None) -> bool:
+    """RING-01: width aliases inner diameter; length aliases outer diameter."""
+    return (inner is not None and outer is not None
+            and math.isfinite(inner) and math.isfinite(outer) and 0 < inner < outer)
+
+
+def invalid_ring_payload(payload: dict) -> bool:
+    return (vision_type_for_shape(payload.get("shape", "Other")) in {"ring", "bangle"}
+            and not valid_ring_diameters(parse_float(payload.get("width_mm")),
+                                         parse_float(payload.get("length_mm"))))
+
+
 def normalize_vision_payload(payload: dict, shape: str) -> dict:
     detected = bool(payload.get("detected", payload.get("ok", True)))
     diameter = parse_float(payload.get("diameter_mm"), parse_float(payload.get("equivalent_diameter_mm")))
@@ -669,10 +705,25 @@ def normalize_vision_payload(payload: dict, shape: str) -> dict:
     if shape_mode == "coin" and diameter is not None:
         width = diameter
         length = diameter
+    # REV 2026-10-02 / RING-01: never reinterpret bounding-box dimensions as
+    # ring diameters. An old vision service now requests manual entry explicitly.
+    inner = parse_float(payload.get("inner_diameter_mm"))
+    outer = parse_float(payload.get("outer_diameter_mm"))
+    ring_ok = payload.get("geometry_ok") is True and valid_ring_diameters(inner, outer)
+    if shape_mode in {"ring", "bangle"}:
+        detected = detected and ring_ok
+        width, length = (inner, outer) if ring_ok else (None, None)
+        if not ring_ok:
+            payload = {**payload, "message": payload.get("message") if payload.get("manual_required")
+                       else "Camera did not return valid inner/outer diameters; enter them manually"}
     return {
         "ok": detected,
         "shape": shape,
         "vision_type": shape_mode,
+        "geometry_ok": ring_ok if shape_mode in {"ring", "bangle"} else detected,
+        "manual_required": shape_mode in {"ring", "bangle"} and not ring_ok,
+        "inner_diameter_mm": round(inner, 3) if ring_ok else None,
+        "outer_diameter_mm": round(outer, 3) if ring_ok else None,
         "width_mm": round(width, 3) if width is not None else None,
         "length_mm": round(length, 3) if length is not None else None,
         "diameter_mm": round(diameter, 3) if diameter is not None else None,
@@ -838,22 +889,26 @@ def get_signal_service_status() -> dict:
     }
 
 
-def start_signal_service(preset: str) -> dict:
+def start_signal_service(preset: str, amplitude_v_peak: float = SIGNAL_AMPLITUDE_V_PEAK) -> dict:
     key, frequency_hz = signal_preset_frequency(preset)
+    amplitude_v_peak = float(amplitude_v_peak)
+    if amplitude_v_peak not in (0.5, 1.0):
+        raise ValueError("Live signal amplitude must be 0.5 V peak (1 Vpp) or 1.0 V peak (2 Vpp)")
     payload = service_json_request(
         "POST",
         service_base_url("signal"),
         "/api/start",
-        payload={"frequency": frequency_hz, "amplitude": SIGNAL_AMPLITUDE_V_PEAK},
+        payload={"frequency": frequency_hz, "amplitude": amplitude_v_peak},
         timeout=10.0,
     )
+    actual_amplitude = parse_float(payload.get("amplitude"), amplitude_v_peak)
     return {
         "ok": True,
         "preset": key,
         "status": payload.get("status", "running"),
         "frequency_hz": parse_float(payload.get("frequency"), frequency_hz),
-        "amplitude_v_peak": parse_float(payload.get("amplitude"), SIGNAL_AMPLITUDE_V_PEAK),
-        "peak_to_peak_v": parse_float(payload.get("peak_to_peak_v"), SIGNAL_PEAK_TO_PEAK_V),
+        "amplitude_v_peak": actual_amplitude,
+        "peak_to_peak_v": parse_float(payload.get("peak_to_peak_v"), actual_amplitude * 2.0),
         "service_payload": payload,
         "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
     }
@@ -1382,6 +1437,48 @@ def teaching_image_extension(content_type: str) -> str:
 
 
 def capture_teaching_image_snapshot() -> dict:
+    # VISUAL-01: prefer a matched raw+geometry bundle. Older services retain
+    # their annotated-JPEG capture path. Only missing routes/data fall back;
+    # network errors must not silently substitute a different capture.
+    try:
+        bundle = service_json_request("GET", service_base_url("vision"), "/image/bundle", timeout=10.0)
+    except RuntimeError as exc:
+        if "HTTP 404" not in str(exc):
+            raise
+        return capture_legacy_teaching_image_snapshot()
+    data, annotation = decode_bundle(bundle)
+    TEACHING_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now().astimezone()
+    filename = f"IMG-{now.strftime('%Y%m%d-%H%M%S-%f')}.jpg"
+    stem = Path(filename).stem
+    annotation["image"]["filename"] = filename
+    outputs = {filename: data,
+        stem + ".json": (json.dumps(annotation, indent=2, allow_nan=False) + "\n").encode(),
+        stem + ".html": viewer_html(annotation, filename).encode(),
+        stem + ".txt": yolo_text(annotation).encode()}
+    written = []
+    try:
+        for name, content in outputs.items():
+            temporary = TEACHING_IMAGES_DIR / ("." + name + ".tmp")
+            temporary.write_bytes(content)
+            written.append(temporary)
+            target = TEACHING_IMAGES_DIR / name
+            os.replace(temporary, target)
+            written.append(target)
+    except Exception:
+        for path in written:
+            path.unlink(missing_ok=True)
+        raise
+    return {"filename": filename, "relative_path": f"teaching_images/{filename}",
+        "url": f"/api/teaching/image/{filename}", "content_type": "image/jpeg",
+        "size_bytes": len(data), "captured_at": now.isoformat(timespec="seconds"),
+        "capture_id": bundle["capture_id"], "raw": True,
+        "annotation_url": f"/api/teaching/image/{stem}.json",
+        "overlay_url": f"/api/teaching/image/{stem}.html",
+        "yolo_url": f"/api/teaching/image/{stem}.txt"}
+
+
+def capture_legacy_teaching_image_snapshot() -> dict:
     data, content_type = service_binary_get(service_base_url("vision"), "/image/detected", timeout=10.0)
     if not data:
         raise RuntimeError("Vision service returned an empty detected image")
@@ -1415,11 +1512,13 @@ def delete_teaching_image(image_info: object) -> None:
     filename = Path(str(image_info.get("filename") or "")).name
     if not filename:
         return
-    path = TEACHING_IMAGES_DIR / filename
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
+    # VISUAL-01: remove matching sidecars together with the saved image.
+    names = [filename] + [Path(filename).stem + ext for ext in (".json", ".html", ".txt")]
+    for name in names:
+        try:
+            (TEACHING_IMAGES_DIR / name).unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def load_classifier_model() -> dict:
@@ -5267,6 +5366,9 @@ def delete_history_record(record_id: str):
 @app.post("/api/measurement/verify")
 def verify_measurement():
     payload = request.get_json(silent=True) or {}
+    if invalid_ring_payload(payload):
+        return jsonify({"error": "invalid_ring_dimensions",
+                        "message": "Enter positive inner/outer diameters; outer must exceed inner."}), 400
     now = datetime.now()
     weight_grams = parse_float(payload.get("weight"), 0.0) or 0.0
     width_mm = parse_float(payload.get("width_mm"), 0.0) or 0.0
@@ -5623,7 +5725,17 @@ def get_teaching_image(filename: str):
     safe_name = Path(filename).name
     if not safe_name or safe_name != filename:
         abort(404)
-    return send_from_directory(TEACHING_IMAGES_DIR, safe_name)
+    # Sidecar discovery works for records lacking overlay_url metadata too.
+    if safe_name.endswith(".html") and not (TEACHING_IMAGES_DIR / safe_name).exists():
+        sidecar = (TEACHING_IMAGES_DIR / safe_name).with_suffix(".json")
+        if not sidecar.exists():
+            abort(404)
+        annotation = json.loads(sidecar.read_text(encoding="utf-8"))
+        image_name = Path(str(annotation["image"]["filename"])).name
+        return Response(viewer_html(annotation, image_name), mimetype="text/html")
+    response = send_from_directory(TEACHING_IMAGES_DIR, safe_name)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/teaching")
@@ -5634,6 +5746,11 @@ def get_teaching_records():
 @app.post("/api/teaching")
 def add_teaching_record():
     payload = request.get_json(silent=True) or {}
+    # Validate BEFORE hardware capture, so reversed/missing diameters cannot
+    # consume a sweep or become a zero-area reference specimen.
+    if invalid_ring_payload(payload):
+        return jsonify({"error": "invalid_ring_dimensions",
+                        "message": "Enter positive inner/outer diameters; outer must exceed inner."}), 400
     records = load_teaching_records()
     now = datetime.now()
     target_sample_count = max(1, min(1000, int(parse_float(payload.get("samples_per_frequency"), SIGNAL_AIR_SAMPLE_COUNT) or SIGNAL_AIR_SAMPLE_COUNT)))
@@ -5756,6 +5873,9 @@ def add_teaching_record():
 @app.post("/api/teaching/validate")
 def validate_teaching_sample():
     payload = request.get_json(silent=True) or {}
+    if invalid_ring_payload(payload):
+        return jsonify({"error": "invalid_ring_dimensions",
+                        "message": "Enter positive inner/outer diameters; outer must exceed inner."}), 400
     now = datetime.now()
     weight_grams = parse_float(payload.get("weight"), 0.0) or 0.0
     width_mm = parse_float(payload.get("width_mm"), 0.0) or 0.0
@@ -6252,9 +6372,13 @@ def signal_start_api():
     payload = request.get_json(silent=True) or {}
     preset = payload.get("preset", "f1")
     try:
+        peak_to_peak_v = float(payload.get("peak_to_peak_v", SIGNAL_PEAK_TO_PEAK_V))
+        if peak_to_peak_v not in (1.0, 2.0):
+            raise ValueError("peak_to_peak_v must be 1.0 or 2.0 Vpp")
+        amplitude_v_peak = peak_to_peak_v / 2.0
         with SIGNAL_SERVICE_LOCK:
-            return jsonify(start_signal_service(preset))
-    except (RuntimeError, ValueError) as exc:
+            return jsonify(start_signal_service(preset, amplitude_v_peak=amplitude_v_peak))
+    except (RuntimeError, ValueError, TypeError) as exc:
         return jsonify({"ok": False, "error": str(exc), "source": "signal_service"}), 400
 
 
@@ -6367,6 +6491,18 @@ def get_vision_detected_image():
         return Response(data, mimetype=content_type)
     except RuntimeError as exc:
         return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
+
+
+@app.get("/api/vision/image/view")
+def get_vision_image_view():
+    try:
+        bundle = service_json_request("GET", service_base_url("vision"), "/image/bundle", timeout=10.0)
+        data, annotation = decode_bundle(bundle)
+        response = Response(viewer_html(annotation, "data:image/jpeg;base64," + base64.b64encode(data).decode()), mimetype="text/html")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except (RuntimeError, ValueError, KeyError) as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 404
 
 
 @app.get("/api/sensors/latest")

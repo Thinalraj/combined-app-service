@@ -4,7 +4,11 @@ Run with: uvicorn api:app --host 0.0.0.0 --port 8003
 """
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import Lock
+from threading import Lock, RLock
+import base64
+import uuid
+import copy
+from annotation_sidecar import build_annotation
 
 import cv2
 import numpy as np
@@ -13,15 +17,18 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 import json
+from ring_geometry import measure_ring_mask
 
 WIDTH, HEIGHT, FPS = 1280, 720, 30
 SETTINGS_FILE = Path(__file__).with_name("settings.json")
 
 
 class Camera:
-    def __init__(self):
+    def __init__(self, serial_number=None):
         self.pipeline = rs.pipeline()
         config = rs.config()
+        if serial_number:
+            config.enable_device(serial_number)  # Camera-only checker can select one of several devices.
         config.enable_stream(rs.stream.depth, WIDTH, HEIGHT, rs.format.z16, FPS)
         config.enable_stream(rs.stream.color, WIDTH, HEIGHT, rs.format.bgr8, FPS)
         profile = self.pipeline.start(config)
@@ -32,7 +39,7 @@ class Camera:
 
     def frame(self):
         with self.lock:
-            frames = self.align.process(self.pipeline.wait_for_frames())
+            frames = self.align.process(self.pipeline.wait_for_frames(5000))
             depth = frames.get_depth_frame()
             color = frames.get_color_frame()
             if not depth or not color:
@@ -47,6 +54,10 @@ class Camera:
 camera = None
 latest_image = None
 latest_detected_image = None
+# VISUAL-01: raw JPEG and geometry published as one immutable capture bundle.
+snapshot_lock = RLock()
+latest_bundle = None
+annotation_contours = []
 
 
 class AOIRequest(BaseModel):
@@ -107,14 +118,55 @@ def object_mask(image, object_type):
 
 
 def measure(image, depth, object_type):
-    global latest_detected_image
+    global latest_bundle, annotation_contours
+    with snapshot_lock:
+        annotation_contours = []
+        latest_bundle = None  # Failed detection must not expose an earlier capture.
+        result = _measure_legacy(image, depth, object_type)
+        if object_type.strip().lower() in {"ring", "bangle", "coin", "bar"}:
+            capture_id = uuid.uuid4().hex
+            ok, raw = cv2.imencode(".jpg", image)  # Never draw on this array.
+            if not ok:
+                latest_bundle = None
+                raise HTTPException(500, "Could not encode raw capture")
+            annotation = build_annotation(image, copy.deepcopy(result), annotation_contours, capture_id)
+            latest_bundle = {"capture_id": capture_id, "annotation": annotation,
+                "raw_jpeg_base64": base64.b64encode(raw.tobytes()).decode("ascii")}
+        else:
+            latest_bundle = None  # Do not reuse a prior ring overlay for another shape.
+        return result
+
+
+def _measure_legacy(image, depth, object_type):
+    global latest_detected_image, annotation_contours
     mask = object_mask(image, object_type)
+    # REV 2026-10-02 / RING-01: canonical type is case-insensitive. Settings
+    # use title-case mode names, but dimension dispatch must use lowercase.
+    shape = object_type.strip().lower()
+    if shape in {"ring", "bangle"}:
+        result, outer, hole = measure_ring_mask(
+            mask, depth, camera.depth_scale, camera.intrinsics.fx,
+            camera.intrinsics.fy, object_type)
+        annotation_contours = [outer, hole]
+        latest_detected_image = image.copy()
+        if outer is not None:
+            cv2.drawContours(latest_detected_image, [outer], -1, (0, 255, 0), 2)
+        if hole is not None:
+            cv2.drawContours(latest_detected_image, [hole], -1, (255, 180, 0), 2)
+        if result["geometry_ok"]:
+            label = f"Inner {result['inner_diameter_mm']:.2f} / Outer {result['outer_diameter_mm']:.2f} mm"
+        else:
+            label = "Manual diameters required"
+        cv2.putText(latest_detected_image, label, (8, 24), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55, (0, 255, 255), 1, cv2.LINE_AA)
+        return result
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = [c for c in contours if cv2.contourArea(c) >= 100]
     if not contours:
         latest_detected_image = image.copy()
         return {"detected": False, "type": object_type, "message": "No object"}
     contour = max(contours, key=cv2.contourArea)
+    annotation_contours = [contour]
     pixels = cv2.drawContours(np.zeros_like(mask), [contour], -1, 255, -1)
     valid = depth[(pixels > 0) & (depth > 0)]
     if not valid.size:
@@ -128,7 +180,7 @@ def measure(image, depth, object_type):
                  (camera.intrinsics.fx * camera.intrinsics.fy) * 1_000_000)
     result = {"detected": True, "type": object_type, "surface_area_mm2": area,
               "estimated_depth_mm": z * 1000.0}
-    if object_type == "coin":
+    if shape == "coin":
         (x, y), radius = cv2.minEnclosingCircle(contour)
         scale = z * 1000.0 * (1 / camera.intrinsics.fx + 1 / camera.intrinsics.fy) / 2
         result.update(center=[round(x, 1), round(y, 1)], diameter_mm=2 * radius * scale)
@@ -157,6 +209,15 @@ def get_detected_image():
     if not ok:
         raise HTTPException(500, "Could not encode detected image")
     return Response(content=encoded.tobytes(), media_type="image/jpeg")
+
+
+@app.get("/image/bundle")
+def get_image_bundle():
+    # One response prevents mismatching a JPEG with another detection's geometry.
+    with snapshot_lock:
+        if latest_bundle is None:
+            raise HTTPException(404, "No sidecar capture available; use legacy image")
+        return copy.deepcopy(latest_bundle)
 
 
 @app.post("/aoi")
@@ -191,7 +252,7 @@ def get_size(type: str = Query("coin", min_length=1)):
                  "ornament": "Ornaments / Pendants / Others"}
     if normalized not in supported:
         raise HTTPException(400, f"Unsupported type. Use: {', '.join(supported)}")
-    latest_image, depth = camera.frame()
+    image, depth = camera.frame()
     mode = supported[normalized]
     try:
         settings = json.loads(SETTINGS_FILE.read_text())
@@ -202,6 +263,9 @@ def get_size(type: str = Query("coin", min_length=1)):
         x1, y1, x2, y2 = [int(v) for v in aoi]
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(WIDTH - 1, x2), min(HEIGHT - 1, y2)
-        latest_image = latest_image[y1:y2 + 1, x1:x2 + 1]
+        if x2 <= x1 or y2 <= y1:
+            raise HTTPException(400, "Invalid AOI; select an area inside the current frame")
+        image = image[y1:y2 + 1, x1:x2 + 1]
         depth = depth[y1:y2 + 1, x1:x2 + 1]
-    return measure(latest_image, depth, mode)
+    latest_image = image
+    return measure(image, depth, mode)

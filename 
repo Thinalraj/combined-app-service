@@ -1,0 +1,616 @@
+[1mdiff --git a/service/view-service/app.js b/service/view-service/app.js[m
+[1mindex 38fac28..8487b47 100644[m
+[1m--- a/service/view-service/app.js[m
+[1m+++ b/service/view-service/app.js[m
+[36m@@ -1,5 +1,6 @@[m
+ const screens = {[m
+   home: document.getElementById("homeScreen"),[m
+[32m+[m[32m  scalePrepare: document.getElementById("scalePrepareScreen"),[m
+   place: document.getElementById("placeScreen"),[m
+   weight: document.getElementById("weightScreen"),[m
+   dimension: document.getElementById("dimensionScreen"),[m
+[36m@@ -68,9 +69,14 @@[m [mconst state = {[m
+   signalLiveTimer: null,[m
+   signalLiveBusy: false,[m
+   signalLiveRunning: false,[m
+[32m+[m[32m  signalLiveVpp: 2,[m
+[32m+[m[32m  signalLiveUnit: "V",[m
+[32m+[m[32m  signalLiveMode: "raw",[m
+[32m+[m[32m  signalLiveLatest: null,[m
+[32m+[m[32m  signalLiveDeltaBaseline: null,[m
+   loadCellTimer: null,[m
+   loadCellHeld: false,[m
+[31m-  acquisitionMode: "simulator",[m
+[32m+[m[32m  acquisitionMode: "daq",[m
+   calibrationRecord: {},[m
+   confidenceThresholdPct: 40,[m
+   detectorConfidenceInput: "40",[m
+[36m@@ -196,7 +202,16 @@[m [mconst bottomMessages = [[m
+   "Buatan Malaysia"[m
+ ];[m
+ [m
+[32m+[m[32m// REV 2026-10-02 / SCALE-01: all new-item paths share an explicit empty-pan gate.[m
+[32m+[m[32m// A net reading of zero cannot prove the platform is empty after a previous tare.[m
+[32m+[m[32m// The operator confirms removal; stable readings then verify the zero operation.[m
+[32m+[m[32mconst SCALE_ZERO_TOLERANCE_G = 0.01; // Workflow band, not accuracy; verify against your scale's resolution.[m
+[32m+[m[32mconst SCALE_SETUP_TIMEOUT_MS = 15000;[m
+[32m+[m[32mconst scalePreparation = { target: "place", cancel: "home", busy: false };[m
+[32m+[m
+ function showScreen(name) {[m
+[32m+[m[32m  // Do not navigate away while a physical zero is in flight. Setup has a deadline.[m
+[32m+[m[32m  if (scalePreparation.busy && name !== "scalePrepare") return;[m
+   Object.values(screens).forEach((screen) => screen.classList.remove("active"));[m
+   screens[name].classList.add("active");[m
+   document.getElementById("menuPanel").classList.remove("open");[m
+[36m@@ -1364,7 +1379,9 @@[m [mfunction configureTeachingPurityScreen() {[m
+ [m
+   document.querySelectorAll("#teachingPurityGrid button").forEach((button) => {[m
+     const purity = button.dataset.purity || "";[m
+[31m-    if (isGold) {[m
+[32m+[m[32m    if (purity === "N/A") {[m
+[32m+[m[32m      button.hidden = false;[m
+[32m+[m[32m    } else if (isGold) {[m
+       button.hidden = !purity.includes("/");[m
+     } else {[m
+       button.hidden = !/^\d{3}$/.test(purity);[m
+[36m@@ -1943,13 +1960,14 @@[m [mfunction sensorsAreValid(sensors) {[m
+ }[m
+ [m
+ function updateAcquisitionModeDisplay() {[m
+[32m+[m[32m  // Simulator switching has been retired from the kiosk UI. Keep this helper[m
+[32m+[m[32m  // null-safe because older cached pages may still contain the legacy fields.[m
+   const modeValue = document.getElementById("modeValue");[m
+   const modeToggle = document.getElementById("modeToggleButton");[m
+[31m-  const isDaq = state.acquisitionMode === "daq";[m
+[31m-[m
+[31m-  modeValue.textContent = isDaq ? "DAQ" : "Simulator";[m
+[31m-  modeToggle.textContent = isDaq ? "Switch to Simulator" : "Switch to DAQ";[m
+[31m-  modeToggle.classList.toggle("active", isDaq);[m
+[32m+[m[32m  if (!modeValue || !modeToggle) return;[m
+[32m+[m[32m  modeValue.textContent = "DAQ";[m
+[32m+[m[32m  modeToggle.textContent = "DAQ Active";[m
+[32m+[m[32m  modeToggle.classList.add("active");[m
+ }[m
+ [m
+ function updateDetectorConfidenceDisplay() {[m
+[36m@@ -1961,7 +1979,7 @@[m [masync function loadAcquisitionMode() {[m
+     const response = await fetch("/api/settings", { cache: "no-store" });[m
+     if (!response.ok) throw new Error("Unable to read settings");[m
+     const settings = await response.json();[m
+[31m-    state.acquisitionMode = settings.acquisition_mode === "daq" ? "daq" : "simulator";[m
+[32m+[m[32m    state.acquisitionMode = "daq";[m
+     const threshold = Number(settings.confidence_threshold_pct);[m
+     state.confidenceThresholdPct = Number.isFinite(threshold) ? threshold : 40;[m
+     state.detectorConfidenceInput = String(Math.round(state.confidenceThresholdPct));[m
+[36m@@ -1973,7 +1991,7 @@[m [masync function loadAcquisitionMode() {[m
+     const slot = Number.parseInt(settings.active_frequency_slot, 10);[m
+     state.activeFrequencySlot = slot >= 1 && slot <= 3 ? slot : 1;[m
+   } catch (error) {[m
+[31m-    state.acquisitionMode = "simulator";[m
+[32m+[m[32m    state.acquisitionMode = "daq";[m
+     state.confidenceThresholdPct = 40;[m
+     state.detectorConfidenceInput = "40";[m
+     state.multiFrequenciesKhz = [10, 20, 30];[m
+[36m@@ -2087,6 +2105,16 @@[m [mfunction signalLiveMetric(value, digits = 6, unit = "V") {[m
+   return Number.isFinite(number) ? `${number.toFixed(digits)} ${unit}` : `-- ${unit}`;[m
+ }[m
+ [m
+[32m+[m[32mfunction signalLiveVoltageMetric(value, digitsV = 6) {[m
+[32m+[m[32m  const number = Number(value);[m
+[32m+[m[32m  const useMv = state.signalLiveUnit === "mV";[m
+[32m+[m[32m  const unit = useMv ? "mV" : "V";[m
+[32m+[m[32m  if (!Number.isFinite(number)) return `-- ${unit}`;[m
+[32m+[m[32m  const scaled = useMv ? number * 1000 : number;[m
+[32m+[m[32m  const digits = useMv ? Math.max(2, digitsV - 3) : digitsV;[m
+[32m+[m[32m  return `${scaled.toFixed(digits)} ${unit}`;[m
+[32m+[m[32m}[m
+[32m+[m
+ function updateSignalLivePresetUi() {[m
+   const preset = SIGNAL_PRESETS[state.signalPreset] || SIGNAL_PRESETS.f1;[m
+   document.querySelectorAll("#liveSignalPresetGrid button[data-signal-preset]").forEach((button) => {[m
+[36m@@ -2096,6 +2124,27 @@[m [mfunction updateSignalLivePresetUi() {[m
+   if (label) label.textContent = `${preset.label} · ${(preset.frequencyHz / 1000).toFixed(2)} kHz`;[m
+ }[m
+ [m
+[32m+[m[32mfunction updateSignalLiveOptionsUi() {[m
+[32m+[m[32m  document.querySelectorAll("#liveAmplitudeToggle button[data-live-vpp]").forEach((button) => {[m
+[32m+[m[32m    button.classList.toggle("selected", Number(button.dataset.liveVpp) === Number(state.signalLiveVpp));[m
+[32m+[m[32m  });[m
+[32m+[m[32m  document.querySelectorAll("#liveUnitToggle button[data-live-unit]").forEach((button) => {[m
+[32m+[m[32m    button.classList.toggle("selected", button.dataset.liveUnit === state.signalLiveUnit);[m
+[32m+[m[32m  });[m
+[32m+[m[32m  document.querySelectorAll("#liveModeToggle button[data-live-mode]").forEach((button) => {[m
+[32m+[m[32m    button.classList.toggle("selected", button.dataset.liveMode === state.signalLiveMode);[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  const selectedAmplitude = document.getElementById("liveSelectedAmplitude");[m
+[32m+[m[32m  if (selectedAmplitude) selectedAmplitude.textContent = `${Number(state.signalLiveVpp).toFixed(2)} Vpp`;[m
+[32m+[m
+[32m+[m[32m  const rawPanel = document.getElementById("liveRawPanel");[m
+[32m+[m[32m  const deltaPanel = document.getElementById("liveDeltaPanel");[m
+[32m+[m[32m  const isDelta = state.signalLiveMode === "delta";[m
+[32m+[m[32m  if (rawPanel) rawPanel.hidden = isDelta;[m
+[32m+[m[32m  if (deltaPanel) deltaPanel.hidden = !isDelta;[m
+[32m+[m[32m}[m
+[32m+[m
+ function setSignalLiveRunning(running) {[m
+   state.signalLiveRunning = Boolean(running);[m
+   const status = document.getElementById("liveSignalStatus");[m
+[36m@@ -2108,18 +2157,53 @@[m [mfunction setSignalLiveRunning(running) {[m
+   if (stopButton) stopButton.disabled = !state.signalLiveRunning;[m
+ }[m
+ [m
+[32m+[m[32mfunction resetSignalLiveDeltaBaseline(useCurrent = false) {[m
+[32m+[m[32m  const current = Number(state.signalLiveLatest?.ac_rms_v);[m
+[32m+[m[32m  state.signalLiveDeltaBaseline = useCurrent && Number.isFinite(current) && current !== 0 ? current : null;[m
+[32m+[m[32m  renderSignalLiveDelta(useCurrent ? (state.signalLiveLatest || {}) : {});[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction renderSignalLiveDelta(payload) {[m
+[32m+[m[32m  const dropNode = document.getElementById("liveDeltaDrop");[m
+[32m+[m[32m  const referenceNode = document.getElementById("liveDeltaReference");[m
+[32m+[m[32m  if (!dropNode || !referenceNode) return;[m
+[32m+[m
+[32m+[m[32m  const current = Number(payload?.ac_rms_v);[m
+[32m+[m[32m  if (state.signalLiveMode !== "delta") return;[m
+[32m+[m
+[32m+[m[32m  if (state.signalLiveDeltaBaseline === null && Number.isFinite(current) && current !== 0) {[m
+[32m+[m[32m    state.signalLiveDeltaBaseline = current;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const baseline = Number(state.signalLiveDeltaBaseline);[m
+[32m+[m[32m  if (!Number.isFinite(current) || !Number.isFinite(baseline) || baseline === 0) {[m
+[32m+[m[32m    dropNode.textContent = "--%";[m
+[32m+[m[32m    referenceNode.textContent = "Waiting for a valid AC RMS reading to establish the 100% reference.";[m
+[32m+[m[32m    return;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const dropPct = ((baseline - current) / baseline) * 100;[m
+[32m+[m[32m  dropNode.textContent = `${dropPct.toFixed(2)}%`;[m
+[32m+[m[32m  const baseText = signalLiveVoltageMetric(baseline, 6);[m
+[32m+[m[32m  referenceNode.textContent = `100% reference: ${baseText} AC RMS · current signal is ${Math.max(0, 100 - dropPct).toFixed(2)}% of reference`;[m
+[32m+[m[32m}[m
+[32m+[m
+ function renderSignalLiveMeasurement(payload) {[m
+   const hasMeasurement = payload.ac_rms_v !== undefined || payload.peak_amplitude_v !== undefined || payload.dc_v !== undefined;[m
+   if (hasMeasurement) {[m
+[31m-    document.getElementById("liveAcRms").textContent = signalLiveMetric(payload.ac_rms_v, 6, "V");[m
+[31m-    document.getElementById("livePeakAmplitude").textContent = signalLiveMetric(payload.peak_amplitude_v, 6, "V");[m
+[31m-    document.getElementById("livePeakToPeak").textContent = signalLiveMetric(payload.peak_to_peak_v, 6, "V");[m
+[32m+[m[32m    state.signalLiveLatest = { ...(state.signalLiveLatest || {}), ...payload };[m
+[32m+[m[32m    document.getElementById("liveAcRms").textContent = signalLiveVoltageMetric(payload.ac_rms_v, 6);[m
+[32m+[m[32m    document.getElementById("livePeakAmplitude").textContent = signalLiveVoltageMetric(payload.peak_amplitude_v, 6);[m
+[32m+[m[32m    document.getElementById("livePeakToPeak").textContent = signalLiveVoltageMetric(payload.peak_to_peak_v, 6);[m
+     document.getElementById("liveMeasuredFrequency").textContent = signalLiveMetric(payload.frequency_hz, 2, "Hz");[m
+[31m-    document.getElementById("liveDcVoltage").textContent = signalLiveMetric(payload.dc_v, 6, "V");[m
+[32m+[m[32m    document.getElementById("liveDcVoltage").textContent = signalLiveVoltageMetric(payload.dc_v, 6);[m
+     document.getElementById("liveAdcSampleRate").textContent = signalLiveMetric(payload.adc_sample_rate_hz, 0, "Hz");[m
+     document.getElementById("liveAdcPoints").textContent = Number.isFinite(Number(payload.adc_points)) ? String(payload.adc_points) : "--";[m
+     document.getElementById("liveSignalUpdated").textContent = new Date().toLocaleTimeString();[m
+[31m-    document.getElementById("liveSignalMessage").textContent = "Live measurement received from the ADP2230 signal service.";[m
+[32m+[m[32m    document.getElementById("liveSignalMessage").textContent = state.signalLiveMode === "delta"[m
+[32m+[m[32m      ? "Delta is referenced to the AC RMS value captured as 100%."[m
+[32m+[m[32m      : "Live measurement received from the ADP2230 signal service.";[m
+[32m+[m[32m    renderSignalLiveDelta(payload);[m
+   }[m
+ [m
+   const commandedFrequency = payload.frequency_set_hz ?? payload.frequency_hz;[m
+[36m@@ -2128,7 +2212,12 @@[m [mfunction renderSignalLiveMeasurement(payload) {[m
+     document.getElementById("liveCommandedFrequency").textContent = signalLiveMetric(commandedFrequency, 0, "Hz");[m
+   }[m
+   if (Number.isFinite(Number(commandedAmplitude))) {[m
+[31m-    document.getElementById("liveCommandedAmplitude").textContent = signalLiveMetric(commandedAmplitude, 3, "Vpk");[m
+[32m+[m[32m    document.getElementById("liveCommandedAmplitude").textContent = signalLiveVoltageMetric(commandedAmplitude, 3).replace(/ (m?V)$/, " $1pk");[m
+[32m+[m[32m    const actualVpp = Number(commandedAmplitude) * 2;[m
+[32m+[m[32m    if (Math.abs(actualVpp - 1) < 0.05 || Math.abs(actualVpp - 2) < 0.05) {[m
+[32m+[m[32m      state.signalLiveVpp = Math.abs(actualVpp - 1) < Math.abs(actualVpp - 2) ? 1 : 2;[m
+[32m+[m[32m      updateSignalLiveOptionsUi();[m
+[32m+[m[32m    }[m
+   }[m
+ [m
+   const frequencySet = Number(commandedFrequency);[m
+[36m@@ -2182,6 +2271,7 @@[m [mfunction stopSignalLivePolling() {[m
+ [m
+ async function loadSignalLiveStatus() {[m
+   updateSignalLivePresetUi();[m
+[32m+[m[32m  updateSignalLiveOptionsUi();[m
+   try {[m
+     const response = await fetch("/api/signal/status", { cache: "no-store" });[m
+     const payload = await response.json().catch(() => ({}));[m
+[36m@@ -2191,16 +2281,24 @@[m [masync function loadSignalLiveStatus() {[m
+ [m
+     const running = payload.signal_running ?? (String(payload.status || "").toLowerCase() === "running");[m
+     const frequency = Number(payload.frequency_set_hz ?? payload.frequency_hz);[m
+[32m+[m[32m    const amplitude = Number(payload.amplitude_v_peak ?? payload.amplitude_set_v);[m
+     if (Number.isFinite(frequency)) {[m
+       const matched = Object.entries(SIGNAL_PRESETS).find(([, item]) => item.frequencyHz === Math.round(frequency));[m
+       if (matched) state.signalPreset = matched[0];[m
+     }[m
+[32m+[m[32m    if (Number.isFinite(amplitude)) {[m
+[32m+[m[32m      const vpp = amplitude * 2;[m
+[32m+[m[32m      if (Math.abs(vpp - 1) < 0.05 || Math.abs(vpp - 2) < 0.05) {[m
+[32m+[m[32m        state.signalLiveVpp = Math.abs(vpp - 1) < Math.abs(vpp - 2) ? 1 : 2;[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+     updateSignalLivePresetUi();[m
+[32m+[m[32m    updateSignalLiveOptionsUi();[m
+     updateSignalPresetSelection();[m
+     setSignalLiveRunning(running);[m
+     document.getElementById("liveSignalMessage").textContent = running[m
+       ? "Signal is already running. Live polling has started."[m
+[31m-      : "Select F1–F4 and press Start. Live measurements will update every 0.5 s.";[m
+[32m+[m[32m      : "Select F1–F4, output level and display mode, then press Start.";[m
+     if (running) startSignalLivePolling();[m
+   } catch (error) {[m
+     setSignalLiveRunning(false);[m
+[36m@@ -2211,13 +2309,14 @@[m [masync function loadSignalLiveStatus() {[m
+ [m
+ async function startSignalLive() {[m
+   stopSignalLivePolling();[m
+[32m+[m[32m  if (state.signalLiveMode === "delta") resetSignalLiveDeltaBaseline(false);[m
+   document.getElementById("liveSignalStatus").textContent = "Starting...";[m
+[31m-  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at 1.00 V peak...`;[m
+[32m+[m[32m  document.getElementById("liveSignalMessage").textContent = `Starting ${String(state.signalPreset || "f1").toUpperCase()} at ${Number(state.signalLiveVpp).toFixed(0)} Vpp...`;[m
+   try {[m
+     const response = await fetch("/api/signal/start", {[m
+       method: "POST",[m
+       headers: { "Content-Type": "application/json" },[m
+[31m-      body: JSON.stringify({ preset: state.signalPreset })[m
+[32m+[m[32m      body: JSON.stringify({ preset: state.signalPreset, peak_to_peak_v: state.signalLiveVpp })[m
+     });[m
+     const payload = await response.json().catch(() => ({}));[m
+     if (!response.ok || payload.ok === false) {[m
+[36m@@ -2225,7 +2324,9 @@[m [masync function startSignalLive() {[m
+     }[m
+     setSignalLiveRunning(true);[m
+     renderSignalLiveMeasurement(payload);[m
+[31m-    document.getElementById("liveSignalMessage").textContent = "Signal started. Reading live values every 0.5 s.";[m
+[32m+[m[32m    document.getElementById("liveSignalMessage").textContent = state.signalLiveMode === "delta"[m
+[32m+[m[32m      ? "Signal started. The first valid AC RMS reading becomes the 100% reference."[m
+[32m+[m[32m      : "Signal started. Reading live values every 0.5 s.";[m
+     startSignalLivePolling();[m
+   } catch (error) {[m
+     setSignalLiveRunning(false);[m
+[36m@@ -2260,19 +2361,51 @@[m [masync function stopSignalLive() {[m
+ async function selectSignalLivePreset(preset) {[m
+   if (!SIGNAL_PRESETS[preset] || preset === state.signalPreset) return;[m
+   const wasRunning = state.signalLiveRunning;[m
+[31m-  if (wasRunning) {[m
+[31m-    await stopSignalLive();[m
+[31m-  }[m
+[32m+[m[32m  if (wasRunning) await stopSignalLive();[m
+   state.signalPreset = preset;[m
+[32m+[m[32m  resetSignalLiveDeltaBaseline(false);[m
+   updateSignalLivePresetUi();[m
+   updateSignalPresetSelection();[m
+   const selected = SIGNAL_PRESETS[preset];[m
+   document.getElementById("liveSignalMessage").textContent = wasRunning[m
+     ? `Changing to ${selected.label} ${(selected.frequencyHz / 1000).toFixed(0)} kHz...`[m
+     : `${selected.label} selected. Press Start to output ${(selected.frequencyHz / 1000).toFixed(0)} kHz.`;[m
+[31m-  if (wasRunning) {[m
+[31m-    await startSignalLive();[m
+[32m+[m[32m  if (wasRunning) await startSignalLive();[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function selectSignalLiveAmplitude(vpp) {[m
+[32m+[m[32m  const next = Number(vpp);[m
+[32m+[m[32m  if (![1, 2].includes(next) || next === Number(state.signalLiveVpp)) return;[m
+[32m+[m[32m  const wasRunning = state.signalLiveRunning;[m
+[32m+[m[32m  if (wasRunning) await stopSignalLive();[m
+[32m+[m[32m  state.signalLiveVpp = next;[m
+[32m+[m[32m  resetSignalLiveDeltaBaseline(false);[m
+[32m+[m[32m  updateSignalLiveOptionsUi();[m
+[32m+[m[32m  document.getElementById("liveSignalMessage").textContent = wasRunning[m
+[32m+[m[32m    ? `Changing output to ${next.toFixed(0)} Vpp...`[m
+[32m+[m[32m    : `${next.toFixed(0)} Vpp selected (${(next / 2).toFixed(1)} V peak).`;[m
+[32m+[m[32m  if (wasRunning) await startSignalLive();[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction selectSignalLiveUnit(unit) {[m
+[32m+[m[32m  if (!["V", "mV"].includes(unit) || unit === state.signalLiveUnit) return;[m
+[32m+[m[32m  state.signalLiveUnit = unit;[m
+[32m+[m[32m  updateSignalLiveOptionsUi();[m
+[32m+[m[32m  if (state.signalLiveLatest) renderSignalLiveMeasurement(state.signalLiveLatest);[m
+[32m+[m[32m  else renderSignalLiveDelta({});[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction selectSignalLiveMode(mode) {[m
+[32m+[m[32m  if (!["raw", "delta"].includes(mode)) return;[m
+[32m+[m[32m  if (mode === "delta") {[m
+[32m+[m[32m    state.signalLiveMode = "delta";[m
+[32m+[m[32m    resetSignalLiveDeltaBaseline(true);[m
+[32m+[m[32m  } else {[m
+[32m+[m[32m    state.signalLiveMode = "raw";[m
+[32m+[m[32m    state.signalLiveDeltaBaseline = null;[m
+   }[m
+[32m+[m[32m  updateSignalLiveOptionsUi();[m
+[32m+[m[32m  if (state.signalLiveLatest) renderSignalLiveMeasurement(state.signalLiveLatest);[m
+ }[m
+ [m
+ async function startLiveViewMonitor() {[m
+[36m@@ -2648,25 +2781,95 @@[m [masync function prepareTeachingDimensionsFromVision() {[m
+   showScreen("teachingDimension");[m
+ }[m
+ [m
+[31m-async function zeroMeasurementScaleBeforePlacement() {[m
+[31m-  const button = document.getElementById("startButton");[m
+[31m-  const originalText = button.textContent;[m
+[31m-  button.textContent = "Zeroing Scale...";[m
+[31m-  button.disabled = true;[m
+[32m+[m[32mfunction zeroMeasurementScaleBeforePlacement() {[m
+[32m+[m[32m  if (scalePreparation.busy) return;[m
+   resetMeasurementInputs();[m
+[32m+[m[32m  beginScalePreparation("place", "home");[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction beginScalePreparation(target, cancel) {[m
+[32m+[m[32m  scalePreparation.target = target;[m
+[32m+[m[32m  scalePreparation.cancel = cancel;[m
+[32m+[m[32m  document.getElementById("scalePrepareStatus").textContent =[m
+[32m+[m[32m    "Remove the previous item. Leave the platform empty, then press Platform Empty — Zero.";[m
+[32m+[m[32m  showScreen("scalePrepare"); // No hardware command is sent by Start / Scan New Material.[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function scaleSetupRequest(url, signal, method = "GET") {[m
+[32m+[m[32m  const response = await fetch(url, {[m
+[32m+[m[32m    method, signal, cache: "no-store",[m
+[32m+[m[32m    ...(method === "POST" ? {[m
+[32m+[m[32m      headers: { "Content-Type": "application/json" }, body: "{}"[m
+[32m+[m[32m    } : {})[m
+[32m+[m[32m  });[m
+[32m+[m[32m  const payload = await response.json().catch(() => ({}));[m
+[32m+[m[32m  if (!response.ok || payload.ok !== true) {[m
+[32m+[m[32m    throw new Error(payload.message || payload.error || "Scale service did not confirm success.");[m
+[32m+[m[32m  }[m
+[32m+[m[32m  return payload;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function waitForStableScale(signal, requireZero) {[m
+[32m+[m[32m  let consecutive = 0;[m
+[32m+[m[32m  while (!signal.aborted) {[m
+[32m+[m[32m    const reading = await scaleSetupRequest("/api/load-cell/latest", signal);[m
+[32m+[m[32m    // Reject unsupported units instead of treating kilograms as grams.[m
+[32m+[m[32m    if (String(reading.unit || "").trim().toLowerCase() !== "g") {[m
+[32m+[m[32m      throw new Error("Set the scale unit to grams, then retry.");[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if (typeof reading.weight_g !== "number" || !Number.isFinite(reading.weight_g)) {[m
+[32m+[m[32m      throw new Error("Scale returned an invalid weight.");[m
+[32m+[m[32m    }[m
+[32m+[m[32m    // Use the device's explicit S/D status; the legacy adapter guesses stable[m
+[32m+[m[32m    // when a service omits its status, which is not adequate for this check.[m
+[32m+[m[32m    const status = String(reading.service_payload?.status ?? reading.status ?? "").toUpperCase();[m
+[32m+[m[32m    const stable = status === "S" || status === "STABLE";[m
+[32m+[m[32m    const inBand = !requireZero || Math.abs(reading.weight_g) <= SCALE_ZERO_TOLERANCE_G;[m
+[32m+[m[32m    consecutive = stable && inBand ? consecutive + 1 : 0;[m
+[32m+[m[32m    document.getElementById("scalePrepareStatus").textContent =[m
+[32m+[m[32m      `${requireZero ? "Checking zero" : "Waiting for the empty platform to settle"}: ` +[m
+[32m+[m[32m      `${reading.weight_g.toFixed(3)} g · ${stable ? "stable" : "moving"} · ${consecutive}/3`;[m
+[32m+[m[32m    if (consecutive >= 3) return;[m
+[32m+[m[32m    await delayMs(250);[m
+[32m+[m[32m  }[m
+[32m+[m[32m  throw new Error("Scale setup timed out. Keep the platform empty and retry.");[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function confirmEmptyPlatformAndZero() {[m
+[32m+[m[32m  if (scalePreparation.busy || !screens.scalePrepare.classList.contains("active")) return;[m
+[32m+[m[32m  scalePreparation.busy = true;[m
+[32m+[m[32m  const button = document.getElementById("scalePrepareZeroButton");[m
+[32m+[m[32m  const cancel = document.getElementById("scalePrepareCancelButton");[m
+[32m+[m[32m  const menu = document.getElementById("menuButton");[m
+[32m+[m[32m  button.disabled = cancel.disabled = menu.disabled = true;[m
+[32m+[m[32m  const controller = new AbortController();[m
+[32m+[m[32m  const timeout = setTimeout(() => controller.abort(), SCALE_SETUP_TIMEOUT_MS);[m
+[32m+[m[32m  let ready = false;[m
+   try {[m
+[31m-    await fetch("/api/load-cell/zero", {[m
+[31m-      method: "POST",[m
+[31m-      headers: { "Content-Type": "application/json" },[m
+[31m-      body: JSON.stringify({})[m
+[31m-    });[m
+[32m+[m[32m    await waitForStableScale(controller.signal, false);[m
+[32m+[m[32m    document.getElementById("scalePrepareStatus").textContent = "Zeroing the empty platform...";[m
+[32m+[m[32m    const result = await scaleSetupRequest("/api/load-cell/zero", controller.signal, "POST");[m
+[32m+[m[32m    // MT-SICS ZI replies S/D mean stable/dynamic zero. HTTP 200 alone is not[m
+[32m+[m[32m    // proof: the current scale API also returns success for rejected commands.[m
+[32m+[m[32m    const reply = String(result.raw_response || "").trim();[m
+[32m+[m[32m    if (!/^ZI\s+S$/i.test(reply)) {[m
+[32m+[m[32m      throw new Error(/^ZI\s+D$/i.test(reply)[m
+[32m+[m[32m        ? "Zero occurred while the platform was moving. Leave it empty, let it settle and retry."[m
+[32m+[m[32m        : `Zero not confirmed (${reply || "no device reply"}). Keep the platform empty and retry.`);[m
+[32m+[m[32m    }[m
+[32m+[m[32m    await waitForStableScale(controller.signal, true);[m
+[32m+[m[32m    ready = true;[m
+   } catch (error) {[m
+[31m-    // Continue to placement; the weight page reports scale read errors.[m
+[32m+[m[32m    document.getElementById("scalePrepareStatus").textContent = controller.signal.aborted[m
+[32m+[m[32m      ? "Scale setup timed out. Keep the platform empty and retry."[m
+[32m+[m[32m      : (error.message || "Unable to prepare scale. Keep the platform empty and retry.");[m
+   } finally {[m
+[31m-    button.textContent = originalText;[m
+[31m-    button.disabled = false;[m
+[32m+[m[32m    clearTimeout(timeout);[m
+[32m+[m[32m    scalePreparation.busy = false;[m
+[32m+[m[32m    button.disabled = cancel.disabled = menu.disabled = false;[m
+   }[m
+[31m-  showScreen("place");[m
+[32m+[m[32m  // Only a confirmed, stable zero opens the place-next-item screen.[m
+[32m+[m[32m  if (ready) showScreen(scalePreparation.target);[m
+ }[m
+ [m
+ async function prepareMeasurementScale() {[m
+[36m@@ -2724,31 +2927,14 @@[m [masync function sampleMeasurementWeight() {[m
+   }[m
+ }[m
+ [m
+[31m-async function zeroTeachingScaleBeforePlacement(mode) {[m
+[32m+[m[32mfunction zeroTeachingScaleBeforePlacement(mode) {[m
+[32m+[m[32m  if (scalePreparation.busy) return;[m
+   teachingState.mode = mode;[m
+[31m-  const button = mode === "validate"[m
+[31m-    ? document.getElementById("teachingValidateButton")[m
+[31m-    : document.getElementById("teachingStartButton");[m
+[31m-  const originalText = button.textContent;[m
+[31m-  button.textContent = "Zeroing...";[m
+[31m-  button.disabled = true;[m
+   resetTeachingInputs();[m
+[31m-  try {[m
+[31m-    await fetch("/api/load-cell/zero", {[m
+[31m-      method: "POST",[m
+[31m-      headers: { "Content-Type": "application/json" },[m
+[31m-      body: JSON.stringify({})[m
+[31m-    });[m
+[31m-  } catch (error) {[m
+[31m-    // Continue anyway; the weight screen can still report scale read errors.[m
+[31m-  } finally {[m
+[31m-    button.textContent = originalText;[m
+[31m-    button.disabled = false;[m
+[31m-  }[m
+   document.getElementById("teachingStage").textContent = "F1 · 8 kHz";[m
+   document.querySelector("#teachingRecordScreen .measure-copy p").textContent = "F1–F4 will be sampled sequentially after dimensions are confirmed.";[m
+   document.getElementById("teachingRecordButton").textContent = "Next";[m
+[31m-  showScreen("teachingPlace");[m
+[32m+[m[32m  beginScalePreparation("teachingPlace", "teaching");[m
+ }[m
+ [m
+ async function sampleTeachingWeight() {[m
+[36m@@ -2812,6 +2998,10 @@[m [masync function startLoadCellMonitor() {[m
+ document.getElementById("startButton").addEventListener("click", () => {[m
+   zeroMeasurementScaleBeforePlacement();[m
+ });[m
+[32m+[m[32mdocument.getElementById("scalePrepareZeroButton").addEventListener("click", confirmEmptyPlatformAndZero);[m
+[32m+[m[32mdocument.getElementById("scalePrepareCancelButton").addEventListener("click", () => {[m
+[32m+[m[32m  if (!scalePreparation.busy) showScreen(scalePreparation.cancel);[m
+[32m+[m[32m});[m
+ document.getElementById("placeContinueButton").addEventListener("click", () => showScreen("shape"));[m
+ document.getElementById("weightBackButton").addEventListener("click", () => showScreen("shape"));[m
+ document.getElementById("measurementWeightSampleButton").addEventListener("click", sampleMeasurementWeight);[m
+[36m@@ -2866,7 +3056,8 @@[m [mdocument.getElementById("menuExitButton").addEventListener("click", () => {[m
+   window.open("", "_self");[m
+   window.close();[m
+ });[m
+[31m-document.getElementById("modeToggleButton").addEventListener("click", toggleAcquisitionMode);[m
+[32m+[m[32mconst legacyModeToggleButton = document.getElementById("modeToggleButton");[m
+[32m+[m[32mif (legacyModeToggleButton) legacyModeToggleButton.addEventListener("click", toggleAcquisitionMode);[m
+ document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));[m
+ document.getElementById("engineeringCalibrationButton").addEventListener("click", () => showScreen("calibration"));[m
+ document.getElementById("engineeringTeachingButton").addEventListener("click", () => showScreen("teaching"));[m
+[36m@@ -2896,6 +3087,21 @@[m [mdocument.getElementById("liveSignalPresetGrid").addEventListener("click", (event[m
+   if (!button) return;[m
+   selectSignalLivePreset(button.dataset.signalPreset);[m
+ });[m
+[32m+[m[32mdocument.getElementById("liveAmplitudeToggle").addEventListener("click", (event) => {[m
+[32m+[m[32m  const button = event.target.closest("button[data-live-vpp]");[m
+[32m+[m[32m  if (!button) return;[m
+[32m+[m[32m  selectSignalLiveAmplitude(button.dataset.liveVpp);[m
+[32m+[m[32m});[m
+[32m+[m[32mdocument.getElementById("liveUnitToggle").addEventListener("click", (event) => {[m
+[32m+[m[32m  const button = event.target.closest("button[data-live-unit]");[m
+[32m+[m[32m  if (!button) return;[m
+[32m+[m[32m  selectSignalLiveUnit(button.dataset.liveUnit);[m
+[32m+[m[32m});[m
+[32m+[m[32mdocument.getElementById("liveModeToggle").addEventListener("click", (event) => {[m
+[32m+[m[32m  const button = event.target.closest("button[data-live-mode]");[m
+[32m+[m[32m  if (!button) return;[m
+[32m+[m[32m  selectSignalLiveMode(button.dataset.liveMode);[m
+[32m+[m[32m});[m
+ document.getElementById("daqSettingsBackButton").addEventListener("click", () => showScreen("engineering"));[m
+ document.getElementById("daqSettingsDoneButton").addEventListener("click", () => showScreen("engineering"));[m
+ document.getElementById("loadCellBackButton").addEventListener("click", () => showScreen("engineering"));[m
+[36m@@ -3176,8 +3382,12 @@[m [mdocument.getElementById("teachingPurityGrid").addEventListener("click", (event)[m
+ document.getElementById("teachingPurityKeypad").addEventListener("click", (event) => {[m
+   const key = event.target.dataset.teachingPurityKey;[m
+   if (!key) return;[m
+[31m-  if (key === "clear") teachingState.purity = "";[m
+[31m-  else if (teachingState.purity.length < 4) teachingState.purity += key;[m
+[32m+[m[32m  if (key === "clear") {[m
+[32m+[m[32m    teachingState.purity = "";[m
+[32m+[m[32m  } else {[m
+[32m+[m[32m    if (teachingState.purity === "N/A") teachingState.purity = "";[m
+[32m+[m[32m    if (teachingState.purity.length < 4) teachingState.purity += key;[m
+[32m+[m[32m  }[m
+   updateTeachingPuritySelection();[m
+ });[m
+ [m
+[1mdiff --git a/service/view-service/index.html b/service/view-service/index.html[m
+[1mindex 3a93c28..065d472 100644[m
+[1m--- a/service/view-service/index.html[m
+[1m+++ b/service/view-service/index.html[m
+[36m@@ -116,6 +116,20 @@[m
+         </footer>[m
+       </section>[m
+ [m
+[32m+[m[32m      <!-- REV 2026-10-02 / SCALE-01: shared by user verification and engineer teaching.[m
+[32m+[m[32m           Item removal is confirmed BEFORE a zero command, including repeat-item loops. -->[m
+[32m+[m[32m      <section class="screen" id="scalePrepareScreen">[m
+[32m+[m[32m        <div class="instruction-panel">[m
+[32m+[m[32m          <h2>Empty the Platform</h2>[m
+[32m+[m[32m          <p>Do not place the next item yet.</p>[m
+[32m+[m[32m          <p id="scalePrepareStatus" role="status">Remove the previous item before zeroing.</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <div class="button-row">[m
+[32m+[m[32m          <button class="secondary" id="scalePrepareCancelButton" type="button">Cancel</button>[m
+[32m+[m[32m          <button class="primary" id="scalePrepareZeroButton" type="button">Platform Empty — Zero</button>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+       <section class="screen" id="placeScreen">[m
+         <div class="instruction-panel">[m
+           <div class="placement-stage" aria-hidden="true">[m
+[36m@@ -340,25 +354,46 @@[m
+         </div>[m
+       </section>[m
+ [m
+[31m-      <section class="screen" id="engineeringScreen">[m
+[31m-        <div class="engineering-grid menu-grid">[m
+[31m-          <article class="metric-card orange">[m
+[31m-            <span>Acquisition</span>[m
+[31m-            <strong id="modeValue">Simulator</strong>[m
+[31m-            <button class="mode-toggle" id="modeToggleButton" type="button">Switch to DAQ</button>[m
+[31m-          </article>[m
+[32m+[m[32m      <section class="screen engineering-screen" id="engineeringScreen">[m
+[32m+[m[32m        <div class="engineering-header">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <p class="eyebrow">Engineering</p>[m
+[32m+[m[32m            <h2>System Tools</h2>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m          <p>Touch a module to inspect, calibrate, teach, or review the system.</p>[m
+         </div>[m
+         <div class="engineering-actions">[m
+[31m-          <button type="button" id="engineeringLiveViewButton">Live View</button>[m
+[31m-          <button type="button" id="engineeringCalibrationButton">Calibration</button>[m
+[31m-          <button type="button" id="engineeringTeachingButton">Teaching</button>[m
+[31m-          <button type="button" id="engineeringLoadCellButton">Load Cell</button>[m
+[31m-          <button type="button" id="engineeringDetectorSettingsButton">Detector Settings</button>[m
+[31m-          <button type="button" id="engineeringClassifierButton">Classifier</button>[m
+[31m-          <button type="button" id="engineeringHistoryButton">History</button>[m
+[32m+[m[32m          <button class="engineering-action-card" type="button" id="engineeringLiveViewButton">[m
+[32m+[m[32m            <strong>Live View</strong>[m
+[32m+[m[32m            <span>Live signal measurements</span>[m
+[32m+[m[32m          </button>[m
+[32m+[m[32m          <button class="engineering-action-card" type="button" id="engineeringCalibrationButton">[m
+[32m+[m[32m            <strong>Calibration</strong>[m
+[32m+[m[32m            <span>Air baseline &amp; validation</span>[m
+[32m+[m[32m          </button>[m
+[32m+[m[32m          <button class="engineering-action-card" type="button" id="engineeringTeachingButton">[m
+[32m+[m[32m            <strong>Teaching</strong>[m
+[32m+[m[32m            <span>Capture material references</span>[m
+[32m+[m[32m          </button>[m
+[32m+[m[32m          <button class="engineering-action-card" type="button" id="engineeringLoadCellButton">[m
+[32m+[m[32m            <strong>Load Cell</strong>[m
+[32m+[m[32m            <span>Weight service controls</span>[m
+[32m+[m[32m          </button>[m
+[32m+[m[32m          <button class="engineering-action-card" type="button" id="engineeringDetectorSettingsButton">[m
+[32m+[m[32m            <strong>Detector Settings</strong>[m
+[32m+[m[32m            <span>Detection configuration</span>[m
+[32m+[m[32m          </button>[m
+[32m+[m[32m          <button class="engineering-action-card" type="button" id="engineeringClassifierButton">[m
+[32m+[m[32m            <strong>Classifier</strong>[m
+[32m+[m[32m            <span>Model status &amp; training</span>[m
+[32m+[m[32m          </button>[m
+[32m+[m[32m          <button class="engineering-action-card engineering-history-card" type="button" id="engineeringHistoryButton">[m
+[32m+[m[32m            <strong>History</strong>[m
+[32m+[m[32m            <span>Review saved measurements</span>[m
+[32m+[m[32m          </button>[m
+         </div>[m
+[31m-        <div class="button-row">[m
+[31m-          <button class="primary" id="engineering

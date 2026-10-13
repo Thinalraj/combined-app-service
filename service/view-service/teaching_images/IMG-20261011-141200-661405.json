@@ -1,0 +1,61 @@
+{
+  "schema": "thinal-overlay-v1",
+  "capture_id": "39bc6fbb75e7464db5bbd780372f48f0",
+  "image": {
+    "width": 486,
+    "height": 385,
+    "scope": "measurement AOI crop",
+    "filename": "IMG-20261011-141200-661405.jpg"
+  },
+  "coordinate_system": "normalized_0_1",
+  "classes": [
+    "Ring",
+    "Coin",
+    "Bar",
+    "Bangle"
+  ],
+  "source": "OpenCV geometry, not YOLO inference",
+  "objects": [
+    {
+      "class_id": 2,
+      "label": "Bar",
+      "bbox_xywhn": [
+        0.5,
+        0.5,
+        1.0,
+        1.0
+      ],
+      "polygons": [
+        {
+          "role": "outer",
+          "points": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.9974026
+            ],
+            [
+              0.9979424,
+              0.9974026
+            ],
+            [
+              0.9979424,
+              0.0
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "measurement": {
+    "detected": true,
+    "type": "Bar",
+    "surface_area_mm2": 12331.24631798979,
+    "estimated_depth_mm": 167.09999577869894,
+    "width_mm": 124.68662690483636,
+    "length_mm": 98.89790608740482
+  }
+}
