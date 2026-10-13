@@ -2658,6 +2658,96 @@ output {
   margin-top: 4px;
 }
 
+.vision-test-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  margin-top: 8px;
+  min-height: 0;
+}
+
+.vision-test-preview-panel,
+.vision-test-controls {
+  background: rgba(16, 19, 24, 0.9);
+  border: 1px solid rgba(0, 213, 255, 0.2);
+  border-radius: 12px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.vision-test-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.vision-test-toolbar span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.vision-test-toolbar span.error {
+  color: #ff8d8d;
+}
+
+.vision-test-image {
+  background: #090b0e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  display: block;
+  max-height: 54vh;
+  min-height: 220px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.vision-test-image:not([src]) {
+  visibility: hidden;
+}
+
+.vision-test-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 6px 0 12px;
+}
+
+.vision-test-buttons {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vision-test-buttons button {
+  min-height: 42px;
+}
+
+.vision-test-result {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #d5f7ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 12px 0 0;
+  max-height: 28vh;
+  min-height: 100px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .vision-test-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 #engineeringScreen .engineering-history-card {
   grid-column: 1 / -1;
 }

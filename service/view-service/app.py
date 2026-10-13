@@ -6493,6 +6493,18 @@ def get_vision_detected_image():
         return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
 
 
+@app.get("/api/vision/image/current")
+def get_vision_current_image():
+    """Proxy a fresh raw frame for Engineering Image Service diagnostics."""
+    try:
+        data, content_type = service_binary_get(service_base_url("vision"), "/image", timeout=10.0)
+        response = Response(data, mimetype=content_type)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
+
+
 @app.get("/api/vision/image/view")
 def get_vision_image_view():
     try:

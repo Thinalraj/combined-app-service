@@ -378,6 +378,10 @@
             <strong>Teaching</strong>
             <span>Capture material references</span>
           </button>
+          <button class="engineering-action-card" type="button" id="engineeringVisionTestButton">
+            <strong>Test Image Service</strong>
+            <span>Fetch image and test background removal</span>
+          </button>
           <button class="engineering-action-card" type="button" id="engineeringLoadCellButton">
             <strong>Load Cell</strong>
             <span>Weight service controls</span>
@@ -397,6 +401,41 @@
         </div>
         <div class="engineering-footer">
           <button class="secondary engineering-exit-button" id="engineeringExitButton" type="button">Exit Engineering</button>
+        </div>
+      </section>
+
+      <section class="screen" id="visionTestScreen">
+        <div class="engineering-header">
+          <div>
+            <p class="eyebrow">Engineering · Image Service</p>
+            <h2>Test Image Service</h2>
+          </div>
+          <p>Fetch a frame, then run background removal for each sample type.</p>
+        </div>
+        <div class="vision-test-layout">
+          <div class="vision-test-preview-panel">
+            <div class="vision-test-toolbar">
+              <button class="primary" id="visionFetchImageButton" type="button">Fetch Current Image</button>
+              <span id="visionTestStatus" aria-live="polite">Ready</span>
+            </div>
+            <img id="visionTestImage" class="vision-test-image" alt="Current Image Service frame" />
+          </div>
+          <div class="vision-test-controls">
+            <p class="eyebrow">Background Removal Test</p>
+            <p class="vision-test-help">Each button captures a fresh frame, applies the saved calibration, and shows the detected result.</p>
+            <div class="vision-test-buttons">
+              <button type="button" data-vision-test-shape="coin">Coin</button>
+              <button type="button" data-vision-test-shape="bar">Bar</button>
+              <button type="button" data-vision-test-shape="ring">Ring</button>
+              <button type="button" data-vision-test-shape="chain">Chain</button>
+              <button type="button" data-vision-test-shape="bangle">Bangle</button>
+              <button type="button" data-vision-test-shape="ornament">Ornament</button>
+            </div>
+            <pre id="visionTestResult" class="vision-test-result">No test run yet.</pre>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" id="visionTestBackButton" type="button">Back</button>
         </div>
       </section>
 

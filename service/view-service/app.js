@@ -10,6 +10,7 @@ const screens = {
   result: document.getElementById("resultScreen"),
   password: document.getElementById("passwordScreen"),
   engineering: document.getElementById("engineeringScreen"),
+  visionTest: document.getElementById("visionTestScreen"),
   classifier: document.getElementById("classifierScreen"),
   liveView: document.getElementById("liveViewScreen"),
   daqSettings: document.getElementById("daqSettingsScreen"),
@@ -97,6 +98,7 @@ const titles = {
   result: "Result",
   password: "Engineering Login",
   engineering: "Engineering",
+  visionTest: "Test Image Service",
   classifier: "Classifier",
   liveView: "Live View",
   daqSettings: "DAQ Settings",
@@ -314,6 +316,49 @@ function loadTeachingDetectedImage() {
   image.onerror = () => { if (!image.hidden) status.textContent = "No detected image available yet. Capture or detect an image first."; };
   image.src = `/api/vision/image/detected?t=${Date.now()}`;
   tryImageOverlay(image, `/api/vision/image/view?t=${Date.now()}`, status);
+}
+
+function setVisionTestStatus(message, isError = false) {
+  const status = document.getElementById("visionTestStatus");
+  status.textContent = message;
+  status.classList.toggle("error", isError);
+}
+
+function fetchVisionTestImage(path = "/api/vision/image/current") {
+  const image = document.getElementById("visionTestImage");
+  image.hidden = false;
+  image.onerror = () => setVisionTestStatus("Image Service image unavailable", true);
+  image.onload = () => setVisionTestStatus("Image loaded");
+  image.src = `${path}?t=${Date.now()}`;
+}
+
+async function runVisionBackgroundTest(shape) {
+  const resultNode = document.getElementById("visionTestResult");
+  const label = String(shape || "").toUpperCase();
+  setVisionTestStatus(`Testing ${label}...`);
+  resultNode.textContent = `Calling Image Service for ${shape}...`;
+  document.querySelectorAll("[data-vision-test-shape]").forEach((button) => {
+    button.disabled = true;
+  });
+  try {
+    const response = await fetch(`/api/vision/size?shape=${encodeURIComponent(shape)}`, {cache: "no-store"});
+    const payload = await response.json().catch(() => ({}));
+    resultNode.textContent = JSON.stringify(payload, null, 2);
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.message || payload.error || `Image Service ${shape} test failed`);
+    }
+    fetchVisionTestImage("/api/vision/image/detected");
+    setVisionTestStatus(`${label} background removal completed`);
+  } catch (error) {
+    setVisionTestStatus(`${label} test failed`, true);
+    if (resultNode.textContent === `Calling Image Service for ${shape}...`) {
+      resultNode.textContent = JSON.stringify({ok: false, error: error.message}, null, 2);
+    }
+  } finally {
+    document.querySelectorAll("[data-vision-test-shape]").forEach((button) => {
+      button.disabled = false;
+    });
+  }
 }
 
 async function captureTeachingImageSnapshot() {
@@ -3133,6 +3178,7 @@ if (legacyModeToggleButton) legacyModeToggleButton.addEventListener("click", tog
 document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));
 document.getElementById("engineeringCalibrationButton").addEventListener("click", () => showScreen("calibration"));
 document.getElementById("engineeringTeachingButton").addEventListener("click", () => showScreen("teaching"));
+document.getElementById("engineeringVisionTestButton").addEventListener("click", () => showScreen("visionTest"));
 document.getElementById("engineeringLoadCellButton").addEventListener("click", () => showScreen("loadCell"));
 document.getElementById("engineeringDetectorSettingsButton").addEventListener("click", async () => {
   await loadAcquisitionMode();
@@ -3147,6 +3193,11 @@ document.getElementById("viewCalibrationButton").addEventListener("click", async
   showScreen("calibrationResult");
 });
 document.getElementById("engineeringHistoryButton").addEventListener("click", () => showScreen("history"));
+document.getElementById("visionTestBackButton").addEventListener("click", () => showScreen("engineering"));
+document.getElementById("visionFetchImageButton").addEventListener("click", () => fetchVisionTestImage());
+document.querySelectorAll("[data-vision-test-shape]").forEach((button) => {
+  button.addEventListener("click", () => runVisionBackgroundTest(button.dataset.visionTestShape));
+});
 document.getElementById("classifierBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("classifierTrainButton").addEventListener("click", trainClassifierModel);
 document.getElementById("classifierAlgorithmSelect").addEventListener("change", saveClassifierAlgorithm);
