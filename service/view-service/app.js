@@ -134,6 +134,7 @@ const ADMIN_PIN = "242218";
 let selectedHistoryId = null;
 let selectedTeachingId = null;
 let deletePassword = "";
+let visionCalibrationPoints = [];
 let teachingRecords = [];
 const teachingState = {
   material: "Gold",
@@ -324,12 +325,88 @@ function setVisionTestStatus(message, isError = false) {
   status.classList.toggle("error", isError);
 }
 
+function setVisionTestTab(tab) {
+  const calibrate = tab === "calibrate";
+  document.querySelectorAll("[data-vision-tab]").forEach((button) => {
+    const active = button.dataset.visionTab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.getElementById("visionTestPanel").classList.toggle("active", !calibrate);
+  document.getElementById("visionCalibrationPanel").classList.toggle("active", calibrate);
+  document.getElementById("visionTestScreen").classList.toggle("vision-calibrate-mode", calibrate);
+}
+
+function renderVisionCalibrationPoints() {
+  const image = document.getElementById("visionTestImage");
+  const overlay = document.getElementById("visionCalibrationPointsOverlay");
+  const count = document.getElementById("visionCalibrationPointCount");
+  overlay.innerHTML = "";
+  visionCalibrationPoints.forEach((point, index) => {
+    const marker = document.createElement("span");
+    marker.className = "vision-calibration-point";
+    marker.textContent = String(index + 1);
+    marker.style.left = `${(point[0] / image.naturalWidth) * 100}%`;
+    marker.style.top = `${(point[1] / image.naturalHeight) * 100}%`;
+    overlay.appendChild(marker);
+  });
+  count.textContent = `Points selected: ${visionCalibrationPoints.length} / 9`;
+  document.getElementById("visionManualCalibrateButton").disabled = visionCalibrationPoints.length !== 9;
+}
+
+function clearVisionCalibrationPoints() {
+  visionCalibrationPoints = [];
+  renderVisionCalibrationPoints();
+}
+
+function selectVisionCalibrationPoint(event) {
+  if (!document.getElementById("visionTestScreen").classList.contains("vision-calibrate-mode")) return;
+  const image = document.getElementById("visionTestImage");
+  if (!image.naturalWidth || visionCalibrationPoints.length >= 9) return;
+  const rect = image.getBoundingClientRect();
+  const x = Math.round((event.clientX - rect.left) * image.naturalWidth / rect.width);
+  const y = Math.round((event.clientY - rect.top) * image.naturalHeight / rect.height);
+  if (x < 5 || y < 5 || x >= image.naturalWidth - 5 || y >= image.naturalHeight - 5) return;
+  visionCalibrationPoints.push([x, y]);
+  renderVisionCalibrationPoints();
+}
+
 function fetchVisionTestImage(path = "/api/vision/image/current") {
   const image = document.getElementById("visionTestImage");
   image.hidden = false;
   image.onerror = () => setVisionTestStatus("Image Service image unavailable", true);
-  image.onload = () => setVisionTestStatus("Image loaded");
+  image.onload = () => {
+    renderVisionCalibrationPoints();
+    setVisionTestStatus("Image loaded");
+  };
   image.src = `${path}?t=${Date.now()}`;
+}
+
+async function manualCalibrateVisionBackground() {
+  const shape = document.getElementById("visionCalibrationShape").value;
+  const resultNode = document.getElementById("visionCalibrationResult");
+  const button = document.getElementById("visionManualCalibrateButton");
+  button.disabled = true;
+  setVisionTestStatus(`Saving ${shape.toUpperCase()} point calibration...`);
+  try {
+    const response = await fetch("/api/vision/calibration/manual", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({type: shape, points: visionCalibrationPoints}),
+      cache: "no-store"
+    });
+    const payload = await response.json().catch(() => ({}));
+    resultNode.textContent = JSON.stringify(payload, null, 2);
+    if (!response.ok || payload.saved !== true) {
+      throw new Error(payload.message || payload.error || "Manual calibration failed");
+    }
+    setVisionTestStatus(`${shape.toUpperCase()} point calibration saved`);
+  } catch (error) {
+    setVisionTestStatus("Manual calibration failed", true);
+    if (!resultNode.textContent) resultNode.textContent = JSON.stringify({ok: false, error: error.message}, null, 2);
+  } finally {
+    button.disabled = visionCalibrationPoints.length !== 9;
+  }
 }
 
 async function runVisionBackgroundTest(shape) {
@@ -3223,6 +3300,15 @@ document.getElementById("engineeringHistoryButton").addEventListener("click", ()
 document.getElementById("visionTestBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("visionFetchImageButton").addEventListener("click", () => fetchVisionTestImage());
 document.getElementById("visionAutoCalibrateButton").addEventListener("click", autoCalibrateVisionBackground);
+document.getElementById("visionCalibrationFetchImageButton").addEventListener("click", () => {
+  clearVisionCalibrationPoints();
+  fetchVisionTestImage();
+});
+document.getElementById("visionManualCalibrateButton").addEventListener("click", manualCalibrateVisionBackground);
+document.getElementById("visionTestImage").addEventListener("click", selectVisionCalibrationPoint);
+document.querySelectorAll("[data-vision-tab]").forEach((button) => {
+  button.addEventListener("click", () => setVisionTestTab(button.dataset.visionTab));
+});
 document.querySelectorAll("[data-vision-test-shape]").forEach((button) => {
   button.addEventListener("click", () => runVisionBackgroundTest(button.dataset.visionTestShape));
 });

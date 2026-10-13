@@ -6530,6 +6530,19 @@ def auto_vision_calibration():
         return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
 
 
+@app.post("/api/vision/calibration/manual")
+def manual_vision_calibration():
+    """Save nine operator-picked AOI points through Image Service."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = service_json_request(
+            "POST", service_base_url("vision"), "/calibration/manual",
+            payload=payload, timeout=20.0)
+        return jsonify(result), 200
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
+
+
 @app.get("/api/vision/image/view")
 def get_vision_image_view():
     try:

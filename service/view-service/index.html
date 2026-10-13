@@ -412,17 +412,37 @@
           </div>
           <p>Fetch a frame, then run background removal for each sample type.</p>
         </div>
+        <div class="vision-test-tabs" role="tablist" aria-label="Image Service tools">
+          <button class="vision-test-tab active" type="button" data-vision-tab="test" role="tab" aria-selected="true">Test</button>
+          <button class="vision-test-tab" type="button" data-vision-tab="calibrate" role="tab" aria-selected="false">Calibrate Background</button>
+        </div>
         <div class="vision-test-layout">
           <div class="vision-test-preview-panel">
             <div class="vision-test-toolbar">
               <button class="primary" id="visionFetchImageButton" type="button">Fetch Current Image</button>
               <span id="visionTestStatus" aria-live="polite">Ready</span>
             </div>
-            <img id="visionTestImage" class="vision-test-image" alt="Current Image Service frame" />
+            <div class="vision-image-stage">
+              <img id="visionTestImage" class="vision-test-image" alt="Current Image Service frame" />
+              <div id="visionCalibrationPointsOverlay" class="vision-calibration-points-overlay" aria-hidden="true"></div>
+            </div>
           </div>
-          <div class="vision-test-controls">
+          <div class="vision-test-controls vision-test-panel active" id="visionTestPanel">
+            <p class="eyebrow">Background Removal Test</p>
+            <p class="vision-test-help">Each button captures a fresh frame, applies the saved calibration, and shows the detected result.</p>
+            <div class="vision-test-buttons">
+              <button type="button" data-vision-test-shape="coin">Coin</button>
+              <button type="button" data-vision-test-shape="bar">Bar</button>
+              <button type="button" data-vision-test-shape="ring">Ring</button>
+              <button type="button" data-vision-test-shape="chain">Chain</button>
+              <button type="button" data-vision-test-shape="bangle">Bangle</button>
+              <button type="button" data-vision-test-shape="ornament">Ornament</button>
+            </div>
+            <pre id="visionTestResult" class="vision-test-result">No test run yet.</pre>
+          </div>
+          <div class="vision-test-controls vision-test-panel" id="visionCalibrationPanel">
             <p class="eyebrow">Background Calibration</p>
-            <p class="vision-test-help">Remove the sample from the shared AOI, then capture the empty background and save it for the selected type.</p>
+            <p class="vision-test-help">Remove the sample first. For Ring/Bangle, fetch the cropped AOI, click nine clean background points, then save them.</p>
             <div class="vision-calibration-controls">
               <label for="visionCalibrationShape">Save calibration for</label>
               <select id="visionCalibrationShape">
@@ -435,18 +455,10 @@
               </select>
               <button class="primary" id="visionAutoCalibrateButton" type="button">Auto-Calibrate Background</button>
             </div>
+            <button class="secondary vision-calibration-fetch-button" id="visionCalibrationFetchImageButton" type="button">Fetch Cropped Image &amp; Clear Points</button>
+            <p id="visionCalibrationPointCount" class="vision-calibration-point-count">Points selected: 0 / 9</p>
+            <button class="primary" id="visionManualCalibrateButton" type="button" disabled>Save 9 Selected Points</button>
             <pre id="visionCalibrationResult" class="vision-test-result">No calibration run yet.</pre>
-            <p class="eyebrow">Background Removal Test</p>
-            <p class="vision-test-help">Each button captures a fresh frame, applies the saved calibration, and shows the detected result.</p>
-            <div class="vision-test-buttons">
-              <button type="button" data-vision-test-shape="coin">Coin</button>
-              <button type="button" data-vision-test-shape="bar">Bar</button>
-              <button type="button" data-vision-test-shape="ring">Ring</button>
-              <button type="button" data-vision-test-shape="chain">Chain</button>
-              <button type="button" data-vision-test-shape="bangle">Bangle</button>
-              <button type="button" data-vision-test-shape="ornament">Ornament</button>
-            </div>
-            <pre id="visionTestResult" class="vision-test-result">No test run yet.</pre>
           </div>
         </div>
         <div class="button-row">

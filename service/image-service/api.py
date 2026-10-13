@@ -149,6 +149,11 @@ class CalibrationRequest(BaseModel):
     resolution: list[int] | None = None
 
 
+class ManualCalibrationRequest(BaseModel):
+    type: str = "ring"
+    points: list[list[int]]
+
+
 @asynccontextmanager
 async def lifespan(app):
     global camera
@@ -356,6 +361,52 @@ def auto_calibration(type: str = Query("coin", min_length=1)):
         "lab_median": center.round(3).tolist(),
         "lab_spread": spread.round(3).tolist(),
         "sample_points": sample_points,
+        "sample_patch_size": radius * 2 + 1,
+        "resolution": [int(width), int(height)],
+    }
+    settings.setdefault("modes", {}).setdefault(mode, {})["color_calibration"] = calibration
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return {
+        "saved": True,
+        "type": mode,
+        "calibration": calibration,
+        "aoi": shared_aoi(settings),
+        "processed_image_size": [int(width), int(height)],
+    }
+
+
+@app.post("/calibration/manual")
+def manual_calibration(request: ManualCalibrationRequest):
+    """Capture the shared AOI and save a model from nine operator-picked points."""
+    mode = mode_name(request.type)
+    if len(request.points) != 9:
+        raise HTTPException(422, "Select exactly 9 background points")
+    image, depth = camera.frame()
+    settings = load_settings()
+    cropped, _ = crop_shared_aoi(image, depth, settings)
+    height, width = cropped.shape[:2]
+    radius = 5
+    samples = []
+    points = []
+    for point in request.points:
+        if len(point) != 2:
+            raise HTTPException(422, "Each calibration point must contain x and y")
+        x, y = int(point[0]), int(point[1])
+        if not (radius <= x < width - radius and radius <= y < height - radius):
+            raise HTTPException(422, "Calibration points must be inside the cropped AOI")
+        patch = cropped[y - radius:y + radius + 1, x - radius:x + radius + 1]
+        samples.append(cv2.cvtColor(patch, cv2.COLOR_BGR2LAB).reshape(-1, 3))
+        points.append([x, y])
+    pixels = np.concatenate(samples, axis=0).astype(np.float32)
+    center = np.median(pixels, axis=0)
+    median_deviation = np.median(np.abs(pixels - center), axis=0)
+    spread = np.maximum(median_deviation * 1.4826, 2.0)
+    calibration = {
+        "color_space": "OpenCV Lab",
+        "source": "manual shared AOI calibration",
+        "lab_median": center.round(3).tolist(),
+        "lab_spread": spread.round(3).tolist(),
+        "sample_points": points,
         "sample_patch_size": radius * 2 + 1,
         "resolution": [int(width), int(height)],
     }

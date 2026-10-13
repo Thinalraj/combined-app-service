@@ -2666,6 +2666,29 @@ output {
   min-height: 0;
 }
 
+.vision-test-tabs {
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.vision-test-tab {
+  background: #171a20;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  color: var(--muted);
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.vision-test-tab.active {
+  background: rgba(255, 159, 26, 0.14);
+  border-color: var(--orange);
+  color: #fff3dc;
+}
+
 .vision-test-preview-panel,
 .vision-test-controls {
   background: rgba(16, 19, 24, 0.9);
@@ -2673,6 +2696,18 @@ output {
   border-radius: 12px;
   min-height: 0;
   padding: 12px;
+}
+
+.vision-test-panel {
+  display: none;
+}
+
+.vision-test-panel.active {
+  display: block;
+}
+
+.vision-image-stage {
+  position: relative;
 }
 
 .vision-test-toolbar {
@@ -2709,6 +2744,38 @@ output {
   visibility: hidden;
 }
 
+.vision-calibration-points-overlay {
+  display: none;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+#visionTestScreen.vision-calibrate-mode .vision-calibration-points-overlay {
+  display: block;
+}
+
+#visionTestScreen.vision-calibrate-mode .vision-test-image {
+  cursor: crosshair;
+}
+
+.vision-calibration-point {
+  align-items: center;
+  background: var(--orange);
+  border: 2px solid #fff3dc;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
+  color: #160d00;
+  display: flex;
+  font-size: 10px;
+  font-weight: 900;
+  height: 22px;
+  justify-content: center;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+}
+
 .vision-test-help {
   color: var(--muted);
   font-size: 12px;
@@ -2743,6 +2810,24 @@ output {
 .vision-calibration-controls button {
   grid-column: 1 / -1;
   min-height: 42px;
+}
+
+.vision-calibration-fetch-button {
+  margin: 2px 0 8px;
+  min-height: 42px;
+  width: 100%;
+}
+
+.vision-calibration-point-count {
+  color: var(--orange);
+  font-size: 12px;
+  font-weight: 700;
+  margin: 4px 0 8px;
+}
+
+#visionManualCalibrateButton {
+  min-height: 42px;
+  width: 100%;
 }
 
 .vision-test-buttons {
