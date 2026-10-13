@@ -421,6 +421,21 @@
             <img id="visionTestImage" class="vision-test-image" alt="Current Image Service frame" />
           </div>
           <div class="vision-test-controls">
+            <p class="eyebrow">Background Calibration</p>
+            <p class="vision-test-help">Remove the sample from the shared AOI, then capture the empty background and save it for the selected type.</p>
+            <div class="vision-calibration-controls">
+              <label for="visionCalibrationShape">Save calibration for</label>
+              <select id="visionCalibrationShape">
+                <option value="coin">Coin</option>
+                <option value="bar">Bar</option>
+                <option value="ring">Ring</option>
+                <option value="chain">Chain</option>
+                <option value="bangle">Bangle</option>
+                <option value="ornament">Ornament</option>
+              </select>
+              <button class="primary" id="visionAutoCalibrateButton" type="button">Auto-Calibrate Background</button>
+            </div>
+            <pre id="visionCalibrationResult" class="vision-test-result">No calibration run yet.</pre>
             <p class="eyebrow">Background Removal Test</p>
             <p class="vision-test-help">Each button captures a fresh frame, applies the saved calibration, and shows the detected result.</p>
             <div class="vision-test-buttons">

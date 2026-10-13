@@ -2716,6 +2716,35 @@ output {
   margin: 6px 0 12px;
 }
 
+.vision-calibration-controls {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-bottom: 8px;
+}
+
+.vision-calibration-controls label {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.vision-calibration-controls select {
+  background: #171a20;
+  border: 1px solid rgba(255, 159, 26, 0.58);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  min-height: 42px;
+  padding: 0 10px;
+}
+
+.vision-calibration-controls button {
+  grid-column: 1 / -1;
+  min-height: 42px;
+}
+
 .vision-test-buttons {
   display: grid;
   gap: 8px;

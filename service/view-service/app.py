@@ -6517,6 +6517,19 @@ def update_vision_calibration():
         return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
 
 
+@app.post("/api/vision/calibration/auto")
+def auto_vision_calibration():
+    """Capture and save a fresh background calibration through Image Service."""
+    shape = request.args.get("shape", "coin")
+    try:
+        result = service_json_request(
+            "POST", service_base_url("vision"), "/calibration/auto",
+            query={"type": shape}, timeout=20.0)
+        return jsonify(result), 200
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
+
+
 @app.get("/api/vision/image/view")
 def get_vision_image_view():
     try:

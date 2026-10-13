@@ -326,6 +326,50 @@ def save_calibration(request: CalibrationRequest):
     return {"saved": True, "type": mode, "calibration": calibration}
 
 
+@app.post("/calibration/auto")
+def auto_calibration(type: str = Query("coin", min_length=1)):
+    """Capture the empty shared AOI and save a 3x3 Lab background model."""
+    mode = mode_name(type)
+    image, depth = camera.frame()
+    settings = load_settings()
+    cropped, _ = crop_shared_aoi(image, depth, settings)
+    height, width = cropped.shape[:2]
+    radius = 5
+    if width < (radius * 2 + 3) or height < (radius * 2 + 3):
+        raise HTTPException(400, "Shared AOI is too small for automatic calibration")
+    x_points = np.linspace(radius, width - radius - 1, 3).round().astype(int)
+    y_points = np.linspace(radius, height - radius - 1, 3).round().astype(int)
+    samples = []
+    sample_points = []
+    for y in y_points:
+        for x in x_points:
+            patch = cropped[y - radius:y + radius + 1, x - radius:x + radius + 1]
+            samples.append(cv2.cvtColor(patch, cv2.COLOR_BGR2LAB).reshape(-1, 3))
+            sample_points.append([int(x), int(y)])
+    pixels = np.concatenate(samples, axis=0).astype(np.float32)
+    center = np.median(pixels, axis=0)
+    median_deviation = np.median(np.abs(pixels - center), axis=0)
+    spread = np.maximum(median_deviation * 1.4826, 2.0)
+    calibration = {
+        "color_space": "OpenCV Lab",
+        "source": "automatic shared AOI calibration",
+        "lab_median": center.round(3).tolist(),
+        "lab_spread": spread.round(3).tolist(),
+        "sample_points": sample_points,
+        "sample_patch_size": radius * 2 + 1,
+        "resolution": [int(width), int(height)],
+    }
+    settings.setdefault("modes", {}).setdefault(mode, {})["color_calibration"] = calibration
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return {
+        "saved": True,
+        "type": mode,
+        "calibration": calibration,
+        "aoi": shared_aoi(settings),
+        "processed_image_size": [int(width), int(height)],
+    }
+
+
 @app.post("/aoi")
 def save_aoi(request: AOIRequest):
     """Save an AOI for a mode; subsequent measurements crop to it."""

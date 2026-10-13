@@ -361,6 +361,33 @@ async function runVisionBackgroundTest(shape) {
   }
 }
 
+async function autoCalibrateVisionBackground() {
+  const shape = document.getElementById("visionCalibrationShape").value;
+  const resultNode = document.getElementById("visionCalibrationResult");
+  const button = document.getElementById("visionAutoCalibrateButton");
+  button.disabled = true;
+  setVisionTestStatus(`Calibrating ${shape.toUpperCase()} background...`);
+  resultNode.textContent = "Remove the sample, capturing the empty shared AOI...";
+  try {
+    const response = await fetch(`/api/vision/calibration/auto?shape=${encodeURIComponent(shape)}`, {
+      method: "POST", cache: "no-store"
+    });
+    const payload = await response.json().catch(() => ({}));
+    resultNode.textContent = JSON.stringify(payload, null, 2);
+    if (!response.ok || payload.saved !== true) {
+      throw new Error(payload.message || payload.error || "Automatic calibration failed");
+    }
+    setVisionTestStatus(`${shape.toUpperCase()} calibration saved`);
+  } catch (error) {
+    setVisionTestStatus("Background calibration failed", true);
+    if (!resultNode.textContent || resultNode.textContent.startsWith("Remove the sample")) {
+      resultNode.textContent = JSON.stringify({ok: false, error: error.message}, null, 2);
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function captureTeachingImageSnapshot() {
   const status = document.getElementById("teachingDetectedImageStatus");
   status.textContent = "Saving detected image with teaching record...";
@@ -3195,6 +3222,7 @@ document.getElementById("viewCalibrationButton").addEventListener("click", async
 document.getElementById("engineeringHistoryButton").addEventListener("click", () => showScreen("history"));
 document.getElementById("visionTestBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("visionFetchImageButton").addEventListener("click", () => fetchVisionTestImage());
+document.getElementById("visionAutoCalibrateButton").addEventListener("click", autoCalibrateVisionBackground);
 document.querySelectorAll("[data-vision-test-shape]").forEach((button) => {
   button.addEventListener("click", () => runVisionBackgroundTest(button.dataset.visionTestShape));
 });
