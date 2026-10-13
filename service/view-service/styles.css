@@ -2723,14 +2723,31 @@ output {
 }
 
 .vision-test-buttons button {
+  background: #171a20;
+  border-color: rgba(255, 159, 26, 0.58);
+  color: #fff3dc;
   min-height: 42px;
+}
+
+.vision-test-buttons button:hover,
+.vision-test-buttons button:focus-visible {
+  background: rgba(255, 159, 26, 0.16);
+  border-color: var(--orange);
+  color: #fffaf0;
+  outline: none;
+}
+
+.vision-test-buttons button:disabled {
+  background: #101216;
+  border-color: var(--border);
+  color: var(--dim);
 }
 
 .vision-test-result {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  color: #d5f7ff;
+  color: #eef3f7;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 1.35;

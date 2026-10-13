@@ -82,6 +82,19 @@ def shared_aoi(settings):
     return saved
 
 
+def crop_shared_aoi(image, depth, settings):
+    """Crop a color/depth pair using the one AOI shared by all object types."""
+    aoi = shared_aoi(settings)
+    if not isinstance(aoi, list) or len(aoi) != 4:
+        return image, depth
+    x1, y1, x2, y2 = [int(value) for value in aoi]
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(WIDTH - 1, x2), min(HEIGHT - 1, y2)
+    if x2 <= x1 or y2 <= y1:
+        raise HTTPException(400, "Invalid AOI; select an area inside the current frame")
+    return image[y1:y2 + 1, x1:x2 + 1], depth[y1:y2 + 1, x1:x2 + 1]
+
+
 class Camera:
     def __init__(self, serial_number=None):
         self.pipeline = rs.pipeline()
@@ -125,6 +138,15 @@ class AOIRequest(BaseModel):
     y: int = Field(ge=0)
     width: int = Field(gt=1)
     height: int = Field(gt=1)
+
+
+class CalibrationRequest(BaseModel):
+    type: str = "coin"
+    lab_median: list[float]
+    lab_spread: list[float]
+    sample_points: list[list[int]] | None = None
+    sample_patch_size: int | None = None
+    resolution: list[int] | None = None
 
 
 @asynccontextmanager
@@ -249,6 +271,19 @@ def get_image():
     return Response(content=encoded.tobytes(), media_type="image/jpeg")
 
 
+@app.get("/image/cropped")
+def get_cropped_image():
+    """Return a fresh raw frame cropped to the shared AOI."""
+    global latest_image
+    image, depth = camera.frame()
+    image, _ = crop_shared_aoi(image, depth, load_settings())
+    latest_image = image
+    ok, encoded = cv2.imencode(".jpg", image)
+    if not ok:
+        raise HTTPException(500, "Could not encode cropped image")
+    return Response(content=encoded.tobytes(), media_type="image/jpeg")
+
+
 @app.get("/image/detected")
 def get_detected_image():
     if latest_detected_image is None:
@@ -265,7 +300,30 @@ def get_image_bundle():
     with snapshot_lock:
         if latest_bundle is None:
             raise HTTPException(404, "No sidecar capture available; use legacy image")
-        return copy.deepcopy(latest_bundle)
+    return copy.deepcopy(latest_bundle)
+
+
+@app.post("/calibration")
+def save_calibration(request: CalibrationRequest):
+    """Save a Lab background calibration supplied by an external UI/client."""
+    mode = mode_name(request.type)
+    if len(request.lab_median) != 3 or len(request.lab_spread) != 3:
+        raise HTTPException(422, "lab_median and lab_spread must each contain 3 values")
+    if not all(np.isfinite(request.lab_median)) or not all(
+            np.isfinite(request.lab_spread)) or any(value <= 0 for value in request.lab_spread):
+        raise HTTPException(422, "Calibration values must be finite and spreads must be positive")
+    settings = load_settings()
+    calibration = {
+        "color_space": "OpenCV Lab",
+        "lab_median": [round(float(value), 3) for value in request.lab_median],
+        "lab_spread": [round(float(value), 3) for value in request.lab_spread],
+        "sample_points": request.sample_points or [],
+        "sample_patch_size": request.sample_patch_size or 11,
+        "resolution": request.resolution or [WIDTH, HEIGHT],
+    }
+    settings.setdefault("modes", {}).setdefault(mode, {})["color_calibration"] = calibration
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return {"saved": True, "type": mode, "calibration": calibration}
 
 
 @app.post("/aoi")
@@ -294,14 +352,15 @@ def get_size(type: str = Query("coin", min_length=1)):
     image, depth = camera.frame()
     mode = mode_name(normalized)
     settings = load_settings()
-    aoi = shared_aoi(settings)
-    if isinstance(aoi, list) and len(aoi) == 4:
-        x1, y1, x2, y2 = [int(v) for v in aoi]
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(WIDTH - 1, x2), min(HEIGHT - 1, y2)
-        if x2 <= x1 or y2 <= y1:
-            raise HTTPException(400, "Invalid AOI; select an area inside the current frame")
-        image = image[y1:y2 + 1, x1:x2 + 1]
-        depth = depth[y1:y2 + 1, x1:x2 + 1]
+    image, depth = crop_shared_aoi(image, depth, settings)
     latest_image = image
-    return measure(image, depth, mode)
+    result = measure(image, depth, mode)
+    calibration = settings.get("modes", {}).get(mode, {}).get("color_calibration")
+    result["diagnostics"] = {
+        "settings_file": str(SETTINGS_FILE),
+        "calibration_mode": mode,
+        "calibration_loaded": bool(calibration),
+        "aoi": shared_aoi(settings),
+        "processed_image_size": [int(image.shape[1]), int(image.shape[0])],
+    }
+    return result

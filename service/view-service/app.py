@@ -6495,12 +6495,24 @@ def get_vision_detected_image():
 
 @app.get("/api/vision/image/current")
 def get_vision_current_image():
-    """Proxy a fresh raw frame for Engineering Image Service diagnostics."""
+    """Proxy a fresh raw frame cropped to the shared Image Service AOI."""
     try:
-        data, content_type = service_binary_get(service_base_url("vision"), "/image", timeout=10.0)
+        data, content_type = service_binary_get(service_base_url("vision"), "/image/cropped", timeout=10.0)
         response = Response(data, mimetype=content_type)
         response.headers["Cache-Control"] = "no-store"
         return response
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
+
+
+@app.post("/api/vision/calibration")
+def update_vision_calibration():
+    """Forward a calibration model from the View Service to Image Service."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = service_json_request(
+            "POST", service_base_url("vision"), "/calibration", payload=payload, timeout=10.0)
+        return jsonify(result), 200
     except RuntimeError as exc:
         return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
 
