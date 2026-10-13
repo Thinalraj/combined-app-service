@@ -21,6 +21,65 @@ from ring_geometry import measure_ring_mask
 
 WIDTH, HEIGHT, FPS = 1280, 720, 30
 SETTINGS_FILE = Path(__file__).with_name("settings.json")
+LEGACY_CONFIG_FILE = Path(__file__).with_name("vision_config.json")
+OBJECT_MODES = {
+    "coin": "Coin", "bar": "Bar", "chain": "Chain",
+    "ring": "Ring", "bangle": "Bangle",
+    "ornament": "Ornaments / Pendants / Others",
+}
+
+
+def default_settings():
+    return {"version": 2, "modes": {mode: {} for mode in OBJECT_MODES.values()}}
+
+
+def normalize_settings(settings):
+    """Normalize current and pre-v2 settings exactly like the GUI."""
+    normalized = default_settings()
+    if isinstance(settings, dict):
+        normalized.update(settings)
+    modes = normalized.setdefault("modes", {})
+    legacy_areas = normalized.get("areas", {})
+    legacy_calibrations = normalized.get("color_calibrations", {})
+    for mode in OBJECT_MODES.values():
+        mode_settings = modes.setdefault(mode, {})
+        if mode in legacy_areas and "aoi" not in mode_settings:
+            mode_settings["aoi"] = legacy_areas[mode]
+        if mode in legacy_calibrations and "color_calibration" not in mode_settings:
+            mode_settings["color_calibration"] = legacy_calibrations[mode]
+    normalized.pop("areas", None)
+    normalized.pop("color_calibrations", None)
+    normalized["version"] = 2
+    return normalized
+
+
+def load_settings():
+    """Read settings from the service directory, including legacy files."""
+    config_path = SETTINGS_FILE if SETTINGS_FILE.exists() else LEGACY_CONFIG_FILE
+    if not config_path.exists():
+        return default_settings()
+    try:
+        return normalize_settings(json.loads(config_path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        return default_settings()
+
+
+def mode_name(object_type):
+    normalized = str(object_type).strip().lower()
+    try:
+        return OBJECT_MODES[normalized]
+    except KeyError:
+        raise HTTPException(400, "Unsupported type")
+
+
+def shared_aoi(settings):
+    """Return the one AOI shared by every object type."""
+    saved = settings.get("aoi")
+    if saved is None:
+        saved = settings.get("modes", {}).get("Coin", {}).get("aoi")
+    if isinstance(saved, dict):
+        return saved.get("coordinates")
+    return saved
 
 
 class Camera:
@@ -82,30 +141,19 @@ app = FastAPI(title="Vision Service API", version="1.0", lifespan=lifespan)
 @app.get("/settings")
 def get_settings(type: str = Query("coin", min_length=1)):
     """Return the AOI and calibration status saved by diameter.py."""
-    supported = {"coin": "Coin", "bar": "Bar", "chain": "Chain",
-                 "ring": "Ring", "bangle": "Bangle",
-                 "ornament": "Ornaments / Pendants / Others"}
-    mode = supported.get(type.strip().lower())
-    if mode is None:
-        raise HTTPException(400, "Unsupported type")
-    try:
-        settings = json.loads(SETTINGS_FILE.read_text())
-    except (OSError, ValueError):
-        settings = {}
+    mode = mode_name(type)
+    settings = load_settings()
     mode_settings = settings.get("modes", {}).get(mode, {})
     calibration = mode_settings.get("color_calibration")
-    return {"type": mode, "aoi": mode_settings.get("aoi"),
+    return {"type": mode, "aoi": settings.get("aoi") or settings.get("modes", {}).get("Coin", {}).get("aoi"),
             "calibration_saved": bool(calibration),
             "calibration": calibration}
 
 
 def object_mask(image, object_type):
     """Build an object mask from the selected mode's saved Lab background."""
-    try:
-        settings = __import__("json").loads(SETTINGS_FILE.read_text())
-        calibration = settings.get("modes", {}).get(object_type, {}).get("color_calibration")
-    except (OSError, ValueError):
-        calibration = None
+    mode = mode_name(object_type)
+    calibration = load_settings().get("modes", {}).get(mode, {}).get("color_calibration")
     if not calibration:
         raise HTTPException(400, f"No colour calibration saved for type '{object_type}'")
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
@@ -223,21 +271,15 @@ def get_image_bundle():
 @app.post("/aoi")
 def save_aoi(request: AOIRequest):
     """Save an AOI for a mode; subsequent measurements crop to it."""
-    supported = {"coin": "Coin", "bar": "Bar", "chain": "Chain",
-                 "ring": "Ring", "bangle": "Bangle",
-                 "ornament": "Ornaments / Pendants / Others"}
-    mode = supported.get(request.type.strip().lower())
-    if mode is None:
-        raise HTTPException(400, "Unsupported type")
-    try:
-        settings = json.loads(SETTINGS_FILE.read_text()) if SETTINGS_FILE.exists() else {"version": 2, "modes": {}}
-    except ValueError:
-        settings = {"version": 2, "modes": {}}
-    settings.setdefault("modes", {}).setdefault(mode, {})["aoi"] = {
+    mode = mode_name(request.type)
+    settings = load_settings()
+    settings["aoi"] = {
         "coordinates": [request.x, request.y, request.x + request.width - 1,
                         request.y + request.height - 1],
         "resolution": [WIDTH, HEIGHT],
     }
+    for mode_settings in settings.setdefault("modes", {}).values():
+        mode_settings.pop("aoi", None)
     SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n")
     return {"saved": True, "type": mode,
             "aoi": request.model_dump() if hasattr(request, "model_dump") else request.dict()}
@@ -247,18 +289,12 @@ def save_aoi(request: AOIRequest):
 def get_size(type: str = Query("coin", min_length=1)):
     global latest_image
     normalized = type.strip().lower()
-    supported = {"coin": "Coin", "bar": "Bar", "chain": "Chain",
-                 "ring": "Ring", "bangle": "Bangle",
-                 "ornament": "Ornaments / Pendants / Others"}
-    if normalized not in supported:
-        raise HTTPException(400, f"Unsupported type. Use: {', '.join(supported)}")
+    if normalized not in OBJECT_MODES:
+        raise HTTPException(400, f"Unsupported type. Use: {', '.join(OBJECT_MODES)}")
     image, depth = camera.frame()
-    mode = supported[normalized]
-    try:
-        settings = json.loads(SETTINGS_FILE.read_text())
-        aoi = settings.get("modes", {}).get(mode, {}).get("aoi", {}).get("coordinates")
-    except (OSError, ValueError):
-        aoi = None
+    mode = mode_name(normalized)
+    settings = load_settings()
+    aoi = shared_aoi(settings)
     if isinstance(aoi, list) and len(aoi) == 4:
         x1, y1, x2, y2 = [int(v) for v in aoi]
         x1, y1 = max(0, x1), max(0, y1)
