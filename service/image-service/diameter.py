@@ -95,8 +95,12 @@ def write_config(config_data):
 
 
 def load_aoi():
-    saved = load_config().get("modes", {}).get(
-        selected_object, {}).get("aoi")
+    settings = load_config()
+    # AOI is shared across all object types.  Coin remains the legacy owner
+    # of the saved crop so existing settings continue to work unchanged.
+    saved = settings.get("aoi")
+    if saved is None:
+        saved = settings.get("modes", {}).get("Coin", {}).get("aoi")
     saved_resolution = [640, 480]
     if isinstance(saved, dict):
         saved_resolution = saved.get("resolution", [FRAME_WIDTH, FRAME_HEIGHT])
@@ -121,16 +125,19 @@ def load_aoi():
 
 def save_aoi(aoi):
     config_data = load_config()
-    config_data.setdefault("modes", {}).setdefault(selected_object, {})["aoi"] = {
+    config_data["aoi"] = {
         "coordinates": list(aoi),
         "resolution": [FRAME_WIDTH, FRAME_HEIGHT],
     }
+    for mode_settings in config_data.setdefault("modes", {}).values():
+        mode_settings.pop("aoi", None)
     write_config(config_data)
     print("Saved {} AOI: {}".format(selected_object, aoi))
 
 
 def reset_all_aois():
     config_data = load_config()
+    config_data.pop("aoi", None)
     for mode_settings in config_data.setdefault("modes", {}).values():
         mode_settings.pop("aoi", None)
     write_config(config_data)
