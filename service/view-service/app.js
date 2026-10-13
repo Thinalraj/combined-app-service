@@ -327,6 +327,7 @@ function setVisionTestStatus(message, isError = false) {
 
 function setVisionTestTab(tab) {
   const calibrate = tab === "calibrate";
+  if (calibrate) clearVisionCalibrationPoints();
   document.querySelectorAll("[data-vision-tab]").forEach((button) => {
     const active = button.dataset.visionTab === tab;
     button.classList.toggle("active", active);
@@ -350,8 +351,8 @@ function renderVisionCalibrationPoints() {
     marker.style.top = `${(point[1] / image.naturalHeight) * 100}%`;
     overlay.appendChild(marker);
   });
-  count.textContent = `Points selected: ${visionCalibrationPoints.length} / 9`;
-  document.getElementById("visionManualCalibrateButton").disabled = visionCalibrationPoints.length !== 9;
+  count.textContent = `Points selected: ${visionCalibrationPoints.length} / 12`;
+  document.getElementById("visionManualCalibrateButton").disabled = visionCalibrationPoints.length !== 12;
 }
 
 function clearVisionCalibrationPoints() {
@@ -362,7 +363,7 @@ function clearVisionCalibrationPoints() {
 function selectVisionCalibrationPoint(event) {
   if (!document.getElementById("visionTestScreen").classList.contains("vision-calibrate-mode")) return;
   const image = document.getElementById("visionTestImage");
-  if (!image.naturalWidth || visionCalibrationPoints.length >= 9) return;
+  if (!image.naturalWidth || visionCalibrationPoints.length >= 12) return;
   const rect = image.getBoundingClientRect();
   const x = Math.round((event.clientX - rect.left) * image.naturalWidth / rect.width);
   const y = Math.round((event.clientY - rect.top) * image.naturalHeight / rect.height);
@@ -405,7 +406,7 @@ async function manualCalibrateVisionBackground() {
     setVisionTestStatus("Manual calibration failed", true);
     if (!resultNode.textContent) resultNode.textContent = JSON.stringify({ok: false, error: error.message}, null, 2);
   } finally {
-    button.disabled = visionCalibrationPoints.length !== 9;
+    button.disabled = visionCalibrationPoints.length !== 12;
   }
 }
 
@@ -3305,6 +3306,7 @@ document.getElementById("visionCalibrationFetchImageButton").addEventListener("c
   fetchVisionTestImage();
 });
 document.getElementById("visionManualCalibrateButton").addEventListener("click", manualCalibrateVisionBackground);
+document.getElementById("visionClearPointsButton").addEventListener("click", clearVisionCalibrationPoints);
 document.getElementById("visionTestImage").addEventListener("click", selectVisionCalibrationPoint);
 document.querySelectorAll("[data-vision-tab]").forEach((button) => {
   button.addEventListener("click", () => setVisionTestTab(button.dataset.visionTab));

@@ -442,7 +442,7 @@
           </div>
           <div class="vision-test-controls vision-test-panel" id="visionCalibrationPanel">
             <p class="eyebrow">Background Calibration</p>
-            <p class="vision-test-help">Remove the sample first. For Ring/Bangle, fetch the cropped AOI, click nine clean background points, then save them.</p>
+            <p class="vision-test-help">Remove the sample first. For Ring/Bangle, fetch the cropped AOI, click 12 clean background and shadow points, then save them.</p>
             <div class="vision-calibration-controls">
               <label for="visionCalibrationShape">Save calibration for</label>
               <select id="visionCalibrationShape">
@@ -456,8 +456,11 @@
               <button class="primary" id="visionAutoCalibrateButton" type="button">Auto-Calibrate Background</button>
             </div>
             <button class="secondary vision-calibration-fetch-button" id="visionCalibrationFetchImageButton" type="button">Fetch Cropped Image &amp; Clear Points</button>
-            <p id="visionCalibrationPointCount" class="vision-calibration-point-count">Points selected: 0 / 9</p>
-            <button class="primary" id="visionManualCalibrateButton" type="button" disabled>Save 9 Selected Points</button>
+            <p id="visionCalibrationPointCount" class="vision-calibration-point-count">Points selected: 0 / 12</p>
+            <div class="vision-calibration-point-actions">
+              <button class="secondary" id="visionClearPointsButton" type="button">Clear Points</button>
+              <button class="primary" id="visionManualCalibrateButton" type="button" disabled>Save 12 Selected Points</button>
+            </div>
             <pre id="visionCalibrationResult" class="vision-test-result">No calibration run yet.</pre>
           </div>
         </div>

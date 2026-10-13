@@ -379,8 +379,8 @@ def auto_calibration(type: str = Query("coin", min_length=1)):
 def manual_calibration(request: ManualCalibrationRequest):
     """Capture the shared AOI and save a model from nine operator-picked points."""
     mode = mode_name(request.type)
-    if len(request.points) != 9:
-        raise HTTPException(422, "Select exactly 9 background points")
+    if len(request.points) != 12:
+        raise HTTPException(422, "Select exactly 12 background points")
     image, depth = camera.frame()
     settings = load_settings()
     cropped, _ = crop_shared_aoi(image, depth, settings)
