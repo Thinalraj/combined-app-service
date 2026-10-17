@@ -1,0 +1,18 @@
+{
+  "adapter": "frequency_rf_v1",
+  "feature_names": [
+    "f1_delta_ch1",
+    "f1_delta_ch2",
+    "f2_delta_ch1",
+    "f2_delta_ch2",
+    "f3_delta_ch1",
+    "f3_delta_ch2",
+    "f1_delta_pct",
+    "f2_delta_pct",
+    "f3_delta_pct",
+    "weight_g",
+    "thickness_mm",
+    "contact_area_ratio"
+  ],
+  "migrated_from": "model_gold_frequency_best_20260630_RF.joblib"
+}

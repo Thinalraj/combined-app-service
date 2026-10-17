@@ -2,17 +2,23 @@ import re
 import time
 import threading
 import serial
+import os
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
+from runtime_status import identity
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from scale_preparation import Preparation, stable_average, grams, validate_settings
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
-PORT = "COM5"
-BAUDRATE = 9600
+PORT = os.environ.get("AFIS_WEIGHT_PORT", "COM5")
+BAUDRATE = int(os.environ.get("AFIS_WEIGHT_BAUD", "9600"))
 
 READ_COMMAND = b"SI\r\n"
 TARE_COMMAND = b"TI\r\n"
@@ -126,9 +132,16 @@ def read_single_weight(ser):
     if weight is None:
         raise RuntimeError(status)
 
+    source_weight, source_unit = weight, unit
+    try:
+        weight = grams(weight, unit)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
     return {
         "weight": weight,
-        "unit": unit,
+        "unit": "g",
+        "source_unit": source_unit,
+        "source_weight": source_weight,
         "status": status,
         "raw": response
     }
@@ -141,60 +154,48 @@ def tare_scale(ser):
         TARE_COMMAND
     )
 
+    if not response.startswith(("TI S", "TI D")):
+        raise RuntimeError("Tare was not acknowledged: " + response)
     return response
 
 
-def read_average(ser):
+def read_average(ser, samples=NUM_READINGS):
+    # ZERO-02: stable samples only, explicit gram conversion, real standard deviation.
+    return stable_average(ser, read_single_weight, count=samples,
+                          interval=SAMPLE_INTERVAL, timeout=max(20, samples * 0.5))
 
-    values = []
-    statuses = []
-    unit = None
 
-    for _ in range(NUM_READINGS):
+preparation = Preparation(open_serial, read_single_weight, serial_lock)
 
-        try:
 
-            result = read_single_weight(ser)
+def require_idle_scale():
+    if preparation.blocked():
+        raise HTTPException(409, "Scale preparation is active or needs recovery; inspect preparation status")
 
-            values.append(
-                result["weight"]
-            )
 
-            statuses.append(
-                result["status"]
-            )
+@app.post("/preparation/start")
+def start_preparation(payload: dict):
+    try:
+        started = preparation.start(payload.get("pan_empty_confirmed"),
+                                    validate_settings(payload.get("settings", {})),
+                                    repeat_internal=payload.get("repeat_internal") is True)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not started:
+        return JSONResponse(preparation.snapshot(), status_code=409)
+    return JSONResponse(preparation.snapshot(), status_code=202)
 
-            unit = result["unit"]
 
-        except RuntimeError:
-            pass
+# FINISH-01: configuration/status only; no COM port is opened here.
+@app.get("/status")
+def runtime_status():
+    return {"runtime":identity("weight"), "simulate":False, "port":PORT,
+            "baudrate":BAUDRATE, "preparation":preparation.snapshot()}
 
-        time.sleep(
-            SAMPLE_INTERVAL
-        )
 
-    if not values:
-        raise RuntimeError(
-            "No valid readings received"
-        )
-
-    average = sum(values) / len(values)
-
-    return {
-        "average": round(average, 3),
-        "minimum": round(min(values), 3),
-        "maximum": round(max(values), 3),
-        "range": round(
-            max(values) - min(values),
-            3
-        ),
-        "unit": unit,
-        "samples_requested": NUM_READINGS,
-        "samples_valid": len(values),
-        "stable_samples": statuses.count("S"),
-        "dynamic_samples": statuses.count("D"),
-        "samples": values
-    }
+@app.get("/preparation/status")
+def preparation_status():
+    return preparation.snapshot()
 
 
 # ============================================================
@@ -208,8 +209,11 @@ def read_average(ser):
 
 @app.get("/weight")
 def get_weight():
+    require_idle_scale()
 
     with serial_lock:
+        # Recheck after acquiring the lock: preparation may have started while waiting.
+        require_idle_scale()
 
         try:
 
@@ -225,7 +229,7 @@ def get_weight():
                 }
 
         except serial.SerialException as e:
-
+            preparation.device_disconnected()
             raise HTTPException(
                 status_code=503,
                 detail=f"Serial port error: {e}"
@@ -244,17 +248,20 @@ def get_weight():
 # ------------------------------------------------------------
 
 @app.get("/weight/average")
-def get_average_weight():
+def get_average_weight(samples: int = NUM_READINGS):
+    require_idle_scale()
+    if not 1 <= samples <= 100:
+        raise HTTPException(400, "samples must be 1 to 100")
 
     with serial_lock:
+        # Recheck after acquiring the lock: preparation may have started while waiting.
+        require_idle_scale()
 
         try:
 
             with open_serial() as ser:
 
-                result = read_average(
-                    ser
-                )
+                result = read_average(ser, samples=samples)
 
                 return {
                     "success": True,
@@ -262,7 +269,7 @@ def get_average_weight():
                 }
 
         except serial.SerialException as e:
-
+            preparation.device_disconnected()
             raise HTTPException(
                 status_code=503,
                 detail=f"Serial port error: {e}"
@@ -282,8 +289,11 @@ def get_average_weight():
 
 @app.post("/tare")
 def tare():
+    require_idle_scale()
 
     with serial_lock:
+        # Recheck after acquiring the lock: preparation may have started while waiting.
+        require_idle_scale()
 
         try:
 
@@ -300,12 +310,14 @@ def tare():
                 }
 
         except serial.SerialException as e:
-
+            preparation.device_disconnected()
             raise HTTPException(
                 status_code=503,
                 detail=f"Serial port error: {e}"
             )
 
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
 
 # ------------------------------------------------------------
 # 4. TARE + AVERAGE
@@ -313,8 +325,11 @@ def tare():
 
 @app.post("/tare-average")
 def tare_and_average():
+    require_idle_scale()
 
     with serial_lock:
+        # Recheck after acquiring the lock: preparation may have started while waiting.
+        require_idle_scale()
 
         try:
 
@@ -338,7 +353,7 @@ def tare_and_average():
                 }
 
         except serial.SerialException as e:
-
+            preparation.device_disconnected()
             raise HTTPException(
                 status_code=503,
                 detail=f"Serial port error: {e}"

@@ -33,75 +33,15 @@
       </nav>
 
       <section class="screen active" id="homeScreen">
-        <div class="showcase" aria-hidden="true">
-          <div class="carousel-stage">
-            <div class="orbit">
-              <div class="sample-card gold active" data-rate-label="Gold 999" data-rate-price="RM 580.65/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
-                <div class="object gold-stack bars-3">
-                  <img src="assets/gold-24k-display.png" alt="">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-              <div class="sample-card gold" data-rate-label="Gold 916" data-rate-price="RM 530.54/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
-                <div class="object gold-stack bars-2">
-                  <img src="assets/gold-22k-display.png" alt="">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-              <div class="sample-card gold" data-rate-label="Gold 750" data-rate-price="RM 424.42/g" data-rate-move="▼ 0.02%" data-rate-trend="down" data-rate-source="GoldBullion Malaysia">
-                <div class="object gold-stack bars-1">
-                  <img src="assets/gold-18k-display.png" alt="">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-              <div class="sample-card silver" data-rate-label="Silver 999" data-rate-price="RM 9.62/g" data-rate-move="▲ 2.30%" data-rate-trend="up" data-rate-source="WorldForexRates">
-                <div class="object silver-stack bars-3">
-                  <img src="assets/silver-999-display.png" alt="">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-              <div class="sample-card silver" data-rate-label="Silver 925" data-rate-price="RM 8.91/g" data-rate-move="▲ 2.30%" data-rate-trend="up" data-rate-source="WorldForexRates">
-                <div class="object silver-stack bars-2">
-                  <img src="assets/silver-925-display.png" alt="">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-              <div class="sample-card palladium" data-rate-label="Palladium" data-rate-price="RM 452.00/g" data-rate-move="— 0.00%" data-rate-trend="flat" data-rate-source="Configured source">
-                <div class="object palladium-stack bars-1">
-                  <img src="assets/palladium-display.png" alt="">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <section class="rates-panel" aria-label="Reference metal rates">
+        <section class="rates-panel metal-list-panel" aria-label="Reference precious-metal prices">
           <div class="rates-head">
-            <p class="eyebrow">Reference Metal Rates</p>
+            <p class="eyebrow">Precious Metal Reference Prices</p>
+            <button id="refreshRatesButton" type="button">Refresh</button>
           </div>
-          <div class="active-rate-card" id="activeRateCard">
-            <span id="activeRateLabel">Gold 999</span>
-            <strong id="activeRatePrice">RM 580.65/g</strong>
-            <em class="down" id="activeRateMove">▼ 0.02%</em>
-          </div>
-          <p class="source-line">
-            <span id="activeRateSource">GoldBullion Malaysia</span>
-            <span>Updated 09 May 2026 15:41 MYT</span>
-            <span>Indicative only</span>
-          </p>
+          <p id="metalRatesStatus" class="rates-status" role="status">Loading saved prices...</p>
+          <div id="metalRatesList" class="metal-rates-list app-scroll" role="list" tabindex="0" aria-label="Metal prices, scroll for more"></div>
+          <p class="rates-note">MYR per gram of metal content. Excludes workmanship, dealer margins and fees.</p>
+          <p class="rates-note">Gold API + Frankfurter · Auto-update 00:00 MYT · Changes since previous quote</p>
         </section>
 
         <button class="primary-action" id="startButton" type="button">
@@ -116,29 +56,53 @@
         </footer>
       </section>
 
+      <!-- ZERO-02: all new-item paths share this explicit empty-pan gate. -->
+      <section class="screen" id="scalePrepareScreen">
+        <div class="scale-preparation-content app-scroll">
+          <h2>Remove all items from the pan</h2>
+          <p>Keep the pan empty until preparation finishes. The internal check runs once per Weight-service startup; normal zero is checked for every new item.</p>
+          <div class="camera-preview-host" id="scalePreparationCameraHost"></div>
+          <label class="scale-empty-confirm"><input id="scalePreparationConfirm" type="checkbox"> I have removed all items</label>
+          <p id="scalePreparationStatus" role="status" aria-live="polite">Ready to prepare</p>
+          <p id="scalePreparationInternal"></p>
+          <p id="scalePreparationReadings"></p>
+          <details id="scalePreparationEngineering" hidden>
+            <summary>Engineering options</summary>
+            <label class="scale-empty-confirm"><input id="scaleRepeatInternal" type="checkbox"> Repeat internal check now (e.g. after moving the balance)</label>
+            <div class="scale-settings-grid">
+              <label>Empty-pan limit (g)<input id="scaleSetting_empty_limit_g" type="number" min="0.00001" max="5" step="0.001" value="0.1"></label>
+              <label>Zero tolerance (g)<input id="scaleSetting_zero_tolerance_g" type="number" min="0.00001" max="5" step="0.001" value="0.01"></label>
+              <label>Maximum spread (g)<input id="scaleSetting_max_spread_g" type="number" min="0.00001" max="5" step="0.001" value="0.02"></label>
+              <label>Internal operation<select id="scaleSetting_internal_mode"><option value="auto">Auto: test, otherwise adjustment</option><option value="test">Internal sensitivity test</option><option value="adjust">Internal adjustment</option><option value="skip">Skip (explicitly recorded)</option></select></label>
+            </div>
+            <p>Initial software limits: tune to the balance specification. Internal deviation uses the device's reported units, not an assumed gram zero error.</p>
+            <button class="secondary" id="scalePreparationSave" type="button">Save settings</button>
+            <p id="scalePreparationSettingsStatus" role="status"></p>
+          </details>
+        </div>
+        <div class="button-row scale-preparation-actions">
+          <button class="secondary" id="scalePreparationCancel" type="button">Cancel</button>
+          <button class="primary" id="scalePreparationStart" type="button">Prepare empty pan</button>
+          <button class="primary" id="scalePreparationContinue" type="button" disabled>Place item</button>
+        </div>
+      </section>
+
       <section class="screen" id="placeScreen">
+        <div class="screen-body app-scroll">
         <div class="instruction-panel">
-          <div class="placement-stage" aria-hidden="true">
-            <div class="target-graphic">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <div class="sample-guide">
-              <span class="guide-bar"></span>
-            </div>
-            <div class="guide-arrow"></div>
-          </div>
           <h2>Place Object</h2>
           <p>Place the object at the center of the sensing area.</p>
+          <div class="camera-preview-host" id="userPlaceCameraHost"></div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" data-back-home type="button">Cancel</button>
           <button class="primary" id="placeContinueButton" type="button">Continue</button>
         </div>
       </section>
 
       <section class="screen" id="weightScreen">
+        <div class="screen-body app-scroll">
         <div class="weight-layout">
           <div class="value-panel">
             <p class="label">Measured Weight</p>
@@ -165,13 +129,25 @@
             <button class="primary" id="measurementWeightSampleButton" type="button">Sample Again</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="weightBackButton" type="button">Back</button>
           <button class="primary" id="weightNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="dimensionScreen">
+        <div class="screen-body app-scroll">
+<details class="geometry-panel" id="userGeometryPanel" hidden>
+          <summary>Area, height &amp; density estimate (optional)</summary>
+          <p>Keep the item flat and still. Requires an empty-support reference in Engineering.</p>
+          <div class="button-row">
+            <button class="primary geometry-measure" data-kind="user" data-manual="0" type="button">Measure area + depth height</button>
+            <button class="secondary geometry-measure" data-kind="user" data-manual="1" type="button">Use entered thickness</button>
+          </div>
+          <p id="userGeometryStatus" role="status"></p>
+          <p id="userGeometrySummary" class="geometry-summary" hidden></p>
+        </details>
         <div class="weight-layout">
           <div class="value-panel dimension-panel">
             <p class="label">Sample Dimensions</p>
@@ -193,7 +169,7 @@
               </button>
             </div>
             <div class="dimension-meta">
-              <span>Sample area <strong id="sampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Formula area <strong id="sampleAreaDisplay">0.00 mm²</strong></span>
               <span>Contact ratio <strong id="contactRatioDisplay">0.00%</strong></span>
             </div>
           </div>
@@ -212,13 +188,15 @@
             <button type="button" data-dimension-key="clear">Clear</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="dimensionBackButton" type="button">Back</button>
           <button class="primary" id="dimensionNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="shapeScreen">
+        <div class="screen-body app-scroll">
         <div class="shape-grid" id="shapeGrid">
           <button class="shape-option" type="button" data-shape="Ring">
             <span class="ring-icon"></span>
@@ -245,13 +223,15 @@
             Other
           </button>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="shapeBackButton" type="button">Back</button>
           <button class="primary" id="measureButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="otherShapeScreen">
+        <div class="screen-body app-scroll">
         <div class="selection-panel">
           <p class="eyebrow">Other Shape</p>
           <div class="material-grid shape-select-grid" id="otherShapeGrid">
@@ -264,13 +244,15 @@
             <button type="button" data-other-shape="Unknown">Unknown</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="otherShapeBackButton" type="button">Back</button>
           <button class="primary" id="otherShapeNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="measureScreen">
+        <div class="screen-body app-scroll">
         <div class="measure-panel">
           <div class="progress-ring" aria-hidden="true">
             <svg viewBox="0 0 120 120">
@@ -282,6 +264,7 @@
           <div class="measure-copy">
             <h2 id="measureStage">Stabilizing</h2>
             <p id="measureInstruction">Keep the object still on the sensing area.</p>
+            <div class="camera-preview-host" id="userMeasureCameraHost"></div>
             <div class="progress-bar">
               <span id="progressBar"></span>
             </div>
@@ -293,26 +276,45 @@
             </div>
           </div>
         </div>
-      </section>
+      </div>
+        </section>
 
       <section class="screen" id="resultScreen">
+        <div class="screen-body app-scroll">
         <div class="result-panel">
           <p class="eyebrow">Result</p>
           <h2 id="resultMaterial">Gold 916</h2>
           <p class="confidence hidden" id="resultConfidence"></p>
+          <div class="saved-photo-panel" id="resultPhotoPanel" hidden>
+            <p class="label">Saved photograph</p>
+            <a id="resultPhotoDownload" download>Download original photo</a>
+            <a id="resultPhotoViewer" target="_blank" rel="noopener">Open photo / annotations</a>
+          </div>
+          <p id="resultScalePreparation" class="scale-record-summary" hidden></p>
+          <p id="resultGeometrySummary" class="geometry-summary" hidden></p>
+          <p id="resultReferenceSummary" class="reference-summary" hidden></p>
+          <div class="camera-preview-host" id="userResultCameraHost"></div>
+          <div class="removal-panel">
+            <h3>Please remove the item</h3>
+            <p id="resultRemovalStatus" role="status" aria-live="polite">Waiting for live removal checks...</p>
+            <label><input id="resultRemovalConfirm" type="checkbox" disabled> I have visually checked the entire pan is empty.</label>
+          </div>
           <div class="result-details">
             <span>Weight</span><strong id="resultWeight">0 g</strong>
             <span>Shape</span><strong id="resultShape">Ring</strong>
             <span>Status</span><strong class="signal-ok" id="resultStatus">Saved locally</strong>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="detailsButton" type="button">View History</button>
-          <button class="primary" id="newMeasurementButton" type="button">Home</button>
+          <button class="secondary" id="newMeasurementButton" type="button">Item Removed / Home</button>
+          <button class="primary" id="resultAnotherButton" type="button">Another Item</button>
         </div>
       </section>
 
       <section class="screen" id="passwordScreen">
+        <div class="screen-body app-scroll">
         <div class="password-layout">
           <div class="value-panel password-panel">
             <p class="label">Engineering Password</p>
@@ -334,13 +336,15 @@
             <button type="button" data-pin="back">Back</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="passwordCancelButton" type="button">Cancel</button>
           <button class="primary" id="passwordEnterButton" type="button">Enter</button>
         </div>
       </section>
 
       <section class="screen" id="engineeringScreen">
+        <div class="screen-body app-scroll">
         <div class="engineering-grid menu-grid">
           <article class="metric-card orange">
             <span>Acquisition</span>
@@ -349,7 +353,9 @@
           </article>
         </div>
         <div class="engineering-actions">
+          <button type="button" id="engineeringReadinessButton">System Readiness</button>
           <button type="button" id="engineeringLiveViewButton">Live View</button>
+          <button type="button" id="engineeringVisionButton">Vision Model</button>
           <button type="button" id="engineeringFrequencyButton">Frequency Mode</button>
           <button type="button" id="engineeringCalibrationButton">Calibration</button>
           <button type="button" id="engineeringTeachingButton">Teaching</button>
@@ -359,12 +365,26 @@
           <button type="button" id="engineeringClassifierButton">Classifier</button>
           <button type="button" id="engineeringHistoryButton">History</button>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="primary" id="engineeringExitButton" type="button">Exit</button>
         </div>
       </section>
 
+      <section class="screen" id="readinessScreen">
+        <div class="screen-body app-scroll">
+          <p class="eyebrow">System Readiness</p>
+          <p id="readinessStatus" role="status">Checks run on opening this screen.</p>
+          <div id="readinessRows"></div>
+        </div>
+        <div class="screen-actions button-row">
+          <button class="secondary" id="readinessBackButton" type="button">Back</button>
+          <button class="primary" id="readinessRefreshButton" type="button">Check Again</button>
+        </div>
+      </section>
+
       <section class="screen" id="classifierScreen">
+        <div class="screen-body app-scroll">
         <div class="history-detail-panel left-scroll-panel">
           <p class="eyebrow">Classifier</p>
           <h2>Detector Classifier</h2>
@@ -372,6 +392,7 @@
             <label for="classifierAlgorithmSelect">Classifier Method</label>
             <select id="classifierAlgorithmSelect">
               <option value="two_pass_frequency_rf">Gold Standard</option>
+              <option value="gold_reference_v1">Known-gold 916/999 reference</option>
               <option value="mahalanobis">Mahalanobis</option>
               <option value="knn_cluster">KNN Cluster</option>
               <option value="hybrid_hill_knn">Hill + KNN</option>
@@ -415,18 +436,22 @@
             <div id="classifierWarnings" class="classifier-list"></div>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="classifierBackButton" type="button">Back</button>
           <button class="primary" id="classifierTrainButton" type="button">Compute Model</button>
         </div>
       </section>
 
       <section class="screen" id="liveViewScreen">
+        <div class="screen-body app-scroll">
+        <div class="camera-preview-host" id="engineeringCameraHost"></div>
+        <details class="removal-panel"><summary>Signal input notes</summary><p>Signal service acquires one scope waveform; CH2 is a mirrored legacy display. Direct serial mode may use separate inputs. The reference model uses raw F1-F4 once.</p></details>
         <div class="live-view-shell">
           <div class="live-view-toolbar">
             <article class="metric-card orange compact live-frequency-card">
               <span>Frequency</span>
-              <strong id="liveFrequency">F1 10.00 kHz</strong>
+              <strong id="liveFrequency">F1 8.00 kHz</strong>
             </article>
             <div class="live-view-tabs" role="tablist" aria-label="Live view mode">
               <button class="mode-toggle active" id="liveRawTabButton" type="button" role="tab" aria-selected="true">Raw</button>
@@ -482,30 +507,34 @@
             </div>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="liveViewBackButton" type="button">Back</button>
           <button class="primary" id="liveViewHomeButton" type="button">Home</button>
         </div>
       </section>
 
       <section class="screen" id="daqSettingsScreen">
+        <div class="screen-body app-scroll">
         <div class="settings-panel">
           <p class="eyebrow">DAQ Configuration</p>
           <h2>DAQ Settings</h2>
           <div class="calibration-note">
-            <span>CH1 /dev/ttyUSB0</span>
-            <span>CH2 /dev/ttyUSB1</span>
+            <span>Legacy serial CH1 /dev/ttyUSB0</span>
+            <span>Legacy serial CH2 /dev/ttyUSB1</span>
             <span>115200 baud</span>
-            <span>3 frequencies x 5 second settle</span>
+            <span>5 second settle per configured frequency slot</span>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="daqSettingsBackButton" type="button">Back</button>
           <button class="primary" id="daqSettingsDoneButton" type="button">Done</button>
         </div>
       </section>
 
       <section class="screen" id="loadCellScreen">
+        <div class="screen-body app-scroll">
         <div class="settings-panel">
           <p class="eyebrow">Load Cell Settings</p>
           <h2>Scale Reading</h2>
@@ -528,15 +557,17 @@
             <span id="loadCellUpdated">Updated: --</span>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="loadCellBackButton" type="button">Back</button>
           <button class="secondary" id="loadCellSingleButton" type="button">Set Single Weight</button>
           <button class="secondary" id="loadCellAverageButton" type="button">Get Average</button>
-          <button class="primary" id="loadCellTareButton" type="button">Tare</button>
+          <button class="primary" id="loadCellTareButton" type="button">Prepare / zero</button>
         </div>
       </section>
 
       <section class="screen" id="calibrationScreen">
+        <div class="screen-body app-scroll">
         <div class="calibration-start-panel">
           <div class="calibration-empty-icon" aria-hidden="true">
             <div class="empty-plate"></div>
@@ -549,12 +580,13 @@
             <div class="calibration-note">
               <span>Keep area empty</span>
               <span>Do not touch sensor</span>
-              <span>Capture duration 15 seconds</span>
+              <span>30 samples per frequency</span>
               <span id="calibrationFrequencyTag">Frequency: --</span>
             </div>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="calibrationCancelButton" type="button">Cancel</button>
           <button class="secondary" id="viewCalibrationButton" type="button">View Record</button>
           <button class="secondary" id="validateCalibrationButton" type="button">Validate</button>
@@ -563,6 +595,7 @@
       </section>
 
       <section class="screen" id="calibrationProgressScreen">
+        <div class="screen-body app-scroll">
         <div class="measure-panel">
           <div class="progress-ring" aria-hidden="true">
             <svg viewBox="0 0 120 120">
@@ -578,16 +611,18 @@
               <span id="calibrationProgressBar"></span>
             </div>
             <div class="summary-row">
-              <span id="calibrationDurationLabel">3 frequencies</span>
+              <span id="calibrationDurationLabel">4 frequencies by default</span>
               <span id="calibrationFrequencyLabel">F1</span>
               <span id="calibrationSampleLabel">Sample 0 / 30</span>
               <span class="signal-ok">No material condition</span>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+        </section>
 
       <section class="screen" id="calibrationResultScreen">
+        <div class="screen-body app-scroll">
         <div class="history-detail-panel left-scroll-panel calibration-result-panel">
           <p class="eyebrow">Latest Calibration</p>
           <h2>Air Baseline Saved</h2>
@@ -604,6 +639,7 @@
               <span>F3 Air</span>
               <strong id="calF3Air">--</strong>
             </article>
+            <article class="calibration-frequency-card"><span>F4 Air</span><strong id="calF4Air">Not recorded</strong></article>
           </div>
           <div class="detail-grid calibration-grid">
             <span>Calibrated At</span><strong id="calibratedAt">--</strong>
@@ -619,13 +655,15 @@
             <span>Max Drift</span><strong id="calValidationDrift">--</strong>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="calibrationAgainButton" type="button">Calibrate Again</button>
           <button class="primary" id="calibrationDoneButton" type="button">Done</button>
         </div>
       </section>
 
       <section class="screen" id="teachingScreen">
+        <div class="screen-body app-scroll">
         <div class="calibration-start-panel">
           <div class="calibration-empty-icon teaching-icon" aria-hidden="true">
             <div class="empty-plate"></div>
@@ -634,7 +672,7 @@
           <div class="calibration-copy">
             <p class="eyebrow">Reference Library</p>
             <h2>Teaching Mode</h2>
-            <p>Capture known samples to build the metal comparison library.</p>
+            <p>Record a known sample.</p>
             <div class="calibration-note">
               <span>Known material required</span>
               <span>Shape, weight and area recorded</span>
@@ -643,7 +681,8 @@
             </div>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingCancelButton" type="button">Cancel</button>
           <button class="secondary" id="teachingViewButton" type="button">View Records</button>
           <button class="secondary" id="teachingValidateButton" type="button">Validate</button>
@@ -652,6 +691,7 @@
       </section>
 
       <section class="screen" id="teachingPlaceScreen">
+        <div class="screen-body app-scroll">
         <div class="instruction-panel">
           <div class="placement-stage" aria-hidden="true">
             <div class="target-graphic">
@@ -667,13 +707,15 @@
           <h2>Place Known Sample</h2>
           <p>The scale has been zeroed. Place the certified object, then continue to capture the measured weight.</p>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingPlaceBackButton" type="button">Back</button>
           <button class="primary" id="teachingPlaceNextButton" type="button">Continue</button>
         </div>
       </section>
 
       <section class="screen" id="teachingMaterialScreen">
+        <div class="screen-body app-scroll">
         <div class="selection-panel">
           <p class="eyebrow">First, select the type of metal</p>
           <div class="material-grid" id="teachingMaterialGrid">
@@ -690,13 +732,15 @@
             <button type="button" data-material="Other">Other</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingMaterialBackButton" type="button">Back</button>
           <button class="primary" id="teachingMaterialNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingShapeScreen">
+        <div class="screen-body app-scroll">
         <div class="selection-panel">
           <p class="eyebrow">Sample Shape</p>
           <div class="material-grid shape-select-grid" id="teachingShapeGrid">
@@ -708,13 +752,15 @@
             <button type="button" data-teaching-shape="Other">Other</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingShapeBackButton" type="button">Back</button>
           <button class="primary" id="teachingShapeNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingOtherMaterialScreen">
+        <div class="screen-body app-scroll">
         <div class="selection-panel">
           <p class="eyebrow">Other Material</p>
           <div class="material-grid" id="teachingOtherMaterialGrid">
@@ -727,13 +773,15 @@
             <button type="button" data-other-material="Unknown">Unknown</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingOtherMaterialBackButton" type="button">Back</button>
           <button class="primary" id="teachingOtherMaterialNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingPurityScreen">
+        <div class="screen-body app-scroll">
         <div class="selection-panel">
           <p class="eyebrow" id="teachingPurityEyebrow">Purity / Grade</p>
           <div class="material-grid shape-select-grid" id="teachingPurityGrid">
@@ -766,13 +814,15 @@
             <button type="button" data-teaching-purity-key="clear">Clear</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingPurityBackButton" type="button">Back</button>
           <button class="primary" id="teachingPurityNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingOtherShapeScreen">
+        <div class="screen-body app-scroll">
         <div class="selection-panel">
           <p class="eyebrow">Other Shape</p>
           <div class="material-grid shape-select-grid" id="teachingOtherShapeGrid">
@@ -785,13 +835,15 @@
             <button type="button" data-other-shape="Unknown">Unknown</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingOtherShapeBackButton" type="button">Back</button>
           <button class="primary" id="teachingOtherShapeNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingWeightScreen">
+        <div class="screen-body app-scroll">
         <div class="weight-layout">
           <div class="value-panel">
             <p class="label">Measured Weight</p>
@@ -818,16 +870,28 @@
             <button class="primary" id="teachingWeightSampleButton" type="button">Sample Again</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingWeightBackButton" type="button">Back</button>
           <button class="primary" id="teachingRecordButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingDimensionScreen">
+        <div class="screen-body app-scroll">
+<details class="geometry-panel" id="teachingGeometryPanel" hidden>
+          <summary>Area, height &amp; density estimate (optional)</summary>
+          <p>Keep the item flat and still. Requires an empty-support reference in Engineering.</p>
+          <div class="button-row">
+            <button class="primary geometry-measure" data-kind="teaching" data-manual="0" type="button">Measure area + depth height</button>
+            <button class="secondary geometry-measure" data-kind="teaching" data-manual="1" type="button">Use entered thickness</button>
+          </div>
+          <p id="teachingGeometryStatus" role="status"></p>
+          <p id="teachingGeometrySummary" class="geometry-summary" hidden></p>
+        </details>
         <div class="dimension-tabs" role="tablist" aria-label="Teaching sample details">
           <button class="mode-toggle active" id="teachingDimensionsTabButton" type="button" role="tab" aria-selected="true">Dimensions</button>
-          <button class="mode-toggle" id="teachingImageTabButton" type="button" role="tab" aria-selected="false">Detected Image</button>
+          <button class="mode-toggle" id="teachingImageTabButton" type="button" role="tab" aria-selected="false">Camera</button>
         </div>
         <div class="teaching-dimension-panel active" id="teachingDimensionsPanel">
         <div class="weight-layout">
@@ -851,7 +915,7 @@
               </button>
             </div>
             <div class="dimension-meta">
-              <span>Sample area <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Formula area <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
               <span>Contact ratio <strong id="teachingContactRatioDisplay">0.00%</strong></span>
             </div>
           </div>
@@ -872,20 +936,44 @@
         </div>
         </div>
         <div class="teaching-dimension-panel" id="teachingImagePanel">
-          <div class="detected-image-panel">
-            <p class="label">Detected Item</p>
-            <img id="teachingDetectedImage" class="teaching-detected-image" alt="Detected teaching sample">
-            <p id="teachingDetectedImageStatus" class="muted-copy">Loading detected image...</p>
-            <button class="secondary" id="teachingRefreshImageButton" type="button">Refresh Image</button>
+          <div class="detected-image-panel camera-preview-widget" id="cameraPreviewWidget">
+            <p class="label">Camera preview</p>
+            <div class="camera-image-frame">
+              <img id="teachingDetectedImage" class="teaching-detected-image" alt="Teaching camera or captured result">
+              <pre id="cameraDebugOverlay" class="camera-debug-overlay" hidden></pre>
+              <svg id="cameraAnnotationOverlay" preserveAspectRatio="xMidYMid meet" aria-hidden="true" hidden></svg>
+            </div>
+            <p id="teachingDetectedImageStatus" class="muted-copy" aria-live="polite">Select Live camera or Captured result.</p>
+            <div class="button-row">
+              <button class="primary" id="teachingRefreshImageButton" type="button" aria-pressed="true">Live camera</button>
+              <button class="secondary" id="teachingCapturedImageButton" type="button" aria-pressed="false">Captured photo</button>
+              <button class="camera-overlay-toggle" id="cameraAnnotationButton" type="button" aria-pressed="false">Annotations: off</button>
+              <button class="camera-overlay-toggle" id="cameraDebugButton" type="button" aria-pressed="false" hidden>Camera debug: off</button>
+              <button class="primary" id="cameraSavePhotoButton" type="button">Snap photo</button>
+            </div>
+            <select id="cameraShapeSelect" aria-label="Engineering outline mode" hidden>
+              <option value="unknown">Unknown / raw only</option><option value="coin">Coin</option>
+              <option value="bar">Bar</option><option value="ring">Ring</option><option value="bangle">Bangle</option>
+              <option value="bracelet">Bracelet</option><option value="chain">Chain</option><option value="ornament">Ornament</option>
+            </select>
+            <details id="cameraDebugDetails" class="camera-debug-details" hidden>
+              <summary>Camera / depth details</summary>
+              <pre id="cameraDebugJson"></pre>
+            </details>
+            <p id="cameraDetectionStatus" class="vision-detection-status" role="status" hidden></p>
+            <p id="cameraPhotoStatus" class="muted-copy"></p>
+            <a id="cameraPhotoDownload" download hidden>Download saved photo</a>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingDimensionBackButton" type="button">Back</button>
           <button class="primary" id="teachingDimensionNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="teachingRecordScreen">
+        <div class="screen-body app-scroll">
         <div class="measure-panel">
           <div class="progress-ring" aria-hidden="true">
             <svg viewBox="0 0 120 120">
@@ -908,9 +996,11 @@
             </div>
           </div>
         </div>
-      </section>
+      </div>
+        </section>
 
       <section class="screen" id="teachingRemoveScreen">
+        <div class="screen-body app-scroll">
         <div class="instruction-panel">
           <div class="placement-stage" aria-hidden="true">
             <div class="target-graphic">
@@ -924,14 +1014,23 @@
           </div>
           <h2>Remove Material</h2>
           <p>Remove the sample from the sensing area before viewing the result.</p>
+          <div class="camera-preview-host" id="teachingRemoveCameraHost"></div>
+          <div class="removal-panel">
+            <h3>Please remove the item</h3>
+            <p id="teachingRemovalStatus" role="status" aria-live="polite">Waiting for live removal checks...</p>
+            <label><input id="teachingRemovalConfirm" type="checkbox" disabled> I have visually checked the entire pan is empty.</label>
+          </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingRemoveBackButton" type="button">Back</button>
           <button class="primary" id="teachingRemoveNextButton" type="button">Item Removed</button>
         </div>
       </section>
 
       <section class="screen" id="teachingSavedScreen">
+        <div class="screen-body app-scroll">
+          <p id="teachingSavedReferenceSummary" class="reference-summary" hidden></p>
         <div class="history-detail-panel left-scroll-panel">
           <p class="eyebrow" id="teachingSavedEyebrow">Teaching Record Saved</p>
           <h2 id="teachingSavedMaterial">Gold 916</h2>
@@ -948,10 +1047,11 @@
               <span>F3 Reading</span>
               <strong id="teachingSavedF3">--</strong>
             </article>
+            <article class="calibration-frequency-card"><span>F4 Reading</span><strong id="teachingSavedF4">Not recorded</strong></article>
           </div>
           <div class="detail-grid">
             <span>Validation</span><strong id="teachingSavedValidation">--</strong>
-            <span>Confidence</span><strong id="teachingSavedConfidence">--</strong>
+            <span id="teachingSavedScoreLabel">Confidence</span><strong id="teachingSavedConfidence">--</strong>
             <span>Shape</span><strong id="teachingSavedShape">Bar</strong>
             <span>Weight</span><strong id="teachingSavedWeight">0 g</strong>
             <span>CH1 RMS</span><strong id="teachingSavedCh1">--</strong>
@@ -963,13 +1063,15 @@
             <span>Status</span><strong>Reference sample</strong>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingSavedAgainButton" type="button">Run Again</button>
           <button class="primary" id="teachingSavedDoneButton" type="button">Done</button>
         </div>
       </section>
 
       <section class="screen" id="teachingRecordsScreen">
+        <div class="screen-body app-scroll">
         <div class="history-panel left-scroll-panel">
           <div class="history-head">
             <p class="eyebrow">Reference Library</p>
@@ -977,16 +1079,24 @@
           </div>
           <div class="teaching-table" id="teachingTable"></div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingRecordsBackButton" type="button">Back</button>
           <button class="primary" id="teachingRecordsHomeButton" type="button">Home</button>
         </div>
       </section>
 
       <section class="screen" id="teachingDetailScreen">
+        <div class="screen-body app-scroll">
         <div class="history-detail-panel left-scroll-panel">
           <p class="eyebrow">Teaching Detail</p>
           <h2 id="teachingDetailMaterial">Gold 916</h2>
+          <div class="saved-photo-panel" id="teachingDetailPhotoPanel" hidden>
+            <p class="label">Saved photograph</p>
+            <iframe id="teachingDetailPhotoFrame" title="Saved raw photo and optional annotations" sandbox="" loading="lazy"></iframe>
+            <a id="teachingDetailPhotoDownload" download>Download original photo</a>
+            <a id="teachingDetailPhotoViewer" target="_blank" rel="noopener">Open photo / annotations</a>
+          </div>
           <div class="calibration-frequency-list" id="teachingDetailFrequencyCards">
             <article class="calibration-frequency-card">
               <span>F1 Reading</span>
@@ -1000,6 +1110,7 @@
               <span>F3 Reading</span>
               <strong id="teachingDetailF3">--</strong>
             </article>
+            <article class="calibration-frequency-card"><span>F4 Reading</span><strong id="teachingDetailF4">Not recorded</strong></article>
           </div>
           <div class="detail-grid">
             <span>Date</span><strong id="teachingDetailDate">--</strong>
@@ -1018,7 +1129,8 @@
             <span>Status</span><strong id="teachingDetailStatus">Reference sample</strong>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="teachingDetailBackButton" type="button">Back</button>
           <button class="secondary danger-button" id="teachingDetailDeleteButton" type="button">Delete</button>
           <button class="primary" id="teachingDetailHomeButton" type="button">Home</button>
@@ -1026,6 +1138,7 @@
       </section>
 
       <section class="screen" id="historyScreen">
+        <div class="screen-body app-scroll">
         <div class="history-panel">
           <div class="history-head">
             <p class="eyebrow">Measurement Records</p>
@@ -1033,16 +1146,27 @@
           </div>
           <div class="history-table" id="historyTable"></div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="historyBackButton" type="button">Back</button>
           <button class="primary" id="historyHomeButton" type="button">Home</button>
         </div>
       </section>
 
       <section class="screen" id="historyDetailScreen">
+        <div class="screen-body app-scroll">
         <div class="history-detail-panel left-scroll-panel">
           <p class="eyebrow">Measurement Detail</p>
           <h2 id="detailResult">Gold 916</h2>
+          <p id="detailScalePreparation" class="scale-record-summary" hidden></p>
+          <p id="detailGeometrySummary" class="geometry-summary" hidden></p>
+          <p id="detailReferenceSummary" class="reference-summary" hidden></p>
+          <div class="saved-photo-panel" id="detailPhotoPanel" hidden>
+            <p class="label">Saved photograph</p>
+            <iframe id="detailPhotoFrame" title="Saved raw photo and optional annotations" sandbox="" loading="lazy"></iframe>
+            <a id="detailPhotoDownload" download>Download original photo</a>
+            <a id="detailPhotoViewer" target="_blank" rel="noopener">Open photo / annotations</a>
+          </div>
           <div class="calibration-frequency-list" id="detailFrequencyCards">
             <article class="calibration-frequency-card">
               <span>F1 Reading</span>
@@ -1056,17 +1180,19 @@
               <span>F3 Reading</span>
               <strong id="detailF3">--</strong>
             </article>
+            <article class="calibration-frequency-card"><span>F4 Reading</span><strong id="detailF4">Not recorded</strong></article>
           </div>
           <div class="detail-grid">
             <span>Date</span><strong id="detailDate">09 May 2026</strong>
             <span>Time</span><strong id="detailTime">15:42</strong>
             <span>Weight</span><strong id="detailWeight">12.45 g</strong>
             <span>Shape</span><strong id="detailShape">Bar</strong>
-            <span>Confidence</span><strong id="detailConfidence">87%</strong>
+            <span id="detailScoreLabel">Confidence</span><strong id="detailConfidence">87%</strong>
             <span>Status</span><strong id="detailStatus">Saved locally</strong>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="detailBackButton" type="button">Back</button>
           <button class="secondary danger-button" id="detailDeleteButton" type="button">Delete</button>
           <button class="primary" id="detailHomeButton" type="button">Home</button>
@@ -1074,6 +1200,7 @@
       </section>
 
       <section class="screen" id="deletePasswordScreen">
+        <div class="screen-body app-scroll">
         <div class="password-layout">
           <div class="value-panel password-panel">
             <p class="label">Admin Password</p>
@@ -1095,13 +1222,15 @@
             <button type="button" data-delete-pin="back">Back</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="deleteCancelButton" type="button">Cancel</button>
           <button class="primary danger-confirm" id="deleteConfirmButton" type="button">Confirm Delete</button>
         </div>
       </section>
 
       <section class="screen" id="detectorSettingsScreen">
+        <div class="screen-body app-scroll">
         <div class="weight-layout">
           <div class="value-panel">
             <p class="label">Confidence Threshold</p>
@@ -1123,13 +1252,89 @@
             <button type="button" data-detector-key="back">Back</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="detectorSettingsCancelButton" type="button">Cancel</button>
           <button class="primary" id="detectorSettingsSaveButton" type="button">Save</button>
         </div>
       </section>
 
+      <!-- YOLO-01: model/ROI/confidence controls stay behind Engineering login. -->
+      <section class="screen" id="visionSettingsScreen">
+        <div class="screen-body app-scroll">
+          <div class="settings-panel vision-settings-panel">
+            <h2>System Assets / Coin &amp; Bar Vision</h2>
+            <p>Put files inside <strong>system_assets</strong> in the project folder, then scan. Subfolders are included.</p>
+            <button class="primary" id="assetsScanButton" type="button">Scan folder</button>
+            <p id="assetsRoot" class="asset-path"></p>
+            <p id="assetsScanStatus" role="status"></p>
+            <label><input id="visionEnabled" type="checkbox"> Use YOLO for user verification</label>
+            <label>Coin/bar segmentation model<select id="visionModelPath"><option value="vision/coin_bar_seg.pt">vision/coin_bar_seg.pt (scan to check)</option></select></label>
+            <div class="vision-settings-grid">
+              <label>Accept object label (%)<input id="visionAcceptanceConfidence" type="number" min="1" max="100" value="80"></label>
+              <label>Detection floor for counting (%)<input id="visionDetectionConfidence" type="number" min="1" max="100" value="25"></label>
+              <label>ROI left (%)<input id="visionRoiX" type="number" min="0" max="100" value="0"></label>
+              <label>ROI top (%)<input id="visionRoiY" type="number" min="0" max="100" value="0"></label>
+              <label>ROI width (%)<input id="visionRoiW" type="number" min="1" max="100" value="100"></label>
+              <label>ROI height (%)<input id="visionRoiH" type="number" min="1" max="100" value="100"></label>
+            </div>
+            <details><summary>Vision notes</summary><p>Coin and bar only. Keep the complete item inside the ROI. Low confidence stays Unknown. No detections do not prove an empty pan. This model identifies shape; it does not determine gold purity. Switch YOLO off to use the existing manual/OpenCV workflow.</p></details>
+            <p id="visionSettingsStatus" role="status"></p>
+            <details class="asset-details"><summary>Geometry: empty-support reference</summary>
+              <p>Keep the support flat, camera nearly overhead, and ROI free of objects. Recalibrate after camera restart, movement or ROI changes. This does not zero the scale.</p>
+              <label><input id="geometryEmptyConfirmed" type="checkbox"> I removed every item from the support / coil</label>
+              <button class="primary" id="geometryReferenceButton" type="button">Capture empty reference</button>
+              <button class="secondary" id="geometryStatusButton" type="button">Check reference</button>
+              <button class="secondary" id="geometryGuideButton" type="button">Show geometry guide</button>
+              <p id="geometryReferenceStatus" role="status"></p>
+              <details><summary>Geometry quality settings</summary>
+                <textarea id="geometrySettingsJson" rows="10" spellcheck="false" aria-label="Geometry settings JSON"></textarea>
+                <button class="primary" id="geometrySettingsSaveButton" type="button">Validate &amp; save</button>
+                <p>Height is tray-relative, not camera range. Density compares only with the configured pure-gold reference; it does not prove purity.</p>
+              </details>
+            </details>
+            <details class="asset-details"><summary>Known-gold 916/999 reference model</summary>
+              <p>Uses raw F1–F4 RMS changes, formula area, thickness and shape. This is reference matching only; it cannot identify non-gold.</p>
+              <label>Reference pipeline (.joblib)<select id="referenceModelPath"></select></label>
+              <label>Minimum uncalibrated score (%)<input id="referenceMinScore" type="number" min="80" max="100" value="80"></label>
+              <p id="referenceProfile"></p>
+              <label><input id="referenceProfileConfirmed" type="checkbox"> I confirm this acquisition profile matches the model's training data.</label>
+              <div class="button-row">
+                <button class="secondary" id="referenceTestButton" type="button">Test model</button>
+                <button class="primary" id="referenceSaveButton" type="button">Validate &amp; select</button>
+                <button class="primary" id="referenceUseButton" type="button">Use reference mode</button>
+              </div>
+              <p id="referenceModelStatus" role="status"></p>
+              <p>The supplied bundle needs scikit-learn 1.6.1 in View Python. Run fresh four-frequency air calibration after updating. Simulated readings cannot become accepted physical matches.</p>
+            </details>
+
+            <details class="asset-details"><summary>Legacy Gold Standard model pair</summary>
+              <p>These selectors use the existing Gold Standard classifier. They do not select that mode automatically. Only frequency_rf_v1 bundles with the documented feature order can be activated.</p>
+              <label>Gold gate (.joblib)<select id="assetsGoldModel"></select></label>
+              <label>Purity (.joblib)<select id="assetsPurityModel"></select></label>
+              <button class="primary" id="assetsModelsSaveButton" type="button">Validate &amp; activate pair</button>
+              <p id="assetsModelsStatus" role="status"></p>
+            </details>
+            <details class="asset-details"><summary>API sources and formats</summary>
+              <p>Service addresses, price/FX URLs and JSON field paths. Rates use USD per troy ounce and MYR per USD. Edits apply to the next request or price refresh.</p>
+              <textarea id="assetsApiConfig" rows="12" spellcheck="false" aria-label="API source JSON"></textarea>
+              <button class="primary" id="assetsApiSaveButton" type="button">Validate &amp; save API settings</button>
+              <button class="secondary" id="assetsReferenceButton" type="button">Show API reference</button>
+              <p id="assetsApiStatus" role="status"></p>
+              <pre id="assetsReference" class="app-scroll" hidden></pre>
+            </details>
+            <details class="asset-details"><summary>Discovered files</summary><pre id="assetsInventory" class="app-scroll"></pre></details>
+          </div>
+        </div>
+        <div class="screen-actions button-row vision-settings-actions">
+          <button class="secondary" id="visionBackButton" type="button">Back</button>
+          <button class="secondary" id="visionTestButton" type="button">Test model</button>
+          <button class="primary" id="visionSaveButton" type="button">Save</button>
+        </div>
+      </section>
+
       <section class="screen" id="frequencyModeScreen">
+        <div class="screen-body app-scroll">
         <div class="settings-panel">
           <p class="eyebrow">Acquisition Setting</p>
           <h2>Frequency Profiles</h2>
@@ -1137,17 +1342,24 @@
             <button type="button" id="frequencySlot1Button">Frequency 1</button>
             <button type="button" id="frequencySlot2Button">Frequency 2</button>
             <button type="button" id="frequencySlot3Button">Frequency 3</button>
+            <button type="button" id="frequencySlot4Button">Frequency 4</button>
           </div>
           <p id="frequencyModeStatus">Current: Frequency 1</p>
           <button type="button" id="editFrequencyButton">Edit Selected Frequency</button>
+          <button class="secondary" type="button" id="fourFrequencyPresetButton">Use 8 / 10 / 15 / 20 kHz</button>
+          <details class="frequency-help"><summary>Frequency / model notes</summary>
+            <p>Save frequency changes, then recalibrate. Four-frequency captures include F4. Existing classifier models keep their original feature inputs; legacy validation uses F1/F3. The new four-frequency model is connected separately.</p>
+          </details>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="frequencyModeBackButton" type="button">Back</button>
           <button class="primary" id="frequencyModeSaveButton" type="button">Save</button>
         </div>
       </section>
 
       <section class="screen" id="frequencyEditScreen">
+        <div class="screen-body app-scroll">
         <div class="weight-layout">
           <div class="value-panel">
             <p class="label" id="selectedFrequencyLabel">Frequency 1</p>
@@ -1169,7 +1381,8 @@
             <button type="button" data-frequency-settings-key="clear">Clear</button>
           </div>
         </div>
-        <div class="button-row">
+        </div>
+        <div class="screen-actions button-row">
           <button class="secondary" id="frequencyEditBackButton" type="button">Back</button>
           <button class="primary" id="frequencyEditSetButton" type="button">Set</button>
         </div>

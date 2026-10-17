@@ -4,7 +4,9 @@ import csv
 import json
 import math
 import os
+import uuid
 import random
+import sys
 import re
 import threading
 import time
@@ -17,6 +19,12 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
+# YOLO-01: a shared schema keeps both services on identical ROI/confidence settings.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import system_assets as assets
+from vision_settings import (load_settings as load_yolo_settings, save_settings as save_yolo_settings,
+    validate_settings as validate_yolo_settings, public_settings as public_yolo_settings)
 
 from brass_classifier import (
     CH1_F1_RULE_PARAMS,
@@ -32,6 +40,15 @@ from brass_classifier import (
     classify_brass,
     classify_brass_ch2_f1_f3,
 )
+from snapshot_store import save_snapshot, serve_snapshot
+from geometry_evidence import density_check
+from gold_reference import (ReferenceModel, configuration as reference_configuration,
+    feature_row as reference_feature_row, raw_step as reference_raw_step, unavailable as reference_unavailable,
+    METHOD as REFERENCE_METHOD, NUMERIC as REFERENCE_NUMERIC)
+from metal_rates import MetalRates
+from removal_check import evaluate as evaluate_removal
+from runtime_status import identity as runtime_identity
+
 from serial_collect import collect_frequency_sequence, collect_live_rms_burst, send_frequency_mode, summarize_channel, summarize_packets
 
 try:
@@ -51,33 +68,34 @@ except Exception:
 
 
 BASE_DIR = Path(__file__).resolve().parent
+assets.migrate_legacy(BASE_DIR)
+if not (assets.ROOT / "api_sources.json").exists():
+    api_defaults = assets.api_config()
+    legacy_settings_path = BASE_DIR / "settings.json"
+    if legacy_settings_path.exists():
+        old_settings = json.loads(legacy_settings_path.read_text(encoding="utf-8"))
+        for name in api_defaults["services"]:
+            url = old_settings.get(name + "_service_url")
+            if url:
+                api_defaults["services"][name] = url
+    assets.write_json(assets.ROOT / "api_sources.json", assets.validate_api(api_defaults))
 MEASUREMENTS_FILE = BASE_DIR / "measurements.json"
 CALIBRATION_FILE = BASE_DIR / "calibration.json"
+YOLO_SETTINGS_FILE = assets.ROOT / "vision_settings.json"
+YOLO_SETTINGS_LOCK = threading.RLock()
 TEACHING_FILE = BASE_DIR / "teaching_library.json"
+# PHOTO-01: verification evidence is separate from known teaching references.
+VERIFICATION_IMAGES_DIR = BASE_DIR / "verification_images"
+LAST_SCALE_PREPARATION = None
+TEACHING_IMAGES_DIR = BASE_DIR / "teaching_images"
 SETTINGS_FILE = BASE_DIR / "settings.json"
-CLASSIFIER_MODEL_FILE = BASE_DIR / "classifier_model.json"
+CLASSIFIER_MODEL_FILE = assets.asset_path("algorithms/classifier_model.json")
+CLASSIFIER_MODEL_FILE.parent.mkdir(parents=True, exist_ok=True)
 VALIDATION_RESULTS_FILE = BASE_DIR / "validation_results.json"
 VALIDATION_REPORTS_DIR = BASE_DIR / "validation_reports"
 DAQ_OFFSET_FILE = BASE_DIR / "daq_offset.json"
-FREQUENCY_RF_GOLD_MODEL_FILE = BASE_DIR / "model_gold_frequency_best_20260630_RF.joblib"
-FREQUENCY_RF_PURITY_MODEL_FILE = BASE_DIR / "model_purity_frequency_best_20260630_RF.joblib"
-FREQUENCY_RF_GOLD_FALLBACK_FILE = BASE_DIR.parent / "teaching_master_build_20260630" / "model_gold_frequency_best_20260630_RF.joblib"
-FREQUENCY_RF_PURITY_FALLBACK_FILE = BASE_DIR.parent / "teaching_master_build_20260630" / "model_purity_frequency_best_20260630_RF.joblib"
 FREQUENCY_RF_MODEL_VERSION = "frequency_rf_20260630"
-FREQUENCY_RF_FEATURE_NAMES = [
-    "f1_delta_ch1",
-    "f1_delta_ch2",
-    "f2_delta_ch1",
-    "f2_delta_ch2",
-    "f3_delta_ch1",
-    "f3_delta_ch2",
-    "f1_delta_pct",
-    "f2_delta_pct",
-    "f3_delta_pct",
-    "weight_g",
-    "thickness_mm",
-    "contact_area_ratio",
-]
+FREQUENCY_RF_FEATURE_NAMES = list(assets.RF_FEATURE_NAMES)
 ADMIN_PIN = "242218"
 LOAD_CELL_PORT = "/dev/ttyUSB0"
 LOAD_CELL_BAUD = 9600
@@ -124,6 +142,7 @@ CLASSIFIER_MIN_THRESHOLD = 1.5
 CLASSIFIER_UNCERTAIN_GAP = 0.30
 CLASSIFIER_DEFAULT_ALGORITHM = "two_pass_frequency_rf"
 CLASSIFIER_ALGORITHMS = {
+    "gold_reference_v1": {"label":"Known-gold 916/999 reference", "method":REFERENCE_METHOD},
     "mahalanobis": {
         "label": "Mahalanobis",
         "method": "regularized pooled-covariance Mahalanobis classifier",
@@ -237,6 +256,25 @@ DEFAULT_DAQ_OFFSET = {
 
 app = Flask(__name__, static_folder=None)
 
+# REV 2026-10-18 / ACCESS-01: protect engineering operations on the server.
+from engineering_auth import install_engineering_auth
+install_engineering_auth(app, ADMIN_PIN)
+
+# REV 2026-10-18 / RATES-LIST-01: cached rates are independent of sensor services.
+metal_rates = MetalRates(cache_path=BASE_DIR / "metal_rates_cache.json")
+metal_rates.start_daily_scheduler()
+
+
+@app.get("/api/metal-rates")
+def get_metal_rates():
+    return jsonify(metal_rates.snapshot()), 200, {"Cache-Control": "no-store"}
+
+
+@app.post("/api/metal-rates/refresh")
+def refresh_metal_rates():
+    return jsonify(metal_rates.snapshot(manual=True)), 200, {"Cache-Control": "no-store"}
+
+
 
 def save_daq_offset_settings(data: dict) -> None:
     with DAQ_OFFSET_FILE.open("w", encoding="utf-8") as file:
@@ -322,12 +360,14 @@ def apply_daq_correction_to_packets(samples: list[dict], channel: str, settings:
 
 def rebuild_corrected_frequency_steps(channels: dict[str, list[dict]], previous_steps: list[dict] | None = None) -> list[dict]:
     settle_by_frequency = {}
+    hz_by_frequency = {}
     for step in previous_steps or []:
         if not isinstance(step, dict):
             continue
         command = str(step.get("frequency_command") or "").lower()
         if command:
             settle_by_frequency[command] = step.get("settle_seconds")
+            hz_by_frequency[command] = step.get("frequency_hz")
     frequency_commands = []
     for channel_name in ("ch1", "ch2"):
         for packet in channels.get(channel_name, []):
@@ -353,6 +393,7 @@ def rebuild_corrected_frequency_steps(channels: dict[str, list[dict]], previous_
             {
                 "frequency_command": command,
                 "settle_seconds": settle_by_frequency.get(command, 5.0),
+                "frequency_hz": hz_by_frequency.get(command),
                 "channels": step_channels,
             }
         )
@@ -370,11 +411,19 @@ def apply_daq_correction_to_collection(collection, settings: dict | None = None)
     return collection
 
 
+# REV 2026-10-18 / FREQ-04: retain four slots; do not resize trained model vectors.
+DEFAULT_FREQUENCIES_KHZ = [8.0, 10.0, 15.0, 20.0]
+
+
+def configured_frequency_commands() -> list[str]:
+    return [f"f{i + 1}" for i in range(len(load_settings()["multi_frequencies_khz"]))]
+
+
 def load_settings() -> dict:
     default_settings = {
         "acquisition_mode": "daq",
         "confidence_threshold_pct": 40.0,
-        "multi_frequencies_khz": [10.0, 20.0, 30.0],
+        "multi_frequencies_khz": list(DEFAULT_FREQUENCIES_KHZ),
         "active_frequency_slot": 1,
         "classifier_algorithm": CLASSIFIER_DEFAULT_ALGORITHM,
         "service_mode_enabled": True,
@@ -382,6 +431,7 @@ def load_settings() -> dict:
         "vision_service_url": "http://127.0.0.1:8003",
         "signal_service_url": "http://127.0.0.1:8001",
     }
+    default_settings.update({name + "_service_url": url for name, url in assets.api_config()["services"].items()})
     if not SETTINGS_FILE.exists():
         return default_settings
 
@@ -394,23 +444,25 @@ def load_settings() -> dict:
     mode = data.get("acquisition_mode", "daq")
     if mode not in {"simulator", "daq"}:
         mode = "daq"
-    multi_frequencies = data.get("multi_frequencies_khz", [10.0, 20.0, 30.0])
+    multi_frequencies = data.get("multi_frequencies_khz", DEFAULT_FREQUENCIES_KHZ)
     if not isinstance(multi_frequencies, list):
-        multi_frequencies = [10.0, 20.0, 30.0]
-    parsed_multi = []
-    for value in multi_frequencies[:3]:
-        parsed = parse_float(value)
-        if parsed is not None and parsed > 0:
-            parsed_multi.append(round(parsed, 3))
-    while len(parsed_multi) < 3:
-        parsed_multi.append([10.0, 20.0, 30.0][len(parsed_multi)])
+        multi_frequencies = DEFAULT_FREQUENCIES_KHZ
+    parsed_multi = [parse_float(value) for value in multi_frequencies[:4]]
+    if len(parsed_multi) not in (3, 4) or any(v is None or not math.isfinite(v) or v <= 0 for v in parsed_multi):
+        parsed_multi = list(DEFAULT_FREQUENCIES_KHZ)
+    # The old factory profile requests 30 kHz, which this Signal API rejects.
+    # Migrate that known default; preserve other saved three/four-frequency plans.
+    migrated = parsed_multi == [10.0, 20.0, 30.0] and data.get("service_mode_enabled", True)
+    if migrated:
+        parsed_multi = list(DEFAULT_FREQUENCIES_KHZ)
+    parsed_multi = [round(value, 3) for value in parsed_multi]
 
     active_slot_raw = data.get("active_frequency_slot", 1)
     try:
         active_slot = int(active_slot_raw)
     except (TypeError, ValueError):
         active_slot = 1
-    if active_slot < 1 or active_slot > 3:
+    if active_slot < 1 or active_slot > len(parsed_multi):
         active_slot = 1
 
     confidence_threshold = parse_float(data.get("confidence_threshold_pct"), 40.0) or 40.0
@@ -421,9 +473,11 @@ def load_settings() -> dict:
     return {
         **default_settings,
         **data,
+        **{name + "_service_url": url for name, url in assets.api_config()["services"].items()},
         "acquisition_mode": mode,
         "confidence_threshold_pct": confidence_threshold,
         "multi_frequencies_khz": parsed_multi,
+        "frequency_plan_note": "Updated old 10/20/30 kHz default to 8/10/15/20 kHz. Recalibrate before measuring." if migrated else "",
         "active_frequency_slot": active_slot,
         "classifier_algorithm": classifier_algorithm,
     }
@@ -448,9 +502,7 @@ def service_mode_enabled() -> bool:
 
 
 def service_base_url(name: str) -> str:
-    settings = load_settings()
-    key = f"{name}_service_url"
-    return str(settings.get(key, "")).rstrip("/")
+    return assets.api_config()["services"][name].rstrip("/")
 
 
 def service_json_request(
@@ -545,8 +597,8 @@ def normalize_weight_service_payload(payload: dict) -> dict:
 
 
 def read_weight_service_average(sample_count: int = 10) -> dict:
-    del sample_count
-    payload = service_json_request("GET", service_base_url("weight"), "/weight/average", timeout=20.0)
+    payload = service_json_request("GET", service_base_url("weight"), "/weight/average",
+                                   query={"samples": sample_count}, timeout=25.0)
     return normalize_weight_service_payload(payload)
 
 
@@ -592,6 +644,8 @@ def normalize_vision_payload(payload: dict, shape: str) -> dict:
         "diameter_mm": round(diameter, 3) if diameter is not None else None,
         "surface_area_mm2": round(surface_area, 3) if surface_area is not None else None,
         "estimated_depth_mm": rounded_or_none(parse_float(payload.get("estimated_depth_mm"))),
+        "distance_to_camera_mm": rounded_or_none(parse_float(payload.get("distance_to_camera_mm"), parse_float(payload.get("estimated_depth_mm")))),
+        "depth_reference": payload.get("depth_reference", "camera_to_object; not tray-relative thickness"),
         "image_url": payload.get("image_url") or "/api/vision/image/detected",
         "message": payload.get("message", "Vision measurement completed" if detected else "No object detected"),
         "source": "vision_service",
@@ -653,15 +707,22 @@ def collect_signal_service_frequency_summaries(
     frequency_commands: list[str] | None = None,
 ) -> dict:
     settings = load_settings()
-    frequencies_khz = settings.get("multi_frequencies_khz", [10.0, 20.0, 30.0])
-    commands = frequency_commands or ["f1", "f2", "f3"]
+    frequencies_khz = settings.get("multi_frequencies_khz", DEFAULT_FREQUENCIES_KHZ)
+    configured_commands = [f"f{i + 1}" for i in range(len(frequencies_khz))]
+    commands = frequency_commands or configured_commands
     frequency_steps = []
+    reference_steps = []
     errors = []
+    amplitude_v=1.0
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        try:amplitude_v=reference_configuration()["amplitude_v_peak"]
+        except (ValueError,OSError) as exc:
+            return {"ok":False,"mode":"signal_service","errors":[str(exc)],"frequency_sequence":[],"reference_signal_sequence":[]}
     for command in commands:
-        try:
-            slot = max(1, min(3, int(str(command).lower().replace("f", ""))))
-        except ValueError:
-            slot = 1
+        if command not in configured_commands:
+            errors.append(f"Unsupported frequency slot: {command}")
+            continue
+        slot = int(command[1:])
         frequency_hz = float(frequencies_khz[slot - 1]) * 1000.0
         try:
             payload = service_json_request(
@@ -672,11 +733,12 @@ def collect_signal_service_frequency_summaries(
                     "frequency_hz": int(round(frequency_hz)),
                     "sample_size": target_sample_count,
                     "interval_s": 0.05,
-                    "amplitude_v": 1.0,
+                    "amplitude_v": amplitude_v,
                 },
                 timeout=45.0,
             )
             frequency_steps.append(normalize_signal_service_step(payload, command, frequency_hz, target_sample_count))
+            reference_steps.append(reference_raw_step(payload,command))
         except RuntimeError as exc:
             errors.append(f"{command}: {exc}")
 
@@ -707,12 +769,13 @@ def collect_signal_service_frequency_summaries(
             })
     apply_daq_correction_to_collection(raw_collection)
     return {
-        "ok": True,
+        "ok": len(frequency_steps) == len(commands) and not errors,
         "mode": "signal_service",
         "ch1": summarize_optional_channel(raw_collection.channels["ch1"], "V"),
         "ch2": summarize_optional_channel(raw_collection.channels["ch2"], "V"),
         "errors": errors[-10:],
         "frequency_sequence": format_frequency_sequence(raw_collection.frequency_steps or []),
+        "reference_signal_sequence": reference_steps,
         "daq_correction": daq_correction_metadata(),
         "raw_measurement": {
             "ch1_rms_raw": raw_rms_mean_from_packets(raw_collection.channels["ch1"]),
@@ -1278,6 +1341,7 @@ def mahalanobis_features_from_frequency_sequence(
     }
 
     pseudo_record = {"frequency_sequence": frequency_sequence}
+    # FREQ-04: this trained model keeps its original feature schema; F4 stays in the capture record.
     for frequency in ("f1", "f2", "f3"):
         for channel in ("ch1", "ch2"):
             sample = parse_float(frequency_channel_summary(pseudo_record, frequency, channel).get("rms"))
@@ -1317,8 +1381,9 @@ def vector_from_mahalanobis_features(features: dict) -> list[float]:
 
 
 def frequency_rf_model_paths() -> tuple[Path, Path]:
-    gold_path = FREQUENCY_RF_GOLD_MODEL_FILE if FREQUENCY_RF_GOLD_MODEL_FILE.exists() else FREQUENCY_RF_GOLD_FALLBACK_FILE
-    purity_path = FREQUENCY_RF_PURITY_MODEL_FILE if FREQUENCY_RF_PURITY_MODEL_FILE.exists() else FREQUENCY_RF_PURITY_FALLBACK_FILE
+    selected = assets.model_selection()
+    gold_path = assets.asset_path(selected["gold"], ".joblib")
+    purity_path = assets.asset_path(selected["purity"], ".joblib")
     return gold_path, purity_path
 
 
@@ -1330,12 +1395,9 @@ def load_frequency_rf_models() -> tuple[dict, dict]:
         raise ValueError(f"Gold Standard model file not found: {gold_path.name}")
     if not purity_path.exists():
         raise ValueError(f"Gold Standard purity model file not found: {purity_path.name}")
-    gold_model = joblib.load(gold_path)
-    purity_model = joblib.load(purity_path)
-    if not isinstance(gold_model, dict) or "model" not in gold_model:
-        raise ValueError("Gold Standard gold model file is invalid")
-    if not isinstance(purity_model, dict) or "model" not in purity_model:
-        raise ValueError("Gold Standard purity model file is invalid")
+    selected = assets.model_selection()
+    gold_model = validate_rf_asset(selected["gold"], "gold")
+    purity_model = validate_rf_asset(selected["purity"], "purity")
     return gold_model, purity_model
 
 
@@ -1373,6 +1435,7 @@ def build_frequency_rf_feature_payload(
     measured_frequency_values: dict[str, dict] = {}
     calibration_frequency_values: dict[str, dict] = {}
 
+    # FREQ-04: this trained model keeps its original feature schema; F4 stays in the capture record.
     for frequency in ("f1", "f2", "f3"):
         measured_frequency_values[frequency] = {}
         calibration_frequency_values[frequency] = {}
@@ -1763,6 +1826,8 @@ def nearest_gate_votes(vector: list[float], model: dict, k: int) -> list[dict]:
 
 
 def classifier_status_payload() -> dict:
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        return reference_status_payload()
     records = load_teaching_records()
     calibration = load_calibration()
     rows, excluded = build_classifier_training_rows(records, calibration)
@@ -2428,6 +2493,9 @@ def train_mahalanobis_classifier() -> dict:
 
 def train_selected_classifier() -> dict:
     algorithm = selected_classifier_algorithm()
+    if algorithm=="gold_reference_v1":
+        cfg=reference_configuration()
+        return {**REFERENCE_MODEL.validate(cfg),"message":"External reference model checked; no training performed"}
     if algorithm == "two_pass_frequency_rf":
         gold_path, purity_path = frequency_rf_model_paths()
         if not gold_path.exists() or not purity_path.exists():
@@ -3322,8 +3390,19 @@ def classifier_prediction_for_collection(
     thickness_mm: float,
     contact_area_ratio: float,
     shape: str = "Other",
+    formula_area_mm2: float | None = None,
 ) -> tuple[dict | None, dict | None]:
     selected_algorithm = selected_classifier_algorithm()
+    if selected_algorithm=="gold_reference_v1":
+        row=None;proof=None
+        try:
+            cfg=reference_configuration()
+            reference_profile_check(cfg,load_settings())
+            row,proof=reference_feature_row(collection,calibration,shape,formula_area_mm2,thickness_mm,cfg)
+            result=REFERENCE_MODEL.predict(row,proof,cfg)
+        except Exception as exc:
+            result=reference_unavailable(str(exc))
+        return result,{"features":row,"acquisition_evidence":proof,"reference_only":True}
     if selected_algorithm == "two_pass_frequency_rf":
         classifier_features = build_frequency_rf_feature_payload(
             collection.get("frequency_sequence", []),
@@ -3677,6 +3756,7 @@ def format_frequency_sequence(sequence: list[dict]) -> list[dict]:
         formatted.append(
             {
                 "frequency_command": step.get("frequency_command"),
+                "frequency_hz": step.get("frequency_hz"),
                 "settle_seconds": step.get("settle_seconds"),
                 "channels": {
                     key: {
@@ -3707,6 +3787,7 @@ def build_frequency_air_record(sequence: list[dict]) -> dict:
             continue
         channels = step.get("channels", {}) if isinstance(step.get("channels"), dict) else {}
         air[command] = {
+            "frequency_hz": step.get("frequency_hz"),
             "ch1": channels.get("ch1"),
             "ch2": channels.get("ch2"),
         }
@@ -3738,12 +3819,12 @@ def collect_daq_frequency_summaries(
             target_sample_count=target_sample_count,
             frequency_commands=frequency_commands,
         )
-        if service_result.get("ok"):
-            return service_result
+        # Never silently switch from configured ADP frequencies to a different serial backend.
+        return service_result
 
     with DAQ_LOCK:
         sequence = collect_frequency_sequence(
-            frequency_commands=frequency_commands or ["f1", "f2", "f3"],
+            frequency_commands=frequency_commands or configured_frequency_commands(),
             ports=["/dev/ttyACM0"],
             settle_seconds=settle_seconds,
             read_timeout_seconds=1.5,
@@ -3779,36 +3860,14 @@ def collect_daq_frequency_summaries(
 
 
 def collect_channel_summaries(duration_seconds: int):
-    mode = acquisition_mode()
-    if mode == "simulator":
-        return {
-            "ok": True,
-            "mode": mode,
-            "ch1": simulated_summary("ch1"),
-            "ch2": simulated_summary("ch2"),
-            "errors": [],
-            "frequency_sequence": [],
-        }
-
+    if acquisition_mode() == "simulator":
+        return simulated_frequency_collection(configured_frequency_commands(), 30)
     return collect_daq_frequency_summaries(target_sample_count=30)
 
 
 def collect_teaching_summaries(duration_seconds: int, target_sample_count: int):
-    mode = acquisition_mode()
-    if mode == "simulator":
-        ch1 = simulated_summary("ch1")
-        ch2 = simulated_summary("ch2")
-        ch1["sample_count"] = target_sample_count
-        ch2["sample_count"] = target_sample_count
-        return {
-            "ok": True,
-            "mode": mode,
-            "ch1": ch1,
-            "ch2": ch2,
-            "errors": [],
-            "frequency_sequence": [],
-        }
-
+    if acquisition_mode() == "simulator":
+        return simulated_frequency_collection(configured_frequency_commands(), target_sample_count)
     return collect_daq_frequency_summaries(target_sample_count=target_sample_count)
 
 
@@ -3819,11 +3878,7 @@ def collect_verification_summaries(
 ):
     mode = acquisition_mode()
     if mode == "simulator":
-        ch1 = simulated_summary("ch1")
-        ch2 = simulated_summary("ch2")
-        ch1["sample_count"] = target_sample_count
-        ch2["sample_count"] = target_sample_count
-        return {"ok": True, "mode": mode, "ch1": ch1, "ch2": ch2, "errors": [], "frequency_sequence": []}
+        return simulated_frequency_collection(frequency_commands or verification_frequency_commands_for_classifier(), target_sample_count)
 
     if selected_classifier_algorithm() in {"binary_brass_ch2_f1_f3", "binary_brass_ch1_f1"}:
         return collect_daq_frequency_summaries(
@@ -3862,7 +3917,7 @@ def simulated_frequency_collection(
                 "command": "R",
                 "sample_count": target_sample_count,
             }
-            ch1_values.append(ch1)
+            ch1_values.append(dict(channels["ch1"]))
         if "ch2" in required_channels:
             ch2 = simulated_summary("ch2")
             ch2["sample_count"] = target_sample_count
@@ -3875,10 +3930,11 @@ def simulated_frequency_collection(
                 "command": "S",
                 "sample_count": target_sample_count,
             }
-            ch2_values.append(ch2)
+            ch2_values.append(dict(channels["ch2"]))
         steps.append(
             {
                 "frequency_command": command,
+                "frequency_hz": load_settings()["multi_frequencies_khz"][int(command[1:]) - 1] * 1000,
                 "settle_seconds": 5.0,
                 "channels": channels,
             }
@@ -3898,6 +3954,9 @@ def collect_validation_summaries(
     target_sample_count: int = 30,
     settle_seconds: float = 5.0,
 ) -> dict:
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        return collect_verification_summaries(duration_seconds=5,target_sample_count=target_sample_count,frequency_commands=["f1","f2","f3","f4"])
+    # Legacy brass validation intentionally measures F1/F3; it is not the new gold-model workflow.
     mode = acquisition_mode()
     if mode == "simulator":
         return simulated_frequency_collection(["f1", "f3"], target_sample_count, required_channels=("ch1", "ch2"))
@@ -3917,7 +3976,7 @@ def rounded_or_none(value: float | None, digits: int = 6) -> float | None:
 def validation_frequency_features(frequency_sequence: list[dict], calibration: dict) -> dict:
     pseudo_record = {"frequency_sequence": frequency_sequence or []}
     feature_map: dict[str, float | None] = {}
-    for frequency in ("f1", "f2", "f3"):
+    for frequency in ("f1", "f2", "f3", "f4"):
         for channel in ("ch1", "ch2"):
             summary = frequency_channel_summary(pseudo_record, frequency, channel)
             air = calibration_frequency_air(calibration, frequency, channel)
@@ -4461,14 +4520,14 @@ def verification_frequency_commands_for_classifier() -> list[str]:
         return ["f1", "f3"]
     if selected_classifier_algorithm() == "binary_brass_ch1_f1":
         return ["f1"]
-    return ["f1", "f2", "f3"]
+    return configured_frequency_commands()
 
 
 def latest_daq_sensor_state() -> dict:
     settings = load_settings()
     active_slot = settings.get("active_frequency_slot", 1)
-    frequencies = settings.get("multi_frequencies_khz", [10.0, 20.0, 30.0])
-    frequency_hz = frequencies[active_slot - 1] if 1 <= active_slot <= len(frequencies) else None
+    frequencies = settings.get("multi_frequencies_khz", DEFAULT_FREQUENCIES_KHZ)
+    frequency_hz = frequencies[active_slot - 1] * 1000 if 1 <= active_slot <= len(frequencies) else None
     command = f"f{active_slot}"
     with DAQ_LOCK:
         collection = collect_live_rms_burst(
@@ -4629,30 +4688,72 @@ def verify_measurement():
     teaching_records = load_teaching_records()
     geometry = build_geometry(width_mm, length_mm, thickness_mm, shape)
 
+    # Keep a photograph even when the signal/classification step fails.
+    record_id = "M-" + now.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    photo, photo_error = capture_record_photo(shape)
+    try:
+        yolo_required = current_yolo_settings()["enabled"]
+    except (ValueError, OSError):
+        yolo_required = True
+    detection = (photo or {}).get("vision_detection") or {}
+    vision_ok = (detection.get("eligible") is True and detection.get("count") == 1
+                 and detection.get("label") == str(shape).strip().lower()
+                 and detection.get("capture_age_ms", 999999) <= 5000)
+    if yolo_required and not vision_ok:
+        message = detection.get("message") or photo_error or "Fresh coin/bar detection is required"
+        if detection.get("capture_age_ms", 999999) > 5000 and detection.get("eligible"):
+            message = "Detection expired; acquire a fresh camera frame"
+        if detection.get("eligible") and detection.get("label") != str(shape).strip().lower():
+            message = "Selected shape differs from detected " + str(detection.get("label"))
+        record = {"id": record_id, "date": now.strftime("%d %b %Y"), "time": now.strftime("%H:%M"),
+            "result": "Unable to determine", "confidence": "0%", "needs_verification": True,
+            "weight": f"{weight_grams:g} g", "shape": shape, "status": message,
+            "error": "vision_check_failed", "message": message,
+            "scale_preparation": scale_preparation_for_record(payload),
+        "geometry_evidence": geometry_evidence_for_record(payload, shape),
+            "evidence_image": photo, "image_capture_error": photo_error, "vision_detection": detection}
+        records = load_measurements()
+        records.insert(0, record)
+        save_measurements(records)
+        return jsonify(record), 409
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        try:reference_preflight(calibration,shape,geometry)
+        except Exception as exc:
+            prediction=reference_unavailable(str(exc))
+            record={"id":record_id,"date":now.strftime("%d %b %Y"),"time":now.strftime("%H:%M"),
+                "result":"Unable to determine","confidence":"0%","weight":f"{weight_grams:g} g","shape":shape,
+                "status":str(exc),"message":str(exc),"error":"reference_not_ready","needs_verification":True,
+                "classifier_result":prediction,"evidence_image":photo,"image_capture_error":photo_error,
+                "geometry_evidence":geometry_evidence_for_record(payload,shape),
+                "scale_preparation":scale_preparation_for_record(payload),"frequency_sequence":[]}
+            records=load_measurements();records.insert(0,record);save_measurements(records)
+            return jsonify(record),409
     collection = collect_verification_summaries(
         duration_seconds=5,
         target_sample_count=10,
         frequency_commands=verification_frequency_commands_for_classifier(),
     )
     if not collection["ok"]:
-        return (
-            jsonify(
-                {
-                    "error": "measurement_failed",
-                    "message": "Unable to collect valid CH1 teaching readings",
-                    "acquisition_mode": collection["mode"],
-                    "details": collection["errors"],
-                }
-            ),
-            503,
-        )
+        record = {"id": record_id, "date": now.strftime("%d %b %Y"), "time": now.strftime("%H:%M"),
+            "result": "Unable to determine", "weight": f"{weight_grams:g} g", "shape": shape,
+            "confidence": "0%", "needs_verification": True,
+            "status": "Signal measurement failed. " + ("Photo saved." if photo else "Photo unavailable: " + str(photo_error)),
+            "scale_preparation": scale_preparation_for_record(payload),
+        "geometry_evidence": geometry_evidence_for_record(payload, shape),
+            "evidence_image": photo, "image_capture_error": photo_error,
+            "error": "measurement_failed", "message": "Unable to collect valid signal readings",
+            "details": collection.get("errors", []), "acquisition_mode": collection.get("mode")}
+        records = load_measurements()
+        records.insert(0, record)
+        save_measurements(records)
+        return jsonify(record), 503
 
     ch1 = collection["ch1"]
     ch2 = collection["ch2"]
     features = build_measurement_features(ch1, ch2, calibration, weight_grams, shape, geometry=geometry)
     frequency_features = validation_frequency_features(collection.get("frequency_sequence", []), calibration)
     features.update(frequency_features)
-    use_surface_classifier = selected_classifier_algorithm() in {"binary_brass_ch1_f1", "binary_brass_ch2_f1_f3", "two_pass_frequency_rf"}
+    use_surface_classifier = selected_classifier_algorithm() in {"binary_brass_ch1_f1", "binary_brass_ch2_f1_f3", "two_pass_frequency_rf", "gold_reference_v1"}
     if use_surface_classifier:
         matches, classification_method = [], CLASSIFIER_ALGORITHMS[selected_classifier_algorithm()]["method"]
     else:
@@ -4664,6 +4765,7 @@ def verify_measurement():
         geometry["thickness_mm"],
         geometry["contact_area_ratio"],
         shape,
+        formula_area_mm2=geometry["sample_area_mm2"],
     )
     top_matches = [
         {
@@ -4754,10 +4856,18 @@ def verify_measurement():
     if needs_verify:
         status_text = f"{status_text} Kindly verify the sample."
 
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        needs_verify=True
+        status_text=classifier_prediction["decision_message"] if classifier_prediction else "Reference comparison unavailable"
+        score_threshold_pct=classifier_prediction.get("threshold",80.) if classifier_prediction else 80.
     record = {
-        "id": payload.get("id") or f"M-{now.strftime('%H%M%S')}",
+        "id": record_id,
         "date": payload.get("date") or now.strftime("%d %b %Y"),
         "time": payload.get("time") or now.strftime("%H:%M"),
+        "scale_preparation": scale_preparation_for_record(payload),
+        "geometry_evidence": geometry_evidence_for_record(payload, shape),
+        "evidence_image": photo,
+        "image_capture_error": photo_error,
         "result": result,
         "weight": f"{weight_grams:g} g",
         "shape": shape,
@@ -4799,6 +4909,7 @@ def verify_measurement():
         "acquisition_mode": collection["mode"],
         "daq_correction": collection.get("daq_correction", daq_correction_metadata()),
         "frequency_sequence": collection.get("frequency_sequence", []),
+        "reference_signal_sequence": collection.get("reference_signal_sequence",[]),
         "calibration_used": calibration.get("calibrated_at", "No calibration record"),
         "features_used": features,
         "feature_version": 3 if classifier_prediction else 2,
@@ -4814,6 +4925,8 @@ def verify_measurement():
         "calibration_frequency_air": classifier_prediction.get("calibration_frequency_air") if classifier_prediction else None,
     }
 
+    if photo_error:
+        record["status"] += " Photo unavailable: " + photo_error
     records = load_measurements()
     records.insert(0, record)
     save_measurements(records)
@@ -4828,6 +4941,7 @@ def get_calibration():
 @app.post("/api/calibration/start")
 def start_calibration():
     now = datetime.now()
+    capture_started = time.monotonic()
     payload = request.get_json(silent=True) or {}
     frequency_hz = parse_float(payload.get("frequency_hz"))
     frequency_slot = payload.get("frequency_slot")
@@ -4852,12 +4966,13 @@ def start_calibration():
         "calibrated_at": now.strftime("%d %b %Y %H:%M"),
         "sample_count": ch1.get("sample_count", 0),
         "samples_per_frequency": 30,
-        "duration_seconds": 48,
+        "duration_seconds": round(time.monotonic() - capture_started, 3),
         "condition": "No material / air reading",
         "acquisition_mode": collection["mode"],
         "frequency_hz": round(frequency_hz, 3) if frequency_hz is not None else None,
         "frequency_slot": frequency_slot,
         "frequency_sequence": frequency_sequence,
+        "reference_signal_sequence": collection.get("reference_signal_sequence",[]),
         "frequency_air": build_frequency_air_record(frequency_sequence),
         "ch1": ch1,
         "ch2": ch2,
@@ -4949,6 +5064,7 @@ def validate_calibration():
             "frequency_hz": round(frequency_hz, 3) if frequency_hz is not None else None,
             "frequency_slot": frequency_slot,
             "frequency_sequence": frequency_sequence,
+        "reference_signal_sequence": collection.get("reference_signal_sequence",[]),
             "raw_measurement": collection.get("raw_measurement", {}),
             "daq_correction": collection.get("daq_correction", daq_correction_metadata()),
         }
@@ -4962,12 +5078,14 @@ def get_teaching_records():
 
 @app.post("/api/teaching")
 def add_teaching_record():
+    capture_started = time.monotonic()
     payload = request.get_json(silent=True) or {}
     records = load_teaching_records()
     now = datetime.now()
     target_sample_count = 30
     frequency_hz = parse_float(payload.get("frequency_hz"))
     frequency_slot = payload.get("frequency_slot")
+    photo, photo_error = capture_record_photo(payload.get("shape", "unknown"), teaching=True)
     collection = collect_teaching_summaries(duration_seconds=5, target_sample_count=target_sample_count)
     if not collection["ok"]:
         return (
@@ -5078,10 +5196,15 @@ def add_teaching_record():
         "acquisition_mode": collection["mode"],
         "daq_correction": collection.get("daq_correction", daq_correction_metadata()),
         "frequency_sequence": collection.get("frequency_sequence", []),
-        "duration_seconds": 48,
+        "reference_signal_sequence": collection.get("reference_signal_sequence",[]),
+        "duration_seconds": round(time.monotonic() - capture_started, 3),
         "samples_per_frequency": target_sample_count,
         "sample_count": ch1.get("sample_count", target_sample_count),
         "status": payload.get("status", "Reference sample"),
+        "scale_preparation": scale_preparation_for_record(payload),
+        "geometry_evidence": geometry_evidence_for_record(payload, shape),
+        "evidence_image": photo,
+        "image_capture_error": photo_error,
     }
     records.insert(0, record)
     save_teaching_records(records)
@@ -5106,6 +5229,9 @@ def validate_teaching_sample():
     coverage_pct = geometry["contact_area_ratio"] * 100.0
     brass_model = build_brass_surface_model(teaching_records, calibration)
 
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        try:reference_preflight(calibration,shape,geometry)
+        except Exception as exc:return jsonify(error="reference_not_ready",message=str(exc)),409
     collection = collect_validation_summaries(target_sample_count=30, settle_seconds=5.0)
     if not collection["ok"]:
         return (
@@ -5125,7 +5251,7 @@ def validate_teaching_sample():
     features = build_measurement_features(ch1, ch2, calibration, weight_grams, shape, geometry=geometry)
     validation_features = validation_frequency_features(collection.get("frequency_sequence", []), calibration)
     features.update(validation_features)
-    use_surface_classifier = selected_classifier_algorithm() in {"binary_brass_ch1_f1", "binary_brass_ch2_f1_f3", "two_pass_frequency_rf"}
+    use_surface_classifier = selected_classifier_algorithm() in {"binary_brass_ch1_f1", "binary_brass_ch2_f1_f3", "two_pass_frequency_rf", "gold_reference_v1"}
     if use_surface_classifier:
         matches, classification_method = [], CLASSIFIER_ALGORITHMS[selected_classifier_algorithm()]["method"]
     else:
@@ -5137,9 +5263,12 @@ def validate_teaching_sample():
         geometry["thickness_mm"],
         geometry["contact_area_ratio"],
         shape,
+        formula_area_mm2=geometry["sample_area_mm2"],
     )
-    rule_models = validation_rule_bundle(coverage_pct, geometry["thickness_mm"], validation_features, brass_model)
+    rule_models = {} if selected_classifier_algorithm()=="gold_reference_v1" else validation_rule_bundle(coverage_pct, geometry["thickness_mm"], validation_features, brass_model)
     primary_rule = rule_models.get("brass_rejection_ch1f1_ch2f1")
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        primary_rule=None;rule_models={}
     top_matches = [
         {
             "rank": index + 1,
@@ -5202,8 +5331,15 @@ def validate_teaching_sample():
     if isinstance(classifier_meta, dict) and is_classifier_model_error(classifier_meta.get("message")):
         status_text = "Error Loading Model"
 
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        grade=(classifier_prediction or {}).get("reference_grade")
+        expected=re.search(r"\b(916|999)\b",str(payload.get("purity",""))+" "+str(expected_material))
+        validation_result="UNABLE TO DETERMINE" if grade is None else "REFERENCE COMPARISON" if expected is None else "REFERENCE MATCH" if int(expected.group(1))==grade else "REFERENCE MISMATCH"
+        status_text=(classifier_prediction or {}).get("decision_message","Reference unavailable")
     record = {
             "id": payload.get("id") or f"V-{now.strftime('%H%M%S')}",
+            "scale_preparation": scale_preparation_for_record(payload),
+        "geometry_evidence": geometry_evidence_for_record(payload, shape),
             "sample_id": payload.get("sample_id"),
             "repeat_index": payload.get("repeat_index"),
             "date": payload.get("date") or now.strftime("%d %b %Y"),
@@ -5285,6 +5421,7 @@ def validate_teaching_sample():
             "feature_version": 3 if classifier_prediction else 2,
             "classification_method": classification_method,
             "frequency_sequence": collection.get("frequency_sequence", []),
+        "reference_signal_sequence": collection.get("reference_signal_sequence",[]),
             "model_version": classifier_prediction.get("model_version") if classifier_prediction else None,
             "gold_prediction": classifier_prediction.get("gold_prediction") if classifier_prediction else None,
             "purity_prediction": classifier_prediction.get("purity_prediction") if classifier_prediction else None,
@@ -5296,7 +5433,7 @@ def validate_teaching_sample():
     validation_records = load_validation_results()
     validation_records.insert(0, record)
     save_validation_results(validation_records)
-    reports = generate_validation_reports(validation_records, brass_model)
+    reports = None if selected_classifier_algorithm()=="gold_reference_v1" else generate_validation_reports([item for item in validation_records if not (item.get("classifier_result") or {}).get("reference_only")], brass_model)
     record["validation_reports"] = reports
     return jsonify(record)
 
@@ -5328,6 +5465,8 @@ def train_classifier():
     except ValueError as exc:
         return jsonify({"error": "classifier_training_failed", "message": str(exc)}), 400
 
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        return jsonify(ok=True,message="External reference model checked; no training performed",algorithm="gold_reference_v1",metadata=model)
     return jsonify(
         {
             "ok": True,
@@ -5359,6 +5498,24 @@ def update_settings():
     payload = request.get_json(silent=True) or {}
     settings = load_settings()
 
+    if "scale_preparation" in payload:
+        values = payload["scale_preparation"]
+        if not isinstance(values, dict):
+            return jsonify(error="invalid_scale_preparation_settings"), 400
+        limits = {}
+        for key, default in (("empty_limit_g", 0.10), ("zero_tolerance_g", 0.01), ("max_spread_g", 0.02)):
+            raw = values.get(key, default)
+            value = parse_float(raw)
+            if isinstance(raw, bool) or value is None or not math.isfinite(value) or not 0 < value <= 5:
+                return jsonify(error="invalid_" + key), 400
+            limits[key] = value
+        if limits["zero_tolerance_g"] > limits["empty_limit_g"]:
+            return jsonify(error="zero_tolerance_exceeds_empty_limit"), 400
+        mode = values.get("internal_mode", "auto")
+        if mode not in {"auto", "test", "adjust", "skip"}:
+            return jsonify(error="invalid_internal_mode"), 400
+        settings["scale_preparation"] = {**limits, "internal_mode": mode}
+
     if "acquisition_mode" in payload:
         mode = payload.get("acquisition_mode")
         if mode not in {"simulator", "daq"}:
@@ -5372,37 +5529,41 @@ def update_settings():
         settings["confidence_threshold_pct"] = max(0.0, min(100.0, threshold))
 
     if "multi_frequencies_khz" in payload:
-        values = payload.get("multi_frequencies_khz")
-        if not isinstance(values, list):
-            return jsonify({"error": "invalid_multi_frequencies"}), 400
-        parsed_multi = []
-        for value in values[:3]:
-            parsed = parse_float(value)
-            if parsed is None or parsed <= 0:
-                return jsonify({"error": "invalid_multi_frequencies"}), 400
-            parsed_multi.append(round(parsed, 3))
-        while len(parsed_multi) < 3:
-            parsed_multi.append([10.0, 20.0, 30.0][len(parsed_multi)])
+        values = payload["multi_frequencies_khz"]
+        if not isinstance(values, list) or len(values) not in (3, 4):
+            return jsonify(error="expected_three_or_four_frequencies"), 400
+        parsed_multi = [parse_float(value) for value in values]
+        if any(isinstance(raw, bool) or value is None or not math.isfinite(value) or value <= 0 for raw, value in zip(values, parsed_multi)):
+            return jsonify(error="invalid_multi_frequencies"), 400
+        if payload.get("service_mode_enabled", settings.get("service_mode_enabled", True)) and any(value not in DEFAULT_FREQUENCIES_KHZ for value in parsed_multi):
+            return jsonify(error="signal_supports_8_10_15_20_khz"), 400
         settings["multi_frequencies_khz"] = parsed_multi
-
+        if settings.get("active_frequency_slot", 1) > len(parsed_multi):
+            settings["active_frequency_slot"] = 1
+        settings["frequency_plan_note"] = "Frequency plan saved. Recalibrate before measuring."
     if "active_frequency_slot" in payload:
         try:
-            slot = int(payload.get("active_frequency_slot"))
+            slot = int(payload["active_frequency_slot"])
         except (TypeError, ValueError):
-            return jsonify({"error": "invalid_active_frequency_slot"}), 400
-        if slot < 1 or slot > 3:
-            return jsonify({"error": "invalid_active_frequency_slot"}), 400
+            return jsonify(error="invalid_active_frequency_slot"), 400
+        if slot < 1 or slot > len(settings["multi_frequencies_khz"]):
+            return jsonify(error="invalid_active_frequency_slot"), 400
         settings["active_frequency_slot"] = slot
 
     if "classifier_algorithm" in payload:
         algorithm = payload.get("classifier_algorithm")
         if algorithm not in CLASSIFIER_ALGORITHMS:
             return jsonify({"error": "invalid_classifier_algorithm"}), 400
+        if algorithm=="gold_reference_v1":
+            try:
+                cfg=reference_configuration();reference_profile_check(cfg,settings);REFERENCE_MODEL.validate(cfg)
+            except Exception as exc:return jsonify(error="reference_not_ready",message=str(exc)),400
         settings["classifier_algorithm"] = algorithm
 
     if "service_mode_enabled" in payload:
         settings["service_mode_enabled"] = bool(payload.get("service_mode_enabled"))
 
+    api_config = assets.api_config()
     for service_name in ("weight", "vision", "signal"):
         key = f"{service_name}_service_url"
         if key in payload:
@@ -5410,6 +5571,11 @@ def update_settings():
             if url and not (url.startswith("http://") or url.startswith("https://")):
                 return jsonify({"error": f"invalid_{key}"}), 400
             settings[key] = url
+            api_config["services"][service_name] = url
+    try:
+        assets.write_json(assets.ROOT / "api_sources.json", assets.validate_api(api_config))
+    except (ValueError, OSError) as exc:
+        return jsonify(error="invalid_api_config", message=str(exc)), 400
 
     save_settings(settings)
     return jsonify(settings)
@@ -5422,33 +5588,28 @@ def set_daq_frequency():
         slot = int(payload.get("active_frequency_slot"))
     except (TypeError, ValueError):
         return jsonify({"error": "invalid_active_frequency_slot"}), 400
-    if slot < 1 or slot > 3:
-        return jsonify({"error": "invalid_active_frequency_slot"}), 400
-
     settings = load_settings()
+    if not 1 <= slot <= len(settings["multi_frequencies_khz"]):
+        return jsonify(error="invalid_active_frequency_slot"), 400
+    command = f"f{slot}"
+    hz = settings["multi_frequencies_khz"][slot - 1] * 1000
+    if settings.get("acquisition_mode") == "simulator":
+        result = {"ok": True, "simulator": True}
+    elif settings.get("service_mode_enabled", True):
+        try:
+            service_json_request("POST", service_base_url("signal"), "/sine/start",
+                                 payload={"frequency_hz": int(hz), "amplitude_v": 1.0}, timeout=10.0)
+            result = {"ok": True, "source": "signal_service"}
+        except RuntimeError as exc:
+            return jsonify(ok=False, message=str(exc)), 503
+    else:
+        with DAQ_LOCK:
+            result = send_frequency_mode(command, ports=["/dev/ttyACM0"])
+        if not result.get("ok"):
+            return jsonify(result), 503
     settings["active_frequency_slot"] = slot
     save_settings(settings)
-
-    command = f"f{slot}"
-    if settings.get("acquisition_mode") == "simulator":
-        return jsonify({
-            "ok": True,
-            "simulator": True,
-            "active_frequency_slot": slot,
-            "frequency_hz": settings.get("multi_frequencies_khz", [10.0, 20.0, 30.0])[slot - 1],
-            "frequency_command": command,
-            "message": "Simulator mode",
-        })
-
-    with DAQ_LOCK:
-        result = send_frequency_mode(command, ports=["/dev/ttyACM0"])
-    status_code = 200 if result.get("ok") else 503
-    return jsonify({
-        **result,
-        "active_frequency_slot": slot,
-        "frequency_hz": settings.get("multi_frequencies_khz", [10.0, 20.0, 30.0])[slot - 1],
-        "frequency_command": command,
-    }), status_code
+    return jsonify(**result, active_frequency_slot=slot, frequency_hz=hz, frequency_command=command)
 
 
 @app.get("/api/load-cell/latest")
@@ -5485,38 +5646,55 @@ def get_load_cell_average():
     return jsonify(reading), status_code
 
 
+# REV 2026-10-18 / ZERO-02: an empty-pan gate replaces blind TI taring.
+@app.post("/api/load-cell/preparation/start")
+@app.post("/api/calibration/scale/prepare")
+def start_scale_preparation_api():
+    global LAST_SCALE_PREPARATION
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict) or payload.get("pan_empty_confirmed") is not True:
+        return jsonify(error="empty_pan_confirmation_required", message="Remove all items, then confirm the empty pan"), 400
+    if not service_mode_enabled():
+        return jsonify(error="weight_service_required", message="Enable Weight service mode in Engineering"), 503
+    try:
+        LAST_SCALE_PREPARATION = None
+        result = service_json_request("POST", service_base_url("weight"), "/preparation/start",
+            payload={"pan_empty_confirmed": True, "settings": load_settings().get("scale_preparation", {}),
+                     "repeat_internal": request.path.startswith("/api/calibration/") and payload.get("repeat_internal") is True}, timeout=5.0)
+        return jsonify(result), 202
+    except RuntimeError as exc:
+        return jsonify(error="scale_preparation_failed", message=str(exc)), 503
+
+
+@app.get("/api/load-cell/preparation/status")
+def scale_preparation_status_api():
+    global LAST_SCALE_PREPARATION
+    try:
+        result = service_json_request("GET", service_base_url("weight"), "/preparation/status", timeout=5.0)
+        if result.get("state") == "ready" and result.get("result", {}).get("zero_verified"):
+            LAST_SCALE_PREPARATION = {"id": result["id"], **result["result"]}
+        else:
+            LAST_SCALE_PREPARATION = None
+        return jsonify(result), 200, {"Cache-Control": "no-store"}
+    except RuntimeError as exc:
+        return jsonify(error="scale_status_unavailable", message=str(exc)), 503
+
+
 @app.post("/api/load-cell/zero")
 def zero_load_cell():
-    if service_mode_enabled():
-        try:
-            result = tare_weight_service()
-            return jsonify(result), 200 if result.get("ok") else 503
-        except RuntimeError as exc:
-            return jsonify(
-                {
-                    "ok": False,
-                    "zero_command": "TI",
-                    "zero_response": "",
-                    "zero_error": str(exc),
-                    "message": "Unable to tare load cell",
-                    "source": "weight_service",
-                    "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
-                }
-            ), 503
-    result = send_load_cell_command(LOAD_CELL_ZERO_COMMAND, wait_seconds=0.1, require_weight=False)
-    ok = bool(result.get("ok"))
-    status_code = 200 if ok else 503
-    return jsonify(
-        {
-            "ok": ok,
-            "zero_command": LOAD_CELL_ZERO_COMMAND,
-            "zero_response": result.get("raw_response", ""),
-            "zero_error": result.get("error", ""),
-            "message": "Tare command sent" if ok else "Unable to tare load cell",
-            "port": LOAD_CELL_PORT,
-            "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
-        }
-    ), status_code
+    # Old clients must not silently tare an item which is still on the pan.
+    return jsonify(ok=False, error="empty_pan_preparation_required",
+        message="Use the empty-pan preparation screen before placing an item"), 409
+
+
+def scale_preparation_for_record(payload):
+    record = LAST_SCALE_PREPARATION
+    if not record or payload.get("scale_preparation_id") != record.get("id"):
+        return None
+    def compact(values):
+        return {key: value for key, value in values.items() if key != "samples"}
+    return {key: compact(value) if key in {"initial", "residual"} else value
+            for key, value in record.items() if key != "commands"}
 
 
 @app.get("/api/vision/size")
@@ -5536,6 +5714,461 @@ def get_vision_size():
                 "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
             }
         ), 503
+
+
+
+
+
+# REFERENCE-01: a separate selection never overwrites the legacy gold/purity pair.
+REFERENCE_MODEL = ReferenceModel()
+
+
+@app.get("/api/calibration/assets/reference-model")
+def reference_model_settings():
+    try:return jsonify(reference_configuration())
+    except (ValueError,OSError) as exc:return jsonify(error="reference_config_invalid",message=str(exc)),400
+
+
+@app.post("/api/calibration/assets/reference-model")
+@app.post("/api/calibration/assets/reference-model/test")
+def reference_model_select():
+    try:
+        cfg=reference_configuration(request.get_json(silent=True))
+        checked=REFERENCE_MODEL.validate(cfg)
+        if not request.path.endswith("/test"):
+            cfg["profile_model_sha256"]=checked["model_sha256"] if cfg["profile_confirmed"] else None
+            assets.write_json(assets.ROOT/"reference_model.json",cfg)
+        return jsonify(ok=True,metadata=checked,settings=cfg,
+                       message="Compatible reference model. Gold identity is not determined."
+                       if request.path.endswith("/test") else "Reference selected. Choose Known-gold 916/999 reference as Classifier Method, then run fresh air calibration.")
+    except Exception as exc:return jsonify(error="reference_model_not_selected",message=str(exc)),400
+
+
+def reference_preflight(calibration,shape,geometry):
+    cfg=reference_configuration();reference_profile_check(cfg,load_settings());REFERENCE_MODEL.validate(cfg)
+    reference_feature_row({"mode":calibration.get("acquisition_mode"),
+        "reference_signal_sequence":calibration.get("reference_signal_sequence")},calibration,
+        shape,geometry["sample_area_mm2"],geometry["thickness_mm"],cfg)
+
+
+def reference_profile_check(cfg,settings):
+    if not settings.get("service_mode_enabled") or settings.get("acquisition_mode")!="daq":
+        raise ValueError("Reference mode requires DAQ acquisition with the Signal service enabled")
+    if not cfg["profile_confirmed"]:
+        raise ValueError("Confirm the reference model's training acquisition profile in Vision Model")
+    metadata=REFERENCE_MODEL.validate(cfg)
+    if cfg.get("profile_model_sha256")!=metadata["model_sha256"]:
+        raise ValueError("Reference file changed; test, reconfirm its training profile and select it again")
+    if [value*1000 for value in settings["multi_frequencies_khz"]]!=cfg["frequency_hz"]:
+        raise ValueError("Configured F1-F4 frequencies differ from the reference model profile")
+
+
+def reference_status_payload():
+    warnings=[];metadata=None;cfg=None;ready=False
+    try:
+        cfg=reference_configuration();metadata=REFERENCE_MODEL.validate(cfg)
+        reference_profile_check(cfg,load_settings())
+        cal=load_calibration()
+        _,proof=reference_feature_row({"mode":cal.get("acquisition_mode"),
+            "reference_signal_sequence":cal.get("reference_signal_sequence")},cal,"Coin",1.,1.,cfg)
+        ready=not proof["simulation"]
+        if proof["simulation"]:warnings.append("Air calibration is simulated; physical reference decisions stay unavailable")
+    except Exception as exc:warnings.append(str(exc))
+    warnings.append("Known-gold 916/999 reference scores are uncalibrated; gold/non-gold and actual purity are not determined")
+    return {"selected_algorithm":"gold_reference_v1","model_algorithm":"gold_reference_v1",
+        "model_method":REFERENCE_METHOD,"model_exists":metadata is not None,"reference_ready":ready,
+        "model_trained_at":None,"teaching_record_count":len(load_teaching_records()),"eligible_record_count":0,
+        "class_count":2,"class_counts":{},"class_readiness":[],"excluded_record_count":0,
+        "model_feature_version":1,"feature_keys":REFERENCE_NUMERIC+["shape"],"warnings":warnings,
+        "calibrated_at":load_calibration().get("calibrated_at"),"reference_model":metadata,
+        "external_model_files":{"reference_model":cfg["model_path"]} if cfg else None,
+        "classifier_algorithms":[{"key":key,"label":item["label"],"method":item["method"]} for key,item in CLASSIFIER_ALGORITHMS.items()]}
+
+
+# GEOMETRY-01: measurements are saved on the server; browser-supplied numbers
+# cannot masquerade as a completed camera/depth check.
+GEOMETRY_READINGS_DIR = BASE_DIR / "geometry_readings"
+
+
+@app.get("/api/calibration/geometry")
+def geometry_status_api():
+    try:
+        return jsonify(service_json_request("GET",service_base_url("vision"),"/geometry/status",timeout=8))
+    except RuntimeError as exc:return jsonify(error="geometry_unavailable",message=str(exc)),503
+
+
+@app.post("/api/calibration/geometry/settings")
+def geometry_settings_api():
+    try:
+        return jsonify(service_json_request("POST",service_base_url("vision"),"/geometry/settings",
+                       payload=request.get_json(silent=True),timeout=8))
+    except RuntimeError as exc:return jsonify(error="geometry_not_saved",message=str(exc)),400
+
+
+@app.post("/api/calibration/geometry/reference")
+def geometry_reference_api():
+    body=request.get_json(silent=True) or {}
+    if not isinstance(body,dict) or body.get("empty_confirmed") is not True:
+        return jsonify(error="empty_support_confirmation_required"),400
+    try:
+        return jsonify(service_json_request("POST",service_base_url("vision"),"/geometry/reference",
+            payload={"settings":current_yolo_settings(),"empty_confirmed":True},timeout=90))
+    except (ValueError,OSError,RuntimeError) as exc:
+        return jsonify(error="geometry_reference_failed",message=str(exc)),503
+
+
+@app.post("/api/vision/geometry/measure")
+def geometry_measure_api():
+    body=request.get_json(silent=True) or {}
+    if not isinstance(body,dict) or str(body.get("shape","")).lower() not in ("coin","bar"):
+        return jsonify(error="coin_or_bar_required"),400
+    try:
+        result=service_json_request("POST",service_base_url("vision"),"/geometry/measure",
+            payload={"settings":current_yolo_settings(),"shape":body["shape"],
+                     "manual_height_mm":body.get("manual_height_mm")},timeout=180)
+        if result.get("ok") is not True or result.get("schema")!="thinal-geometry-v1":
+            raise ValueError("Image service did not return a valid geometry reading")
+        try:weight=read_weight_service_average(sample_count=5)
+        except RuntimeError as exc:weight={"ok":False,"stable":False,"message":str(exc)}
+        result["mass_measurement"]=weight
+        result["density_check"]=density_check(result,weight)
+        result["reading_id"]="G-"+uuid.uuid4().hex
+        result["saved_at_epoch"]=time.time()
+        assets.write_json(GEOMETRY_READINGS_DIR/(result["reading_id"]+".json"),result)
+        return jsonify(result),201
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
+        return jsonify(error="geometry_measurement_failed",message=str(exc)),503
+
+
+def geometry_evidence_for_record(payload,shape):
+    reading_id=payload.get("geometry_reading_id")
+    if not reading_id:return None
+    try:
+        if not isinstance(reading_id,str) or not re.fullmatch(r"G-[a-f0-9]{32}",reading_id):
+            raise ValueError("Invalid geometry reading ID")
+        result=json.loads((GEOMETRY_READINGS_DIR/(reading_id+".json")).read_text(encoding="utf-8"))
+        age=time.time()-result["saved_at_epoch"]
+        if not 0<=age<=600 or result["shape"]!=str(shape).lower():
+            raise ValueError("Geometry reading expired or shape changed; measure again")
+        if result["vision_revision"]!=public_yolo_settings(current_yolo_settings())["revision"]:
+            raise ValueError("Vision settings changed; measure geometry again")
+        live=service_json_request("GET",service_base_url("vision"),"/geometry/status",timeout=8)
+        if not live.get("reference_for_current_session") or live.get("reference",{}).get("reference_id")!=result["reference_id"]:
+            raise ValueError("Camera/reference restarted or changed; measure geometry again")
+        requested_thickness=parse_float(payload.get("thickness_mm"))
+        if result.get("height_mm") is not None and (requested_thickness is None or abs(requested_thickness-result["height_mm"])>.005):
+            raise ValueError("Thickness changed; measure geometry again")
+        return result
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
+        return {"ok":False,"reading_id":reading_id,"message":str(exc)}
+
+
+# REV 2026-10-18 / ASSETS-01: only selected, schema-compatible local models load.
+def validate_rf_asset(relative, role):
+    if joblib is None:
+        raise ValueError("Install joblib and scikit-learn in the View-service Python")
+    path = assets.asset_path(relative, ".joblib", must_exist=True)
+    bundle = joblib.load(path)
+    if not isinstance(bundle, dict) or not callable(getattr(bundle.get("model"), "predict", None)):
+        raise ValueError("Expected a frequency_rf_v1 bundle: dict containing model")
+    model = bundle["model"]
+    sidecar = path.with_suffix(path.suffix + ".json")
+    metadata = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.exists() else bundle
+    names = metadata.get("feature_names")
+    if names is None and hasattr(model, "feature_names_in_"):
+        names = list(model.feature_names_in_)
+    if names is None:
+        raise ValueError("Add feature_names to the bundle or adjacent .joblib.json; see MODEL_INTERFACE.md")
+    if names is not None and list(names) != FREQUENCY_RF_FEATURE_NAMES:
+        raise ValueError("Feature order differs from frequency_rf_v1; a matching adapter is required")
+    if int(getattr(model, "n_features_in_", len(FREQUENCY_RF_FEATURE_NAMES))) != len(FREQUENCY_RF_FEATURE_NAMES):
+        raise ValueError("Model feature count does not match frequency_rf_v1")
+    adapter = metadata.get("adapter", "frequency_rf_v1")
+    if adapter != "frequency_rf_v1":
+        raise ValueError("Unsupported adapter: " + str(adapter))
+    labels = [str(v) for v in getattr(model, "classes_", bundle.get("labels", []))]
+    if not labels or (role == "gold" and "gold" not in [v.lower() for v in labels]):
+        raise ValueError("Model labels do not match the selected role")
+    return bundle
+
+
+@app.get("/api/calibration/assets")
+def assets_scan_api():
+    try:
+        return jsonify(assets.scan())
+    except (ValueError, OSError) as exc:
+        return jsonify(error="assets_unavailable", message=str(exc)), 400
+
+
+@app.post("/api/calibration/assets/models")
+def assets_models_api():
+    try:
+        selected = request.get_json(silent=True)
+        if not isinstance(selected, dict) or set(selected) != set(assets.ROLES):
+            raise ValueError("Select both gold and purity models")
+        # Validate both before one atomic registry replacement; no partial activation.
+        for role in assets.ROLES:
+            validate_rf_asset(selected[role], role)
+        assets.write_json(assets.ROOT / "model_registry.json", selected)
+        return jsonify(ok=True, selection=selected, adapter="frequency_rf_v1")
+    except Exception as exc:
+        return jsonify(error="models_not_activated", message=str(exc)), 400
+
+
+@app.get("/api/calibration/assets/api")
+def assets_api_get():
+    try:
+        return jsonify(assets.api_config())
+    except (ValueError, OSError) as exc:
+        return jsonify(error="api_config_invalid", message=str(exc)), 400
+
+
+@app.post("/api/calibration/assets/api")
+def assets_api_save():
+    try:
+        config = assets.validate_api(request.get_json(silent=True))
+        assets.write_json(assets.ROOT / "api_sources.json", config)
+        return jsonify(ok=True, message="Saved; service URLs apply on next request, rates on next refresh")
+    except (ValueError, OSError) as exc:
+        return jsonify(error="api_config_not_saved", message=str(exc)), 400
+
+
+@app.get("/api/calibration/assets/reference")
+def assets_reference():
+    documents={"api":"API_REFERENCE.md","geometry":"GEOMETRY_GUIDE.md","models":"MODEL_INTERFACE.md","notes":"OPERATING_NOTES.md"}
+    name=documents.get(request.args.get("doc","api"))
+    if name is None:return jsonify(error="unknown_reference"),400
+    return send_from_directory(assets.ROOT, name, mimetype="text/plain")
+
+
+# REV 2026-10-18 / YOLO-01: full settings stay protected; public status contains no model path.
+def current_yolo_settings():
+    with YOLO_SETTINGS_LOCK:
+        return load_yolo_settings(YOLO_SETTINGS_FILE)
+
+
+def request_yolo_frame(debug=False):
+    settings = current_yolo_settings()
+    return service_json_request("POST", service_base_url("vision"), "/yolo/frame",
+                                payload={"settings": settings, "debug": debug}, timeout=35.0)
+
+
+@app.get("/api/vision/yolo/status")
+def yolo_status_api():
+    try:
+        return jsonify(public_yolo_settings(current_yolo_settings())), 200, {"Cache-Control": "no-store"}
+    except (ValueError, OSError) as exc:
+        return jsonify(error="vision_settings_unavailable", message=str(exc)), 503
+
+
+@app.get("/api/calibration/vision/settings")
+def yolo_settings_api():
+    try:
+        return jsonify(current_yolo_settings())
+    except (ValueError, OSError) as exc:
+        return jsonify(error="vision_settings_unavailable", message=str(exc)), 503
+
+
+@app.post("/api/calibration/vision/settings")
+def save_yolo_settings_api():
+    try:
+        settings = validate_yolo_settings(request.get_json(silent=True))
+        # Do not enable a missing/wrong model and leave user verification blocked by accident.
+        if settings["enabled"]:
+            checked = service_json_request("POST", service_base_url("vision"), "/yolo/validate",
+                                 payload={"settings": settings}, timeout=35.0)
+            if checked.get("ok") is not True or checked.get("task") != "segment":
+                raise ValueError("Image service did not validate a segmentation model")
+        with YOLO_SETTINGS_LOCK:
+            save_yolo_settings(YOLO_SETTINGS_FILE, settings)
+        return jsonify(settings)
+    except (ValueError, TypeError, OSError, RuntimeError) as exc:
+        return jsonify(error="vision_settings_not_saved", message=str(exc)), 400
+
+
+@app.post("/api/calibration/vision/validate")
+def test_yolo_model_api():
+    try:
+        settings = validate_yolo_settings(request.get_json(silent=True))
+        return jsonify(service_json_request("POST", service_base_url("vision"), "/yolo/validate",
+                       payload={"settings": settings}, timeout=35.0))
+    except (ValueError, TypeError, RuntimeError) as exc:
+        return jsonify(error="vision_model_unavailable", message=str(exc)), 503
+
+
+@app.get("/api/vision/yolo/frame")
+@app.get("/api/calibration/vision/frame")
+def yolo_frame_api():
+    try:
+        # Camera diagnostics remain private even though the live masks are public.
+        debug = request.path.startswith("/api/calibration/") and request.args.get("debug") == "1"
+        return jsonify(request_yolo_frame(debug)), 200, {"Cache-Control": "no-store"}
+    except (ValueError, OSError, RuntimeError) as exc:
+        return jsonify(error="vision_detection_unavailable", message=str(exc)), 503
+
+
+# REV 2026-10-18 / REMOVE-01: one sequential preview request reads stable
+# scale evidence and a fresh camera frame. No zero/tare/internal-test commands.
+REMOVAL_LOCK = threading.Lock()
+
+
+@app.get("/api/verification/removal/check")
+def removal_check_api():
+    if not REMOVAL_LOCK.acquire(blocking=False):
+        return jsonify(error="removal_busy", message="Removal check already running; retry Live"), 409
+    started = time.monotonic()
+    try:
+        settings = load_settings()
+        yolo = current_yolo_settings()
+        scale, prep, errors, bundle = {}, {}, [], {}
+        if not settings.get("service_mode_enabled"):
+            errors.append("Enable Weight service mode in Engineering")
+        else:
+            try:
+                prep = service_json_request("GET", service_base_url("weight"), "/preparation/status", timeout=3.)
+                if prep.get("state") == "ready" and prep.get("result", {}).get("zero_verified") is True:
+                    scale = service_json_request("GET", service_base_url("weight"), "/weight/average",
+                        query={"samples":5}, timeout=25.)
+            except (RuntimeError, ValueError) as exc:
+                errors.append(str(exc))
+        camera_error = None
+        try:
+            bundle = request_yolo_frame() if yolo["enabled"] else service_json_request(
+                "GET", service_base_url("vision"), "/image/frame",
+                query={"type":"unknown", "annotations":"false"}, timeout=8.)
+        except (RuntimeError, ValueError) as exc:
+            camera_error = str(exc)
+        # Recheck AFTER camera inference: another client may have started preparation.
+        if scale:
+            try:
+                after = service_json_request("GET", service_base_url("weight"), "/preparation/status", timeout=3.)
+                if after.get("id") != prep.get("id") or after.get("state") != "ready" or after.get("needs_recovery"):
+                    scale = {}; errors.append("Scale preparation changed during checking")
+            except RuntimeError as exc:
+                scale = {}; errors.append(str(exc))
+        # Detect a concurrent configuration edit; never carry old evidence forward.
+        if current_yolo_settings() != yolo or load_settings().get("scale_preparation", {}) != settings.get("scale_preparation", {}):
+            scale = {}; errors.append("Settings changed during checking; retry")
+        result = evaluate_removal(scale, prep, settings.get("scale_preparation", {}),
+                                  yolo["enabled"], bundle.get("detection"), camera_error)
+        if errors:
+            result.update(ready_for_confirmation=False, state="unknown", message="; ".join(errors))
+        result["camera_error"] = camera_error
+        result["evidence_age_ms"] = round((time.monotonic()-started)*1000,1)
+        if result["evidence_age_ms"] >= 5000:
+            result.update(ready_for_confirmation=False, state="unknown", message="Removal check took too long; retry Live for fresh evidence.")
+        # Only return display fields; no private camera diagnostics/model paths.
+        public = {key:bundle[key] for key in ("raw_jpeg_base64","annotation","detection") if key in bundle}
+        public["removal"] = result
+        return jsonify(public), 200, {"Cache-Control":"no-store"}
+    except (ValueError, TypeError, OSError) as exc:
+        return jsonify(error="removal_unavailable", message=str(exc)), 503
+    finally:
+        REMOVAL_LOCK.release()
+
+
+@app.get("/api/calibration/readiness")
+def readiness_api():
+    # Passive checks only: no sweep, camera capture, zero, model execution or write.
+    from system_check import build_report
+    report = build_report(include_view=False)
+    try:
+        settings = load_settings()
+        report["checks"].append({"name":"HMI acquisition", "state":"pass" if settings.get("acquisition_mode")=="daq" and settings.get("service_mode_enabled") else "fail",
+            "message":"DAQ + services required for the reference workflow", "details":{"acquisition_mode":settings.get("acquisition_mode"), "services_enabled":settings.get("service_mode_enabled")}})
+        report["checks"].append({"name":"Classifier selection", "state":"pass" if settings.get("classifier_algorithm")=="gold_reference_v1" else "fail",
+            "message":"Select Known-gold 916/999 reference after validating the file"})
+    except (ValueError,OSError) as exc:
+        report["checks"].append({"name":"HMI settings","state":"fail","message":str(exc)})
+    report["ready_for_trial"] = all(c["state"]=="pass" for c in report["checks"])
+    return jsonify(report), 200, {"Cache-Control":"no-store"}
+
+
+# PHOTO-01 / YOLO-01: preserve a raw photograph even if model inference fails.
+def capture_record_photo(shape, teaching=False, phase="before_frequency_sweep", detector=None):
+    use_yolo = False
+    warning = None
+    try:
+        use_yolo = current_yolo_settings()["enabled"] and (not teaching or detector == "yolo")
+        if use_yolo:
+            try:
+                bundle = request_yolo_frame()
+            except RuntimeError as exc:
+                warning = str(exc)
+                bundle = service_json_request("GET", service_base_url("vision"), "/image/frame",
+                    query={"type": "unknown", "annotations": "false"}, timeout=8.0)
+                bundle["annotation"]["warning"] = "YOLO unavailable; raw photo only: " + warning
+                bundle["detection"] = {"state": "error", "eligible": False, "message": warning}
+                bundle["annotation"]["detection"] = bundle["detection"]
+        else:
+            bundle = service_json_request("GET", service_base_url("vision"), "/image/frame",
+                query={"type": str(shape)[:64], "annotations": "true"}, timeout=8.0)
+        directory = TEACHING_IMAGES_DIR if teaching else VERIFICATION_IMAGES_DIR
+        prefix = "/api/teaching/image" if teaching else "/api/verification/image"
+        photo = save_snapshot(bundle, directory, prefix, phase)
+        if use_yolo:
+            photo["vision_detection"] = bundle.get("detection")
+        return photo, warning
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
+        return None, str(exc)
+
+
+# CAMERA-DEBUG-01: the existing /api/calibration/ guard requires Engineering login.
+@app.get("/api/calibration/camera/frame")
+def get_camera_debug_frame():
+    try:
+        bundle = service_json_request("GET", service_base_url("vision"), "/image/frame",
+            query={"type": request.args.get("shape", "unknown")[:64],
+                   "annotations": "true" if request.args.get("annotations") == "1" else "false",
+                   "debug": "true"}, timeout=6.0)
+        return jsonify(bundle), 200, {"Cache-Control": "no-store"}
+    except RuntimeError as exc:
+        return jsonify(error="camera_debug_unavailable", message=str(exc)), 503
+
+
+@app.get("/api/vision/image/frame")
+def get_vision_image_frame():
+    captured = request.args.get("captured") == "1"
+    try:
+        bundle = service_json_request("GET", service_base_url("vision"),
+            "/image/bundle" if captured else "/image/frame",
+            query=None if captured else {"type": request.args.get("shape", "unknown")[:64], "annotations": "true"},
+            timeout=6.0)
+        return jsonify(bundle), 200, {"Cache-Control": "no-store"}
+    except RuntimeError as exc:
+        return jsonify(error="camera_frame_unavailable", message=str(exc)), 503
+
+
+@app.post("/api/verification/image/capture")
+@app.post("/api/teaching/image/capture")
+def capture_photo_api():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(ok=False, message="Expected a JSON object"), 400
+    teaching = request.path.startswith("/api/teaching/")
+    photo, error = capture_record_photo(payload.get("shape", "unknown"), teaching, "manual_snap", payload.get("detector"))
+    if not photo:
+        return jsonify(ok=False, message=error), 503
+    return jsonify(ok=True, image=photo, warning=error), 201
+
+
+@app.get("/api/verification/image/<path:filename>")
+def verification_image_api(filename):
+    return serve_snapshot(VERIFICATION_IMAGES_DIR, filename)
+
+
+@app.get("/api/teaching/image/<path:filename>")
+def teaching_image_api(filename):
+    return serve_snapshot(TEACHING_IMAGES_DIR, filename)
+
+
+@app.get("/api/vision/image/live")
+def get_vision_live_image():
+    try:
+        data, content_type = service_binary_get(service_base_url("vision"), "/image", timeout=6.0)
+        return Response(data, mimetype=content_type, headers={"Cache-Control": "no-store"})
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc), "source": "vision_service"}), 503
 
 
 @app.get("/api/vision/image/detected")
@@ -5572,7 +6205,8 @@ def status():
     return jsonify(
         {
             "system": "DanFishel AFiS",
-            "mode": "demo",
+            "mode": settings["acquisition_mode"],
+            "runtime": runtime_identity("view"),
             "acquisition_mode": settings["acquisition_mode"],
             "measurement_storage": "measurements.json",
             "calibration_storage": "calibration.json",

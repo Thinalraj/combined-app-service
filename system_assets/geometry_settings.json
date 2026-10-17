@@ -1,0 +1,11 @@
+{
+  "samples": 5,
+  "max_plane_rms_mm": 1.5,
+  "min_valid_fraction": 0.8,
+  "max_area_cv_pct": 3.0,
+  "min_resolvable_height_mm": 1.0,
+  "max_height_std_mm": 0.3,
+  "max_reference_shift_mm": 1.0,
+  "pure_gold_density_g_cm3": 19.32,
+  "density_tolerance_pct": 10.0
+}

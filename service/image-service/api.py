@@ -13,6 +13,13 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 import json
+from overlay_capture import build_bundle
+from camera_debug import camera_metadata, frame_diagnostics
+import time
+from datetime import datetime, timezone
+from yolo_preview import Segmenter, VisionError
+from runtime_status import identity
+from vision_settings import validate_settings as validate_yolo_settings
 
 WIDTH, HEIGHT, FPS = 1280, 720, 30
 SETTINGS_FILE = Path(__file__).with_name("settings.json")
@@ -27,18 +34,30 @@ class Camera:
         profile = self.pipeline.start(config)
         self.align = rs.align(rs.stream.color)
         self.depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
+        self.metadata = camera_metadata(profile, rs)
         self.intrinsics = None
         self.lock = Lock()
 
     def frame(self):
+        return self._frame(False)[:2]
+
+    def debug_frame(self):
+        return self._frame(True)
+
+    def _frame(self, debug):
+        # CAMERA-DEBUG-01: pixels, aligned intrinsics and diagnostics share one lock/frame.
         with self.lock:
-            frames = self.align.process(self.pipeline.wait_for_frames())
+            frames = self.align.process(self.pipeline.wait_for_frames(5000))
             depth = frames.get_depth_frame()
             color = frames.get_color_frame()
             if not depth or not color:
                 raise HTTPException(503, "Camera frame is unavailable")
             self.intrinsics = depth.profile.as_video_stream_profile().intrinsics
-            return np.asanyarray(color.get_data()).copy(), np.asanyarray(depth.get_data()).copy()
+            image = np.asanyarray(color.get_data()).copy()
+            depth_array = np.asanyarray(depth.get_data()).copy()
+            report = frame_diagnostics(self.metadata, depth_array, self.depth_scale,
+                                       depth.profile, color) if debug else None
+            return image, depth_array, report
 
     def close(self):
         self.pipeline.stop()
@@ -47,6 +66,7 @@ class Camera:
 camera = None
 latest_image = None
 latest_detected_image = None
+latest_capture_bundle = None
 
 
 class AOIRequest(BaseModel):
@@ -66,6 +86,13 @@ async def lifespan(app):
 
 
 app = FastAPI(title="Vision Service API", version="1.0", lifespan=lifespan)
+
+
+# FINISH-01: health without triggering a capture/inference or replacing evidence.
+@app.get("/status")
+def runtime_status():
+    return {"runtime":identity("vision"), "camera_running":camera is not None,
+            "simulate":False, "metadata":camera.metadata if camera is not None else None}
 
 
 @app.get("/settings")
@@ -106,7 +133,177 @@ def object_mask(image, object_type):
     return cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
 
+# PHOTO-01: a frozen result and its overlays always describe the same frame.
+def capture_bundle(shape, annotations=True, image=None, measurement=None, debug=False):
+    report = None
+    if image is None:
+        try:
+            if camera is None:
+                raise HTTPException(503, "Camera is not running")
+            if debug:
+                image, _, report = camera.debug_frame()
+            else:
+                image, _ = camera.frame()
+        except RuntimeError as exc:
+            raise HTTPException(503, "Camera frame unavailable") from exc
+    mask = None
+    warning = None
+    modes = {"coin": "Coin", "bar": "Bar", "ring": "Ring", "bangle": "Bangle",
+             "bracelet": "Bracelet", "chain": "Chain", "ornament": "Ornaments / Pendants / Others"}
+    label = str(shape).strip().lower()
+    if annotations:
+        try:
+            mask = object_mask(image, modes.get(label, str(shape)))
+        except (HTTPException, ValueError, KeyError, TypeError, cv2.error) as exc:
+            # A broken/missing outline calibration must not discard the raw photo.
+            warning = str(getattr(exc, "detail", exc))
+    result = build_bundle(image, label, mask, warning, measurement)
+    if report is not None:
+        result["camera_debug"] = report
+    return result
+
+
+@app.get("/image/frame")
+def get_image_frame(type: str = Query("unknown", max_length=64), annotations: bool = True, debug: bool = False):
+    return capture_bundle(type, annotations, debug=debug)
+
+
+@app.get("/camera/debug")
+def get_camera_debug():
+    return capture_bundle("unknown", annotations=False, debug=True)["camera_debug"]
+
+
+# REV 2026-10-18 / YOLO-01: one lazy CPU model; clean frame + separate JSON masks.
+segmenter = Segmenter()
+yolo_request_lock = Lock()  # Serialize camera + inference; snapshot never collides with preview.
+
+
+@app.post("/yolo/validate")
+def validate_yolo_model(payload: dict):
+    try:
+        return segmenter.validate(payload.get("settings", {}))
+    except (ValueError, VisionError) as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@app.post("/yolo/frame")
+def get_yolo_frame(payload: dict):
+    # Acquire before taking a frame, so time waiting behind preview is not stale image time.
+    if not yolo_request_lock.acquire(timeout=25):
+        raise HTTPException(503, "YOLO is busy; retry shortly")
+    try:
+        return build_yolo_frame(payload)
+    finally:
+        yolo_request_lock.release()
+
+
+def build_yolo_frame(payload: dict):
+    try:
+        settings = validate_yolo_settings(payload.get("settings", {}))
+        if not settings["enabled"]:
+            raise VisionError("YOLO is disabled in Engineering")
+        if camera is None:
+            raise VisionError("Camera is not running")
+        started = time.monotonic()
+        debug = payload.get("debug") is True
+        if debug:
+            image, _, report = camera.debug_frame()
+        else:
+            image, _ = camera.frame()
+            report = None
+        captured_at = datetime.now(timezone.utc).isoformat()
+        objects, detection = segmenter.predict(image, settings)
+        bundle = build_bundle(image, detection["label"])
+        annotation = bundle["annotation"]
+        annotation.update(source="Ultralytics instance segmentation", label_source="model_prediction",
+            captured_at=captured_at, objects=objects, detection=detection,
+            measurement={"type": detection["label"], "message": detection["message"]})
+        detection.update(capture_id=annotation["capture_id"], captured_at=captured_at,
+                         capture_age_ms=round((time.monotonic() - started) * 1000, 1))
+        bundle["detection"] = detection
+        if report is not None:
+            bundle["camera_debug"] = report
+        return bundle
+    except (ValueError, VisionError, RuntimeError) as exc:
+        # A camera/model error is not a successful zero-object detection.
+        raise HTTPException(503, str(exc)) from exc
+
+
+
+# REV 2026-10-18 / GEOMETRY-01: share the inference lock with live YOLO; capture
+# pixels, aligned raw depth, intrinsics and scale atomically for every sample.
+from geometry_check import Geometry, sdk_rays_factory, settings as geometry_settings
+import system_assets as assets
+geometry = Geometry()
+
+
+def geometry_camera_frame():
+    if camera is None:
+        raise ValueError("Camera is not running")
+    return camera.debug_frame()
+
+
+@app.get("/geometry/status")
+def geometry_status():
+    config=geometry_settings()
+    reference=assets.read_json("geometry_reference.json",{})
+    return {"settings":config,"reference":{key:reference.get(key) for key in
+            ("reference_id","created_at","samples","plane","roi")},
+            "reference_for_current_session":reference.get("session")==geometry.session}
+
+
+@app.post("/geometry/settings")
+def geometry_save_settings(payload:dict):
+    try:
+        config=geometry_settings(payload)
+        assets.write_json(assets.ROOT/"geometry_settings.json",config)
+        return {"ok":True,"settings":config}
+    except (ValueError,OSError) as exc:raise HTTPException(400,str(exc)) from exc
+
+
+@app.post("/geometry/reference")
+def geometry_reference(payload:dict):
+    if not yolo_request_lock.acquire(timeout=25):
+        raise HTTPException(503,"Camera inference is busy; retry")
+    try:
+        vision=validate_yolo_settings(payload.get("settings",{}))
+        return geometry.calibrate(geometry_camera_frame,lambda report:sdk_rays_factory(rs,report),
+                                  vision["roi"],payload.get("empty_confirmed"))
+    except (ValueError,RuntimeError,OSError,KeyError,AttributeError) as exc:
+        raise HTTPException(503,str(exc)) from exc
+    finally:yolo_request_lock.release()
+
+
+@app.post("/geometry/measure")
+def geometry_measure(payload:dict):
+    if not yolo_request_lock.acquire(timeout=25):
+        raise HTTPException(503,"Camera inference is busy; retry")
+    try:
+        vision=validate_yolo_settings(payload.get("settings",{}))
+        return geometry.measure(geometry_camera_frame,lambda report:sdk_rays_factory(rs,report),segmenter,
+                                vision,str(payload.get("shape","")).lower(),payload.get("manual_height_mm"))
+    except (ValueError,RuntimeError,OSError,KeyError,AttributeError) as exc:
+        raise HTTPException(503,str(exc)) from exc
+    finally:yolo_request_lock.release()
+
+
+@app.get("/image/bundle")
+def get_image_bundle():
+    if latest_capture_bundle is None:
+        raise HTTPException(404, "No measurement snapshot available")
+    return latest_capture_bundle
+
+
 def measure(image, depth, object_type):
+    global latest_capture_bundle
+    result = _measure_legacy(image, depth, object_type)
+    bundle = capture_bundle(object_type, image=image, measurement=dict(result))
+    latest_capture_bundle = bundle
+    result["capture_id"] = bundle["annotation"]["capture_id"]
+    return result
+
+
+def _measure_legacy(image, depth, object_type):
     global latest_detected_image
     mask = object_mask(image, object_type)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -127,8 +324,11 @@ def measure(image, depth, object_type):
     area = float(cv2.countNonZero(pixels) * z * z /
                  (camera.intrinsics.fx * camera.intrinsics.fy) * 1_000_000)
     result = {"detected": True, "type": object_type, "surface_area_mm2": area,
-              "estimated_depth_mm": z * 1000.0}
-    if object_type == "coin":
+              # Preserve the legacy field; it is range, never object thickness.
+              "estimated_depth_mm": z * 1000.0, "distance_to_camera_mm": z * 1000.0,
+              "depth_reference": "camera_to_object; not tray-relative thickness"}
+    # Settings use canonical 'Coin', while HTTP input may be any case.
+    if str(object_type).strip().lower() == "coin":
         (x, y), radius = cv2.minEnclosingCircle(contour)
         scale = z * 1000.0 * (1 / camera.intrinsics.fx + 1 / camera.intrinsics.fy) / 2
         result.update(center=[round(x, 1), round(y, 1)], diameter_mm=2 * radius * scale)
@@ -141,12 +341,16 @@ def measure(image, depth, object_type):
 
 @app.get("/image")
 def get_image():
-    global latest_image
-    latest_image, _ = camera.frame()
-    ok, encoded = cv2.imencode(".jpg", latest_image)
+    # CAMERA-01: preview frames must not overwrite a measurement's shared image.
+    try:
+        image, _ = camera.frame()
+    except RuntimeError as exc:
+        raise HTTPException(503, "Camera frame timed out or device is unavailable") from exc
+    ok, encoded = cv2.imencode(".jpg", image)
     if not ok:
         raise HTTPException(500, "Could not encode image")
-    return Response(content=encoded.tobytes(), media_type="image/jpeg")
+    return Response(content=encoded.tobytes(), media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
 
 
 @app.get("/image/detected")
@@ -199,9 +403,15 @@ def get_size(type: str = Query("coin", min_length=1)):
     except (OSError, ValueError):
         aoi = None
     if isinstance(aoi, list) and len(aoi) == 4:
-        x1, y1, x2, y2 = [int(v) for v in aoi]
+        try:
+            x1, y1, x2, y2 = [int(v) for v in aoi]
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise HTTPException(400, "Saved AOI is invalid; select it again in Engineering") from exc
+        height, width = latest_image.shape[:2]
         x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(WIDTH - 1, x2), min(HEIGHT - 1, y2)
+        x2, y2 = min(width - 1, x2), min(height - 1, y2)
+        if x2 <= x1 or y2 <= y1:
+            raise HTTPException(400, "Saved AOI is outside the image or too small; select it again")
         latest_image = latest_image[y1:y2 + 1, x1:x2 + 1]
         depth = depth[y1:y2 + 1, x1:x2 + 1]
     return measure(latest_image, depth, mode)

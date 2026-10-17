@@ -1,5 +1,7 @@
 const screens = {
   home: document.getElementById("homeScreen"),
+  readiness: document.getElementById("readinessScreen"),
+  scalePrepare: document.getElementById("scalePrepareScreen"),
   place: document.getElementById("placeScreen"),
   weight: document.getElementById("weightScreen"),
   dimension: document.getElementById("dimensionScreen"),
@@ -33,6 +35,7 @@ const screens = {
   history: document.getElementById("historyScreen"),
   historyDetail: document.getElementById("historyDetailScreen"),
   deletePassword: document.getElementById("deletePasswordScreen"),
+  visionSettings: document.getElementById("visionSettingsScreen"),
   detectorSettings: document.getElementById("detectorSettingsScreen"),
   frequencyMode: document.getElementById("frequencyModeScreen"),
   frequencyEdit: document.getElementById("frequencyEditScreen")
@@ -56,7 +59,7 @@ const state = {
   shape: "Ring",
   otherShape: "Pendant",
   visionMeasurement: null,
-  carouselIndex: 0,
+  geometryReading: null,
   progressTimer: null,
   measurementWeightSampling: false,
   measurementWeightReady: false,
@@ -72,12 +75,14 @@ const state = {
   detectorConfidenceInput: "40",
   liveViewTab: "raw",
   frequencyMode: "single",
-  multiFrequenciesKhz: [10, 20, 30],
+  multiFrequenciesKhz: [8, 10, 15, 20],
   activeFrequencySlot: 1
 };
 
 const titles = {
   home: "Precious Metal Verification System",
+  readiness: "System Readiness",
+  scalePrepare: "Prepare Empty Scale",
   place: "Place Object",
   weight: "Enter Weight",
   dimension: "Sample Dimensions",
@@ -111,13 +116,31 @@ const titles = {
   history: "Measurement History",
   historyDetail: "Record Detail",
   deletePassword: "Delete Record",
+  visionSettings: "System Assets",
   detectorSettings: "Detector Settings",
   frequencyMode: "Frequency Mode",
   frequencyEdit: "Edit Frequency"
 };
 
-const ENGINEERING_PIN = "242218";
-const ADMIN_PIN = "242218";
+// REV 2026-10-18 / ACCESS-01: the browser contains no engineering/admin PIN.
+const engineeringScreens = new Set([
+  "engineering", "readiness", "classifier", "liveView", "daqSettings", "loadCell",
+  "calibration", "calibrationProgress", "calibrationResult", "detectorSettings",
+  "frequencyMode", "frequencyEdit", "visionSettings",
+  ...Object.keys(screens).filter((name) => name.startsWith("teaching"))
+]);
+let engineeringUnlocked = false;
+let engineeringExpiryTimer = null;
+let currentScreen = "home";
+let historyReturnScreen = "home";
+let screenNavigation = 0;
+// ZERO-02: the internal operation is latched by the Weight service, not the browser.
+let scalePreparationBusy = false;
+let scalePreparationTimer = null;
+let scalePreparationContext = "measurement";
+let scalePreparationResult = null;
+let scalePreparationPreviousId = null;
+let scalePreparationJobId = null;
 let selectedHistoryId = null;
 let selectedTeachingId = null;
 let deletePassword = "";
@@ -134,52 +157,13 @@ const teachingState = {
   lengthMm: "",
   thicknessMm: "",
   visionMeasurement: null,
+  geometryReading: null,
   activeDimensionField: "width",
   latestRecord: null,
   mode: "teach"
 };
-const fallbackHistoryRecords = [
-  {
-    id: "M-1004",
-    date: "09 May 2026",
-    time: "15:42",
-    result: "Gold 916",
-    weight: "12.45 g",
-    shape: "Bar",
-    confidence: "87%",
-    status: "Saved locally"
-  },
-  {
-    id: "M-1003",
-    date: "09 May 2026",
-    time: "15:18",
-    result: "Gold 999",
-    weight: "25.10 g",
-    shape: "Bar",
-    confidence: "91%",
-    status: "Saved locally"
-  },
-  {
-    id: "M-1002",
-    date: "09 May 2026",
-    time: "14:50",
-    result: "Non Gold",
-    weight: "8.20 g",
-    shape: "Other",
-    confidence: "76%",
-    status: "Saved locally"
-  },
-  {
-    id: "M-1001",
-    date: "09 May 2026",
-    time: "14:22",
-    result: "Gold 750",
-    weight: "6.85 g",
-    shape: "Bar",
-    confidence: "84%",
-    status: "Saved locally"
-  }
-];
+// FINISH-01: unavailable history must never display invented gold results.
+const fallbackHistoryRecords = [];
 let historyRecords = [...fallbackHistoryRecords];
 const bottomMessages = [
   "Verify your sample now",
@@ -190,7 +174,39 @@ const bottomMessages = [
   "Buatan Malaysia"
 ];
 
-function showScreen(name) {
+async function showScreen(name) {
+  // Keep the pan-empty instruction visible while the balance is operating.
+  if (scalePreparationBusy && name !== "scalePrepare" && name !== "password") return;
+  if (name !== "scalePrepare") clearTimeout(scalePreparationTimer);
+  // Every entrance is checked, including Back buttons and direct JS navigation.
+  const navigation = ++screenNavigation;
+  if (engineeringScreens.has(name)) {
+    let permitted = false;
+    try {
+      const response = await fetch("/api/engineering/session", { cache: "no-store" });
+      permitted = response.ok && (await response.json()).authenticated;
+    } catch (error) { /* Access stays locked if the service is unavailable. */ }
+    if (navigation !== screenNavigation) return;
+    if (!engineeringUnlocked || !permitted) {
+      engineeringUnlocked = false;
+      showPasswordScreen();
+      return;
+    }
+  }
+  if (name === "home" && engineeringUnlocked) {
+    engineeringUnlocked = false;
+    clearTimeout(engineeringExpiryTimer);
+    try {
+      await fetch("/api/engineering/logout", { method: "POST" });
+    } catch (error) { /* The server also expires sessions after 30 minutes. */ }
+    if (navigation !== screenNavigation) return;
+  }
+  if (name === "history" && !["historyDetail", "deletePassword"].includes(currentScreen)) {
+    historyReturnScreen = engineeringScreens.has(currentScreen) ? "engineering" : "home";
+  }
+  const previousScreen = currentScreen;
+  currentScreen = name;
+  if (previousScreen !== name && removalScreen()) removalNode("Confirm").checked = false;
   Object.values(screens).forEach((screen) => screen.classList.remove("active"));
   screens[name].classList.add("active");
   document.getElementById("menuPanel").classList.remove("open");
@@ -202,6 +218,7 @@ function showScreen(name) {
   if (name === "engineering") {
     loadAcquisitionMode();
     loadCalibration();
+    loadTeachingRecords();
     clearInterval(state.engineeringTimer);
   } else if (name === "liveView") {
     renderLiveViewTab();
@@ -220,9 +237,11 @@ function showScreen(name) {
     stopWeightProgressTimer();
   }
 
-  if (name === "teachingDimension") {
-    loadTeachingDetectedImage();
-  }
+  // CAMERA-01: one shared preview follows the active user/engineering screen.
+  updateCameraPreviewForScreen();
+  if (name === "readiness") loadReadiness();
+  if (name === "home") refreshReferenceRates();
+  else stopReferenceRatesPolling();
 }
 
 function selectTeachingDimensionPanel(panel) {
@@ -233,17 +252,727 @@ function selectTeachingDimensionPanel(panel) {
   document.getElementById("teachingImageTabButton").classList.toggle("active", !dimensionsActive);
   document.getElementById("teachingDimensionsTabButton").setAttribute("aria-selected", String(dimensionsActive));
   document.getElementById("teachingImageTabButton").setAttribute("aria-selected", String(!dimensionsActive));
-  if (!dimensionsActive) loadTeachingDetectedImage();
+  if (!dimensionsActive) updateCameraPreviewForScreen();
+  else stopTeachingCameraPreview();
+}
+
+// REV 2026-10-18 / CAMERA-01: fresh camera preview, separate from frozen results.
+let teachingCameraGeneration = 0;
+let teachingCameraTimer = null;
+let teachingCameraRequest = null;
+let teachingCameraUrl = null;
+let teachingCameraMode = "live";
+let cameraAnnotationsEnabled = false;
+let cameraSavedPhoto = null;
+let cameraDebugEnabled = false;
+// REV 2026-10-18 / YOLO-01: three fresh, consistent frames before user placement continues.
+let visionYoloConfig = null;
+let visionLastDetection = null;
+let visionStableFrames = 0;
+let visionDetectionReceived = 0;
+let visionGateTimer = null;
+
+function yoloBoxOverlap(a, b) {
+  if (!a || !b) return 0;
+  const corners = v => [v[0]-v[2]/2, v[1]-v[3]/2, v[0]+v[2]/2, v[1]+v[3]/2];
+  const x = corners(a), y = corners(b);
+  const area = Math.max(0, Math.min(x[2],y[2])-Math.max(x[0],y[0])) * Math.max(0,Math.min(x[3],y[3])-Math.max(x[1],y[1]));
+  return area / Math.max(1e-9, a[2]*a[3]+b[2]*b[3]-area);
+}
+function yoloCanContinue() {
+  if (visionYoloConfig?.enabled === false) return true;
+  const d = visionLastDetection;
+  return visionYoloConfig?.enabled === true && d?.eligible === true && d.count === 1
+    && d.revision === visionYoloConfig.revision && visionStableFrames >= 3
+    && performance.now() - visionDetectionReceived + Number(d.capture_age_ms || 0) < 5000;
+}
+function updateYoloGate(message = "") {
+  document.getElementById("placeContinueButton").disabled = !yoloCanContinue();
+  const node = document.getElementById("cameraDetectionStatus");
+  node.hidden = visionYoloConfig?.enabled === false || teachingCameraMode !== "live" || currentScreen === "scalePrepare";
+  const d = visionLastDetection;
+  node.textContent = message || (d ? `${d.message}${d.confidence != null ? " · " + (d.confidence*100).toFixed(0) + "%" : ""}${d.eligible ? " · steady " + visionStableFrames + "/3" : ""}` : "Waiting for live object detection");
+  if (d?.eligible && !yoloCanContinue() && visionStableFrames >= 3) node.textContent = "Detection expired; waiting for a fresh frame";
+  node.classList.toggle("vision-ready", Boolean(yoloCanContinue() && visionYoloConfig?.enabled));
+}
+function resetYoloDetection(message = "") {
+  clearTimeout(visionGateTimer);
+  visionLastDetection = null;
+  visionStableFrames = 0;
+  updateYoloGate(message);
+}
+function observeYoloDetection(detection) {
+  const previous = visionLastDetection;
+  const fresh = Number.isFinite(detection?.capture_age_ms) && detection.capture_age_ms < 5000;
+  const acceptable = fresh && detection?.eligible === true && detection.count === 1 && detection.revision === visionYoloConfig?.revision;
+  const consistent = acceptable && previous?.eligible && previous.revision === detection.revision
+    && performance.now() - visionDetectionReceived + Number(previous.capture_age_ms || 0) < 5000
+    && previous.label === detection.label
+    && yoloBoxOverlap(previous.bbox_xywhn, detection.bbox_xywhn) > .5;
+  visionStableFrames = acceptable ? (consistent ? Math.min(3, visionStableFrames + 1) : 1) : 0;
+  visionLastDetection = detection;
+  visionDetectionReceived = performance.now();
+  clearTimeout(visionGateTimer);
+  updateYoloGate();
+  if (acceptable) visionGateTimer = setTimeout(() => updateYoloGate(), Math.max(0, 5010 - detection.capture_age_ms));
+}
+async function refreshYoloStatus() {
+  visionYoloConfig = null;
+  resetYoloDetection("Checking vision settings...");
+  try {
+    const response = await fetch("/api/vision/yolo/status", {cache:"no-store"});
+    const payload = await response.json();
+    if (!response.ok || typeof payload.enabled !== "boolean") throw new Error(payload.message || "Vision settings unavailable");
+    visionYoloConfig = payload;
+    updateYoloGate();
+  } catch (error) {
+    visionYoloConfig = {enabled:null};
+    resetYoloDetection(error.message);
+  }
+}
+
+// ASSETS-01: discovery lists names only; explicit adapters validate selected files.
+function fillAssetSelect(id, files, role, selected) {
+  const select = document.getElementById(id);
+  select.replaceChildren();
+  const paths = files.filter(file=>file.candidate_roles.includes(role)).map(file=>file.path);
+  if (selected && !paths.includes(selected)) paths.unshift(selected);
+  for (const path of paths) {
+    const option = document.createElement("option");
+    option.value = path;
+    option.textContent = path + (files.some(file=>file.path===path) ? "" : " (missing)");
+    select.appendChild(option);
+  }
+  select.value = selected || paths[0] || "";
+}
+async function scanSystemAssets() {
+  const status = document.getElementById("assetsScanStatus");
+  status.textContent = "Scanning...";
+  try {
+    const response = await fetch("/api/calibration/assets", {cache:"no-store"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Scan failed");
+    document.getElementById("assetsRoot").textContent = data.root;
+    fillAssetSelect("visionModelPath", data.files, "vision", document.getElementById("visionModelPath").value);
+    fillAssetSelect("assetsGoldModel", data.files, "gold", data.selection.gold);
+    fillAssetSelect("assetsPurityModel", data.files, "purity", data.selection.purity);
+    document.getElementById("assetsApiConfig").value = JSON.stringify(data.api, null, 2);
+    await loadReferenceSettings(data.files);
+    document.getElementById("assetsInventory").textContent = data.files.map(file=>file.path+" — "+file.status).join("\n") || "No supported candidate files found.";
+    status.textContent = data.files.length + " files found. Select and validate before use.";
+  } catch (error) { status.textContent = error.message; }
+}
+async function saveAssetConfiguration(kind) {
+  const models = kind === "models";
+  const status = document.getElementById(models ? "assetsModelsStatus" : "assetsApiStatus");
+  const button = document.getElementById(models ? "assetsModelsSaveButton" : "assetsApiSaveButton");
+  button.disabled = true;
+  status.textContent = models ? "Validating both models..." : "Checking JSON...";
+  try {
+    const payload = models ? {gold:document.getElementById("assetsGoldModel").value, purity:document.getElementById("assetsPurityModel").value} : JSON.parse(document.getElementById("assetsApiConfig").value);
+    const response = await fetch("/api/calibration/assets/"+kind, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Not saved");
+    status.textContent = data.message || "Validated and activated. Gold Standard mode uses this pair on the next verification.";
+  } catch (error) { status.textContent = error.message; }
+  finally { button.disabled = false; }
+}
+async function showApiReference(doc="api") {
+  if(typeof doc!=="string")doc="api";
+  const target = document.getElementById("assetsReference");
+  try {
+    const response = await fetch("/api/calibration/assets/reference?doc="+encodeURIComponent(doc), {cache:"no-store"});
+    if (!response.ok) throw new Error("Engineering login required");
+    target.textContent = await response.text(); target.hidden = false;
+    const parent=target.closest?.("details");if(parent)parent.open=true;
+    target.scrollIntoView?.({block:"nearest"});
+  } catch (error) { document.getElementById("assetsApiStatus").textContent = error.message; }
+}
+
+
+// GEOMETRY-01: physical mask estimates are separate evidence; preserve learned
+// classifiers' historical formula-area inputs until a matching model is used.
+let geometryBusy = false;
+function geometrySummaryText(value) {
+  if (!value) return "";
+  if (!value.ok) return value.message || "Geometry unavailable";
+  const number=(n,d=2)=>Number.isFinite(n)?n.toFixed(d):"unavailable";
+  const source=value.height_source==="manual_known"?"known manual thickness":value.height_source==="depth_above_support"?"depth above support":"height unavailable";
+  let text=`Footprint ${number(value.area_mm2)} mm² (SD ${number(value.area_std_mm2)}) · height ${number(value.height_mm,3)} mm (${source}) · volume ${number(value.volume_mm3)} mm³ · ${value.samples} frames.`;
+  if (value.area_reference==="support_plane_projection") text+=" Area projected onto support plane; enter known thickness to refine.";
+  const density=value.density_check;
+  if (density?.available) text+=` Density ${number(density.density_g_cm3)} g/cm³ · ${density.message} (deviation ${number(density.deviation_pct,1)}%, tolerance ±${density.tolerance_pct}%).`;
+  else text+=" Density unavailable: "+(density?.message || "stable mass and volume required")+".";
+  if (value.warnings?.length) text+=" "+value.warnings.join("; ");
+  return text+" Estimate only; does not establish gold or purity.";
+}
+function renderGeometrySummary(id,value) {
+  const node=document.getElementById(id);
+  if (!node) return;
+  node.hidden=!value;node.textContent=geometrySummaryText(value);
+}
+async function measureGeometry(kind,manual=false) {
+  if (geometryBusy) return;
+  const teaching=kind==="teaching", target=teaching?teachingState:state;
+  const prefix=teaching?"teaching":"user", screen=currentScreen, navigation=screenNavigation;
+  const startingDimensions=JSON.stringify([target.widthMm,target.lengthMm,target.thicknessMm]);
+  const status=document.getElementById(prefix+"GeometryStatus");
+  const shape=teaching?getTeachingShapeLabel():getMeasurementShapeLabel();
+  if (!["Coin","Bar"].includes(shape)) {status.textContent="Coin and bar only.";return;}
+  const thickness=Number(target.thicknessMm);
+  if (manual && (!Number.isFinite(thickness)||thickness<=0||thickness>50)) {status.textContent="Enter a known thickness in the keypad (0–50 mm), then press Use entered thickness.";return;}
+  geometryBusy=true;target.geometryReading=null;
+  renderGeometrySummary(prefix+"GeometrySummary",null);
+  document.querySelectorAll(".geometry-measure").forEach(button=>button.disabled=true);
+  const next=document.getElementById(teaching?"teachingDimensionNextButton":"dimensionNextButton");next.disabled=true;
+  stopTeachingCameraPreview();
+  status.textContent="Measuring repeated camera frames, then stable mass. Keep item still...";
+  try {
+    const response=await fetch("/api/vision/geometry/measure",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({shape,manual_height_mm:manual?thickness:null})});
+    const value=await response.json();
+    if (!response.ok) throw new Error(value.message||"Geometry measurement failed");
+    if (currentScreen!==screen || screenNavigation!==navigation || (teaching?getTeachingShapeLabel():getMeasurementShapeLabel())!==shape
+        || JSON.stringify([target.widthMm,target.lengthMm,target.thicknessMm])!==startingDimensions) {
+      if(currentScreen===screen)status.textContent="Inputs or screen changed; old geometry result discarded. Measure again.";
+      return;
+    }
+    target.geometryReading=value;
+    if (value.height_mm!=null) target.thicknessMm=value.height_mm.toFixed(3);
+    if (teaching) updateTeachingDimensionDisplay();else updateDimensionDisplay();
+    renderGeometrySummary(prefix+"GeometrySummary",value);
+    status.textContent=value.volume_mm3==null?"Height unavailable. Enter known thickness and retry using that button.":"Geometry estimate saved separately from the classifier inputs.";
+  } catch(error) {if(currentScreen===screen)status.textContent=error.message;}
+  finally {
+    geometryBusy=false;next.disabled=false;
+    document.querySelectorAll(".geometry-measure").forEach(button=>button.disabled=false);
+    if(currentScreen===screen)updateCameraPreviewForScreen();
+  }
+}
+async function geometryEngineeringAction(action="status") {
+  const status=document.getElementById("geometryReferenceStatus");
+  if (action==="reference" && !document.getElementById("geometryEmptyConfirmed").checked) {status.textContent="Remove all items and tick the empty-support confirmation.";return;}
+  const buttons=["geometryReferenceButton","geometryStatusButton","geometrySettingsSaveButton"].map(id=>document.getElementById(id));
+  buttons.forEach(button=>button.disabled=true);status.textContent=action==="reference"?"Capturing empty-support frames...":"Checking geometry configuration...";
+  try {
+    let url="/api/calibration/geometry",options={cache:"no-store"};
+    if(action!=="status"){
+      url+="/"+action;
+      options={method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(action==="reference"?{empty_confirmed:true}:JSON.parse(document.getElementById("geometrySettingsJson").value))};
+    }
+    let response=await fetch(url,options),value=await response.json();
+    if(!response.ok)throw new Error(value.message||"Geometry unavailable");
+    if(action!=="status"){
+      response=await fetch("/api/calibration/geometry",{cache:"no-store"});value=await response.json();
+      if(!response.ok)throw new Error(value.message||"Geometry status unavailable");
+    }
+    document.getElementById("geometrySettingsJson").value=JSON.stringify(value.settings,null,2);
+    const ref=value.reference;
+    status.textContent=value.reference_for_current_session?`Reference ${ref.reference_id} · ${ref.samples} frames · plane RMS ${ref.plane.rms_mm.toFixed(3)} mm. Clear the support and recalibrate if it moved.`:"No reference for this camera session. Remove items and capture one.";
+    if(action==="reference")document.getElementById("geometryEmptyConfirmed").checked=false;
+  }catch(error){status.textContent=error.message;}
+  finally{buttons.forEach(button=>button.disabled=false);}
+}
+
+
+// REFERENCE-01: the selected bundle's contract is explicit; no legacy RF alias.
+let referenceDraft = null;
+async function loadReferenceSettings(files) {
+  const status=document.getElementById("referenceModelStatus");
+  try {
+    const response=await fetch("/api/calibration/assets/reference-model",{cache:"no-store"});
+    const cfg=await response.json();if(!response.ok)throw new Error(cfg.message||"Reference settings unavailable");
+    referenceDraft=cfg;
+    fillAssetSelect("referenceModelPath",files,"reference",cfg.model_path);
+    document.getElementById("referenceMinScore").value=cfg.min_score*100;
+    document.getElementById("referenceProfileConfirmed").checked=cfg.profile_confirmed;
+    document.getElementById("referenceProfile").textContent=`F1–F4: ${cfg.frequency_hz.join(" / ")} Hz; ${cfg.amplitude_v_peak} V peak; signed raw-RMS change from air. Formula area, not mask area.`;
+    status.textContent="Select the supplied signal_plus_geometry.joblib. Test does not retrain the model.";
+  }catch(error){referenceDraft=null;status.textContent=error.message;}
+}
+async function submitReferenceModel(testOnly=false) {
+  const status=document.getElementById("referenceModelStatus");
+  if(!referenceDraft){status.textContent="Scan the asset folder first.";return;}
+  const buttons=["referenceTestButton","referenceSaveButton","referenceUseButton"].map(id=>document.getElementById(id));buttons.forEach(button=>button.disabled=true);
+  status.textContent="Checking the stored pipeline and library version...";
+  try {
+    const cfg={...referenceDraft,model_path:document.getElementById("referenceModelPath").value,
+      min_score:Number(document.getElementById("referenceMinScore").value)/100,
+      profile_confirmed:document.getElementById("referenceProfileConfirmed").checked};
+    const response=await fetch("/api/calibration/assets/reference-model"+(testOnly?"/test":""),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
+    const value=await response.json();if(!response.ok)throw new Error(value.message||"Reference model failed validation");
+    if(!testOnly)referenceDraft=value.settings;
+    status.textContent=value.message+` Effective minimum score ${(value.metadata.effective_threshold*100).toFixed(0)}%.`;
+  }catch(error){status.textContent=error.message;}
+  finally{buttons.forEach(button=>button.disabled=false);}
+}
+async function useReferenceMode() {
+  const status=document.getElementById("referenceModelStatus"),button=document.getElementById("referenceUseButton");button.disabled=true;
+  try {
+    const response=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({classifier_algorithm:"gold_reference_v1"})});
+    const value=await response.json();if(!response.ok)throw new Error(value.message||"Validate/select a confirmed reference profile first");
+    state.classifierAlgorithm=value.classifier_algorithm;
+    document.getElementById("classifierAlgorithmSelect").value=value.classifier_algorithm;
+    status.textContent="Reference mode selected. Run fresh F1–F4 air calibration. Results are reference matches, not gold verification.";
+  }catch(error){status.textContent=error.message;}
+  finally{button.disabled=false;}
+}
+function renderReferenceSummary(id,record) {
+  const node=document.getElementById(id);if(!node)return;
+  const result=record?.classifier_result;node.hidden=!result?.reference_only;
+  node.textContent=result?.reference_only?(result.simulation?"SIMULATION ONLY. ":"")+`Known-gold reference model · uncalibrated score ${Number(result.confidence||0).toFixed(2)}%. `+result.decision_message:"";
+}
+
+function visionFormValues() {
+  const node = id => document.getElementById(id);
+  return {enabled:node("visionEnabled").checked, model_path:node("visionModelPath").value,
+    detection_confidence:Number(node("visionDetectionConfidence").value)/100,
+    acceptance_confidence:Number(node("visionAcceptanceConfidence").value)/100,
+    roi:["X","Y","W","H"].map(key=>Number(node("visionRoi"+key).value)/100), imgsz:640};
+}
+async function openVisionSettings() {
+  await showScreen("visionSettings");
+  if (currentScreen !== "visionSettings") return;
+  const status = document.getElementById("visionSettingsStatus");
+  status.textContent = "Loading...";
+  try {
+    const response = await fetch("/api/calibration/vision/settings", {cache:"no-store"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Engineering login required");
+    document.getElementById("visionEnabled").checked = data.enabled;
+    fillAssetSelect("visionModelPath", [], "vision", data.model_path);
+    await scanSystemAssets();
+    geometryEngineeringAction("status");
+    document.getElementById("visionDetectionConfidence").value = data.detection_confidence*100;
+    document.getElementById("visionAcceptanceConfidence").value = data.acceptance_confidence*100;
+    ["X","Y","W","H"].forEach((key,i)=>document.getElementById("visionRoi"+key).value=data.roi[i]*100);
+    status.textContent = "Choose a scanned .pt, test it, then save. All paths are relative to system_assets.";
+  } catch (error) { status.textContent = error.message; }
+}
+async function submitVisionSettings(testOnly = false) {
+  const status = document.getElementById("visionSettingsStatus");
+  const buttons = ["visionSaveButton","visionTestButton"].map(id=>document.getElementById(id));
+  buttons.forEach(button=>button.disabled=true);
+  status.textContent = "Loading/checking the local model. First load can take a moment...";
+  try {
+    const response = await fetch(`/api/calibration/vision/${testOnly ? "validate" : "settings"}`, {
+      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(visionFormValues())
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Model/settings check failed");
+    status.textContent = testOnly ? "Segmentation model ready: coin and bar." : "Saved. Open Live View to check detections and ROI.";
+    if (!testOnly) visionYoloConfig = null;
+  } catch (error) { status.textContent = error.message; }
+  finally { buttons.forEach(button=>button.disabled=false); }
+}
+
+
+// CAMERA-DEBUG-01: debug is Engineering-only and never drawn into saved pixels.
+function cameraDebugAllowed() {
+  return engineeringUnlocked && engineeringScreens.has(currentScreen) && teachingCameraMode === "live" && !removalScreen();
+}
+function updateCameraDebugControls() {
+  const button = document.getElementById("cameraDebugButton");
+  button.hidden = !engineeringUnlocked || !engineeringScreens.has(currentScreen);
+  button.disabled = teachingCameraMode !== "live";
+  if (!cameraDebugAllowed()) cameraDebugEnabled = false;
+  button.setAttribute("aria-pressed", String(cameraDebugEnabled));
+  button.textContent = cameraDebugEnabled ? "Camera debug: on" : "Camera debug: off";
+}
+function drawCameraDebug(report) {
+  const overlay = document.getElementById("cameraDebugOverlay");
+  const details = document.getElementById("cameraDebugDetails");
+  const visible = cameraDebugEnabled && cameraDebugAllowed() && Boolean(report);
+  overlay.hidden = details.hidden = !visible;
+  overlay.textContent = "";
+  document.getElementById("cameraDebugJson").textContent = "";
+  if (!visible) return;
+  const intr = report.aligned_depth || {};
+  const distance = report.scene_distance_mm?.median;
+  const number = value => Number.isFinite(value) ? value.toFixed(2) : "--";
+  overlay.textContent = `${intr.width || "--"}x${intr.height || "--"} | fx ${number(intr.fx_px)} fy ${number(intr.fy_px)} px\nScene range ${number(distance)} mm (not thickness)\nValid sampled depth ${number(report.valid_depth_percent)}%`;
+  document.getElementById("cameraDebugJson").textContent = JSON.stringify(report, null, 2);
+}
+
+
+function cameraPreviewShape() {
+  if (currentScreen === "teachingDimension") return getTeachingShapeLabel();
+  if (currentScreen === "liveView") return document.getElementById("cameraShapeSelect").value;
+  return getMeasurementShapeLabel();
+}
+
+function drawCameraOverlay(annotation) {
+  const svg = document.getElementById("cameraAnnotationOverlay");
+  svg.replaceChildren();
+  svg.hidden = !cameraAnnotationsEnabled || !annotation;
+  if (svg.hidden) return;
+  const width = Number(annotation.image?.width);
+  const height = Number(annotation.image?.height);
+  if (!(width > 0 && height > 0)) return;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (annotation.detection?.roi_xywhn) {
+    const [x,y,w,h] = annotation.detection.roi_xywhn;
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    for (const [key,value] of Object.entries({x:x*width,y:y*height,width:w*width,height:h*height,fill:"none",stroke:"#fbbf24","stroke-width":2,"stroke-dasharray":"6 4"})) rect.setAttribute(key,String(value));
+    svg.appendChild(rect);
+  }
+  for (const object of annotation.objects || []) {
+    if (Number.isFinite(object.confidence) && object.bbox_xywhn) {
+      const [x,y,w,h] = object.bbox_xywhn;
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x",String(Math.max(0,(x-w/2)*width)));
+      text.setAttribute("y",String(Math.max(18,(y-h/2)*height-4)));
+      text.setAttribute("fill",object.accepted ? "#22c55e" : "#fbbf24");
+      text.setAttribute("font-size",String(Math.max(16,width/50)));
+      text.textContent = `${object.label} ${(object.confidence*100).toFixed(0)}%`;
+      svg.appendChild(text);
+    }
+    for (const polygon of object.polygons || []) {
+      const points = polygon.points || [];
+      if (points.length < 3 || !points.every(p => p.length === 2 && p.every(v => Number.isFinite(v) && v >= 0 && v <= 1))) continue;
+      const element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      element.setAttribute("points", points.map(([x,y]) => `${x*width},${y*height}`).join(" "));
+      element.setAttribute("fill", "none");
+      element.setAttribute("stroke", polygon.role === "hole" ? "#22d3ee" : "#22c55e");
+      element.setAttribute("stroke-width", "2");
+      element.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(element);
+    }
+  }
+}
+
+function localPhoto(record) {
+  const value = record?.evidence_image || record?.image || {};
+  const photo = typeof value === "string" ? {image_url:value} : value;
+  let raw = photo.image_url || photo.url || record?.image_url;
+  if (!raw) return null;
+  if (/^\/?teaching_images\//.test(raw)) raw = "/api/teaching/image/" + raw.split("/").pop();
+  if (!/^\/api\/(verification|teaching)\/image\/[A-Za-z0-9_.-]+\.(jpg|jpeg|png)$/i.test(raw)) return null;
+  return {...photo, image_url:raw, overlay_url:raw.replace(/\.(jpg|jpeg|png)$/i,".html"),
+    annotation_url:photo.annotation_url || raw.replace(/\.(jpg|jpeg|png)$/i,".json")};
+}
+
+function renderSavedPhoto(prefix, record) {
+  const panel = document.getElementById(prefix + "PhotoPanel");
+  const photo = localPhoto(record);
+  panel.hidden = !photo;
+  if (!photo) return;
+  const rawLink = document.getElementById(prefix + "PhotoDownload");
+  rawLink.href = photo.image_url;
+  const overlayLink = document.getElementById(prefix + "PhotoViewer");
+  overlayLink.href = photo.overlay_url;
+  const frame = document.getElementById(prefix + "PhotoFrame");
+  if (frame) frame.src = photo.overlay_url;
+}
+
+async function saveCameraPhoto() {
+  const button = document.getElementById("cameraSavePhotoButton");
+  const status = document.getElementById("cameraPhotoStatus");
+  button.disabled = true;
+  try {
+    const teaching = engineeringScreens.has(currentScreen);
+    const response = await fetch(`/api/${teaching ? "teaching" : "verification"}/image/capture`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({shape:cameraPreviewShape(), detector:visionYoloConfig?.enabled ? "yolo" : "legacy"})
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Photo could not be saved");
+    cameraSavedPhoto = {...payload.image, scope:teaching ? "teaching" : "verification"};
+    const link = document.getElementById("cameraPhotoDownload");
+    link.href = cameraSavedPhoto.image_url;
+    link.hidden = false;
+    status.textContent = payload.warning ? "Raw photo saved; detection unavailable: " + payload.warning : "Photo saved. Automatic masks require review before training.";
+    document.getElementById("teachingCapturedImageButton").disabled = false;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally { button.disabled = false; }
+}
+
+
+// REV 2026-10-18 / REMOVE-01: three fresh clear batches + human inspection.
+// Preview and removal use the SAME request loop, avoiding duplicate YOLO work.
+let removalEvidence = null, removalClearBatches = 0, removalReceivedAt = 0;
+let removalExpiryTimer = null, removalConfirmBusy = false;
+function removalScreen() { return ["result", "teachingRemove"].includes(currentScreen); }
+function removalNode(suffix) { return document.getElementById((currentScreen === "result" ? "result" : "teaching") + "Removal" + suffix); }
+function resetRemovalEvidence(message = "Waiting for live removal checks...") {
+  clearTimeout(removalExpiryTimer); removalEvidence = null; removalClearBatches = 0;
+  if (removalScreen()) renderRemovalState(message);
+}
+function removalReady() {
+  return removalEvidence?.ready_for_confirmation === true && removalClearBatches >= 3
+    && teachingCameraMode === "live" && !document.hidden
+    && performance.now() - removalReceivedAt + Number(removalEvidence.evidence_age_ms || 0) < 5000;
+}
+function renderRemovalState(message = "") {
+  if (!removalScreen()) return;
+  const ready = removalReady(), confirm = removalNode("Confirm");
+  confirm.disabled = !ready;
+  if (!ready) confirm.checked = false;
+  removalNode("Status").textContent = message || `${removalEvidence?.message || "Please remove the item."} Clear checks: ${removalClearBatches}/3.`;
+  removalNode("Status").classList.toggle("vision-ready", ready);
+}
+function observeRemovalEvidence(value) {
+  const previous = removalEvidence;
+  const continuous = previous?.preparation_id === value?.preparation_id
+    && performance.now() - removalReceivedAt + Number(previous?.evidence_age_ms || 0) < 5000;
+  const fresh = Number.isFinite(value?.evidence_age_ms) && value.evidence_age_ms < 5000;
+  removalClearBatches = value?.ready_for_confirmation === true && fresh ? (continuous ? removalClearBatches + 1 : 1) : 0;
+  removalClearBatches = Math.min(3, removalClearBatches);
+  removalEvidence = value; removalReceivedAt = performance.now();
+  clearTimeout(removalExpiryTimer); renderRemovalState();
+  removalExpiryTimer = setTimeout(() => resetRemovalEvidence("Removal evidence expired. Select Live and wait for fresh checks."), Math.max(1,5000-Number(value?.evidence_age_ms || 0)));
+}
+async function confirmItemRemoved(next) {
+  if (removalConfirmBusy) return;
+  if (!removalReady() || !removalNode("Confirm").checked) {
+    renderRemovalState("Please remove the item, wait for 3 clear checks, then tick the visual confirmation. Select Live if needed.");
+    return;
+  }
+  const previousId = removalEvidence.preparation_id, navigation = screenNavigation, screen = currentScreen;
+  removalConfirmBusy = true;
+  stopTeachingCameraPreview();
+  removalNode("Status").textContent = "Checking once more before continuing...";
+  const controller = new AbortController(); teachingCameraRequest = controller;
+  const timeout = setTimeout(() => controller.abort(),45000);
+  let moved = false;
+  try {
+    const response = await fetch("/api/verification/removal/check", {cache:"no-store",signal:controller.signal});
+    const bundle = await response.json();
+    if (navigation !== screenNavigation || screen !== currentScreen || document.hidden) return;
+    const check = bundle.removal;
+    if (!response.ok || !check?.ready_for_confirmation || check.preparation_id !== previousId || !Number.isFinite(check.evidence_age_ms) || check.evidence_age_ms >= 5000) {
+      throw new Error(check?.message || bundle.message || "Removal remains unconfirmed. Try Live again.");
+    }
+    moved = true;
+    await next();
+  } catch (error) {
+    if (navigation === screenNavigation && screen === currentScreen) removalNode("Status").textContent = error.message || "Removal check failed; retry Live.";
+  } finally {
+    clearTimeout(timeout); removalConfirmBusy = false;
+    if (!moved && navigation === screenNavigation && screen === currentScreen) {
+      // Resume automatically; the failure message remains until a fresh batch arrives.
+      teachingCameraMode = "live"; loadTeachingDetectedImage();
+    }
+  }
+}
+
+// FINISH-01: passive readiness report stays behind Engineering authentication.
+async function loadReadiness() {
+  const status = document.getElementById("readinessStatus"), button = document.getElementById("readinessRefreshButton");
+  const rows = document.getElementById("readinessRows");
+  button.disabled = true; status.textContent = "Checking services and configuration; no sensors are activated..."; rows.replaceChildren();
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(),15000);
+  try {
+    const response = await fetch("/api/calibration/readiness",{cache:"no-store",signal:controller.signal});
+    const report = await response.json();
+    if (!response.ok) throw new Error(report.message || "Readiness unavailable; log into Engineering again");
+    if (currentScreen !== "readiness") return;
+    status.textContent = `${report.ready_for_trial ? "Passive checks passed" : "Setup needs attention"}. ${report.note}`;
+    for (const check of report.checks) {
+      const row=document.createElement("article"), heading=document.createElement("strong"), text=document.createElement("p");
+      row.className="readiness-row"; heading.textContent=`${check.state.toUpperCase()} · ${check.name}`;text.textContent=check.message;
+      row.append(heading,text);
+      if (check.details) {const details=document.createElement("details"), summary=document.createElement("summary"), pre=document.createElement("pre");summary.textContent="Details";pre.textContent=JSON.stringify(check.details,null,2);details.append(summary,pre);row.append(details);}
+      rows.appendChild(row);
+    }
+  } catch(error) {if(currentScreen === "readiness")status.textContent=error.message || "Readiness request failed";}
+  finally {clearTimeout(timeout);button.disabled=false;}
+}
+
+function cameraPreviewHost() {
+  if (currentScreen === "teachingDimension") {
+    const panel = document.getElementById("teachingImagePanel");
+    return panel.classList.contains("active") ? panel : null;
+  }
+  const hosts = {
+    place: "userPlaceCameraHost", measure: "userMeasureCameraHost",
+    teachingRemove: "teachingRemoveCameraHost", result: "userResultCameraHost", liveView: "engineeringCameraHost",
+    scalePrepare: "scalePreparationCameraHost"
+  };
+  return hosts[currentScreen] ? document.getElementById(hosts[currentScreen]) : null;
+}
+
+function teachingCameraPanelVisible() {
+  return Boolean(cameraPreviewHost()) && !document.hidden;
+}
+
+async function updateCameraPreviewForScreen() {
+  stopTeachingCameraPreview();
+  updateCameraDebugControls();
+  const host = cameraPreviewHost();
+  if (!host) return;
+  host.appendChild(document.getElementById("cameraPreviewWidget"));
+  // PHOTO-01: live preview, saved user photo and captured measurement stay distinct.
+  const teaching = engineeringScreens.has(currentScreen);
+  if (!teaching && cameraSavedPhoto?.scope === "teaching") cameraSavedPhoto = null;
+  const capturedButton = document.getElementById("teachingCapturedImageButton");
+  capturedButton.hidden = false;
+  capturedButton.disabled = !teaching && !cameraSavedPhoto;
+  document.getElementById("cameraShapeSelect").hidden = currentScreen !== "liveView";
+  if (!teaching) {
+    teachingCameraMode = "live";
+  }
+  const photoLink = document.getElementById("cameraPhotoDownload");
+  photoLink.hidden = !cameraSavedPhoto;
+  if (cameraSavedPhoto) photoLink.href = cameraSavedPhoto.image_url;
+  const generation = teachingCameraGeneration;
+  const screen = currentScreen;
+  await refreshYoloStatus();
+  if (generation !== teachingCameraGeneration || screen !== currentScreen) return;
+  document.getElementById("cameraShapeSelect").hidden = currentScreen !== "liveView" || visionYoloConfig?.enabled === true;
+  loadTeachingDetectedImage();
+}
+
+function stopTeachingCameraPreview() {
+  teachingCameraGeneration += 1;
+  resetRemovalEvidence();
+  clearTimeout(teachingCameraTimer);
+  if (teachingCameraRequest) teachingCameraRequest.abort();
+  teachingCameraRequest = null;
+  if (teachingCameraUrl) URL.revokeObjectURL(teachingCameraUrl);
+  teachingCameraUrl = null;
+  drawCameraOverlay(null);
+  drawCameraDebug(null);
+  resetYoloDetection();
 }
 
 function loadTeachingDetectedImage() {
+  stopTeachingCameraPreview();
+  updateCameraDebugControls();
+  if (!teachingCameraPanelVisible()) return;
+  const generation = teachingCameraGeneration;
+  const live = teachingCameraMode === "live";
   const image = document.getElementById("teachingDetectedImage");
   const status = document.getElementById("teachingDetectedImageStatus");
-  status.textContent = "Loading detected image...";
-  image.onload = () => { status.textContent = "Latest detected item image"; };
-  image.onerror = () => { status.textContent = "No detected image available yet. Capture or detect an image first."; };
-  image.src = `/api/vision/image/detected?t=${Date.now()}`;
+  image.onload = null;
+  image.onerror = null;
+  image.hidden = true;
+  status.textContent = live ? "Connecting to live camera..." : "Loading captured result...";
+  document.getElementById("teachingRefreshImageButton").setAttribute("aria-pressed", String(live));
+  document.getElementById("teachingCapturedImageButton").setAttribute("aria-pressed", String(!live));
+  const overlayButton = document.getElementById("cameraAnnotationButton");
+  overlayButton.setAttribute("aria-pressed", String(cameraAnnotationsEnabled));
+  overlayButton.textContent = cameraAnnotationsEnabled ? "Annotations: on" : "Annotations: off";
+
+  async function nextFrame() {
+    if (generation !== teachingCameraGeneration || !teachingCameraPanelVisible()) return;
+    const removalLive = live && removalScreen();
+    const yoloLive = live && visionYoloConfig?.enabled === true && currentScreen !== "scalePrepare";
+    const controller = new AbortController();
+    teachingCameraRequest = controller;
+    const timeout = setTimeout(() => controller.abort(), (yoloLive || removalLive) ? 45000 : 8000);
+    let delay = 200; // At most five preview frames/second; no overlapping requests.
+    let url = null;
+    try {
+      let blob, annotation = null, legacy = false, debugReport = null;
+      const debugLive = live && cameraDebugEnabled && cameraDebugAllowed();
+      if (removalLive) {
+        delay = 1000;
+        const response = await fetch("/api/verification/removal/check",{cache:"no-store",signal:controller.signal});
+        const bundle = await response.json();
+        if (generation !== teachingCameraGeneration) return;
+        if (!response.ok) throw new Error(bundle.message || "Removal check unavailable");
+        observeRemovalEvidence(bundle.removal);
+        if (!bundle.raw_jpeg_base64) {
+          image.hidden = true; drawCameraOverlay(null); drawCameraDebug(null);
+          status.textContent = bundle.removal?.camera_error ? "Camera unavailable; inspect the physical pan directly." : "No fresh frame";
+          return;
+        }
+        annotation = bundle.annotation;
+        if (yoloLive) observeYoloDetection(bundle.detection);
+        const bytes = Uint8Array.from(atob(bundle.raw_jpeg_base64),c=>c.charCodeAt(0));
+        blob = new Blob([bytes],{type:"image/jpeg"});
+      } else if (yoloLive) {
+        delay = 1000; // One sequential inference request at a time; no raw-preview inference load.
+        const endpoint = debugLive ? "/api/calibration/vision/frame?debug=1" : "/api/vision/yolo/frame";
+        const response = await fetch(endpoint, {cache:"no-store",signal:controller.signal});
+        const bundle = await response.json();
+        if (!response.ok) throw new Error(bundle.message || "YOLO/camera unavailable");
+        annotation = bundle.annotation;
+        debugReport = debugLive ? bundle.camera_debug : null;
+        const bytes = Uint8Array.from(atob(bundle.raw_jpeg_base64), c=>c.charCodeAt(0));
+        blob = new Blob([bytes], {type:"image/jpeg"});
+        if (generation !== teachingCameraGeneration) return;
+        observeYoloDetection(bundle.detection);
+      } else if (teachingCameraMode === "saved" && cameraSavedPhoto) {
+        const response = await fetch(cameraSavedPhoto.image_url, {cache:"no-store", signal:controller.signal});
+        if (!response.ok) throw new Error("Saved photo unavailable");
+        blob = await response.blob();
+        if (cameraAnnotationsEnabled) {
+          const sidecar = await fetch(cameraSavedPhoto.annotation_url, {cache:"no-store", signal:controller.signal});
+          if (sidecar.ok) annotation = await sidecar.json();
+        }
+      } else if (cameraAnnotationsEnabled || !live || debugLive) {
+        const query = live ? `shape=${encodeURIComponent(cameraPreviewShape())}&annotations=${cameraAnnotationsEnabled ? 1 : 0}` : "captured=1";
+        const frameEndpoint = debugLive ? "/api/calibration/camera/frame" : "/api/vision/image/frame";
+        const response = await fetch(`${frameEndpoint}?${query}&t=${Date.now()}`, {
+          cache:"no-store", signal:controller.signal
+        });
+        if (!response.ok && !live) {
+          // Older services/records can still supply the original pre-annotated JPEG.
+          const fallback = await fetch(`/api/vision/image/detected?t=${Date.now()}`, {cache:"no-store",signal:controller.signal});
+          if (!fallback.ok) throw new Error("No captured result");
+          blob = await fallback.blob();
+          legacy = true;
+        } else {
+          if (!response.ok) throw new Error(`Camera service returned ${response.status}`);
+          const bundle = await response.json();
+          annotation = bundle.annotation;
+          debugReport = debugLive ? bundle.camera_debug : null;
+          if (debugLive && !debugReport) throw new Error("Camera diagnostics unavailable; restart Image service with this patch");
+          const bytes = Uint8Array.from(atob(bundle.raw_jpeg_base64), c=>c.charCodeAt(0));
+          blob = new Blob([bytes], {type:"image/jpeg"});
+        }
+      } else {
+        const response = await fetch(`/api/vision/image/live?t=${Date.now()}`, {cache:"no-store",signal:controller.signal});
+        if (!response.ok) throw new Error(`Camera service returned ${response.status}`);
+        blob = await response.blob();
+      }
+      if (generation !== teachingCameraGeneration) return;
+      url = URL.createObjectURL(blob);
+      image.src = url;
+      await image.decode();
+      if (generation !== teachingCameraGeneration) return;
+      if (teachingCameraUrl) URL.revokeObjectURL(teachingCameraUrl);
+      teachingCameraUrl = url;
+      url = null;
+      image.hidden = false;
+      drawCameraOverlay(legacy ? null : annotation);
+      drawCameraDebug(debugReport);
+      status.textContent = legacy ? "Legacy captured JPEG; its existing markings are part of the image"
+        : (live ? `Live camera - ${new Date().toLocaleTimeString()}` : "Captured photo - not live");
+      if (cameraAnnotationsEnabled && annotation?.warning) status.textContent += " | Outlines unavailable: " + annotation.warning;
+      else if (cameraAnnotationsEnabled && annotation) status.textContent += " | Automatic outlines; unreviewed";
+    } catch (error) {
+      if (generation !== teachingCameraGeneration) return;
+      image.hidden = true; // Never present an old frame as current after an error.
+      drawCameraOverlay(null);
+      drawCameraDebug(null);
+      resetYoloDetection(yoloLive ? error.message : "Live detection unavailable");
+      if (removalLive) resetRemovalEvidence(error.message || "Removal check failed; retry Live.");
+      status.textContent = live
+        ? "Live camera unavailable; retrying. Check Image service on port 8003."
+        : "No captured result available. Take a measurement first.";
+      delay = 2000;
+    } finally {
+      clearTimeout(timeout);
+      if (url) URL.revokeObjectURL(url);
+      if (generation === teachingCameraGeneration) {
+        teachingCameraRequest = null;
+        if (live && teachingCameraPanelVisible()) {
+          teachingCameraTimer = setTimeout(nextFrame, delay);
+        }
+      }
+    }
+  }
+  nextFrame();
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopTeachingCameraPreview();
+  else if (teachingCameraMode === "live" && teachingCameraPanelVisible()) updateCameraPreviewForScreen();
+});
+window.addEventListener("pagehide", stopTeachingCameraPreview);
 
 function renderLiveViewTab() {
   const rawActive = state.liveViewTab !== "delta";
@@ -420,6 +1149,7 @@ function updateTeachingDimensionFieldSelection() {
 }
 
 function updateDimensionDisplay() {
+  document.getElementById("userGeometryPanel").hidden=!["Coin","Bar"].includes(getMeasurementShapeLabel());
   const config = getMeasurementDimensionConfig();
   document.getElementById("widthLabel").textContent = config.labels.width;
   document.getElementById("lengthLabel").textContent = config.labels.length;
@@ -438,6 +1168,7 @@ function updateDimensionDisplay() {
 }
 
 function updateTeachingDimensionDisplay() {
+  document.getElementById("teachingGeometryPanel").hidden=!["Coin","Bar"].includes(getTeachingShapeLabel());
   const config = getTeachingDimensionConfig();
   document.getElementById("teachingWidthLabel").textContent = config.labels.width;
   document.getElementById("teachingLengthLabel").textContent = config.labels.length;
@@ -456,6 +1187,7 @@ function updateTeachingDimensionDisplay() {
 }
 
 function setDimensionValue(field, value) {
+  state.geometryReading=null;renderGeometrySummary("userGeometrySummary",null);
   if (field === "length") {
     state.lengthMm = value.slice(0, 7);
   } else if (field === "thickness") {
@@ -467,6 +1199,7 @@ function setDimensionValue(field, value) {
 }
 
 function setTeachingDimensionValue(field, value) {
+  teachingState.geometryReading=null;renderGeometrySummary("teachingGeometrySummary",null);
   if (field === "length") {
     teachingState.lengthMm = value.slice(0, 7);
   } else if (field === "thickness") {
@@ -478,6 +1211,10 @@ function setTeachingDimensionValue(field, value) {
 }
 
 function resetMeasurementInputs() {
+  state.scalePreparationId = null;
+  cameraSavedPhoto = null;
+  document.getElementById("cameraPhotoDownload").hidden = true;
+  document.getElementById("cameraPhotoStatus").textContent = "";
   setWeight("");
   state.measurementWeightSampling = false;
   state.measurementWeightReady = false;
@@ -485,6 +1222,8 @@ function resetMeasurementInputs() {
   state.lengthMm = "";
   state.thicknessMm = "";
   state.visionMeasurement = null;
+  state.geometryReading = null;
+  renderGeometrySummary("userGeometrySummary",null);
   state.activeDimensionField = "width";
   state.shape = "Ring";
   state.otherShape = "Pendant";
@@ -610,6 +1349,7 @@ function resetTeachingWeight() {
 }
 
 function resetTeachingInputs() {
+  teachingState.scalePreparationId = null;
   teachingState.material = "Gold";
   teachingState.otherMaterial = "Brass";
   teachingState.purity = "";
@@ -620,6 +1360,8 @@ function resetTeachingInputs() {
   teachingState.lengthMm = "";
   teachingState.thicknessMm = "";
   teachingState.visionMeasurement = null;
+  teachingState.geometryReading = null;
+  renderGeometrySummary("teachingGeometrySummary",null);
   teachingState.activeDimensionField = "width";
   teachingState.latestRecord = null;
   resetTeachingWeight();
@@ -632,22 +1374,21 @@ function resetTeachingInputs() {
 }
 
 function getCurrentFrequencyValue() {
-  const index = Math.max(0, Math.min(2, Number(state.activeFrequencySlot || 1) - 1));
-  return state.multiFrequenciesKhz[index] || 10;
+  const index = Math.max(0, Math.min(3, Number(state.activeFrequencySlot || 1) - 1));
+  return state.multiFrequenciesKhz[index] || 0;
 }
 
 function updateFrequencyModeSelection() {
-  document.getElementById("frequencySlot1Button").classList.toggle("selected", state.activeFrequencySlot === 1);
-  document.getElementById("frequencySlot2Button").classList.toggle("selected", state.activeFrequencySlot === 2);
-  document.getElementById("frequencySlot3Button").classList.toggle("selected", state.activeFrequencySlot === 3);
+  for (let slot = 1; slot <= 4; slot += 1) {
+    const button = document.getElementById(`frequencySlot${slot}Button`);
+    button.classList.toggle("selected", state.activeFrequencySlot === slot);
+    button.textContent = `F${slot} · ${state.multiFrequenciesKhz[slot - 1] || "not set"} kHz`;
+  }
   document.getElementById("frequencyModeStatus").textContent =
-    `Current: Frequency ${state.activeFrequencySlot} (${getCurrentFrequencyValue().toFixed(2)} kHz)`;
+    `Selected F${state.activeFrequencySlot}: ${getCurrentFrequencyValue().toFixed(2)} kHz`;
   document.getElementById("selectedFrequencyLabel").textContent = `Frequency ${state.activeFrequencySlot}`;
   document.getElementById("selectedFrequencyDisplay").textContent = String(getCurrentFrequencyValue());
-  const freqText =
-    `Sequence: F1 (${Number(state.multiFrequenciesKhz[0] || 0).toFixed(2)} kHz) -> ` +
-    `F2 (${Number(state.multiFrequenciesKhz[1] || 0).toFixed(2)} kHz) -> ` +
-    `F3 (${Number(state.multiFrequenciesKhz[2] || 0).toFixed(2)} kHz)`;
+  const freqText = state.multiFrequenciesKhz.map((value, index) => `F${index + 1} ${Number(value).toFixed(2)} kHz`).join(" · ");
   const calTag = document.getElementById("calibrationFrequencyTag");
   const teachTag = document.getElementById("teachingFrequencyTag");
   const liveTag = document.getElementById("liveFrequency");
@@ -657,6 +1398,13 @@ function updateFrequencyModeSelection() {
 }
 
 async function selectFrequencySlot(slot) {
+  if (slot > state.multiFrequenciesKhz.length) {
+    state.activeFrequencySlot = slot;
+    updateFrequencyModeSelection();
+    showScreen("frequencyEdit");
+    return;
+  }
+  const previousSlot = state.activeFrequencySlot;
   state.activeFrequencySlot = slot;
   updateFrequencyModeSelection();
 
@@ -669,17 +1417,12 @@ async function selectFrequencySlot(slot) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || "Unable to set frequency");
     const savedSlot = Number.parseInt(payload.active_frequency_slot, 10);
-    if (savedSlot >= 1 && savedSlot <= 3) state.activeFrequencySlot = savedSlot;
+    if (savedSlot >= 1 && savedSlot <= state.multiFrequenciesKhz.length) state.activeFrequencySlot = savedSlot;
   } catch (error) {
-    try {
-      await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active_frequency_slot: slot })
-      });
-    } catch (saveError) {
-      // Keep local selection visible; live view will report serial problems.
-    }
+    state.activeFrequencySlot = previousSlot;
+    updateFrequencyModeSelection();
+    document.getElementById("frequencyModeStatus").textContent = error.message || "Frequency was not applied";
+    return;
   }
 
   updateFrequencyModeSelection();
@@ -700,20 +1443,6 @@ function updateOtherShapeSelection() {
   });
 }
 
-function initializeCarouselImages() {
-  document.querySelectorAll(".object img").forEach((image) => {
-    image.addEventListener("load", () => {
-      image.closest(".object").classList.add("has-image");
-    });
-    image.addEventListener("error", () => {
-      image.closest(".object").classList.remove("has-image");
-    });
-
-    if (image.complete && image.naturalWidth > 0) {
-      image.closest(".object").classList.add("has-image");
-    }
-  });
-}
 
 function updateSystemClock() {
   const now = new Date();
@@ -745,20 +1474,40 @@ function updatePasswordDisplay() {
   document.getElementById("passwordDisplay").textContent = masked;
 }
 
-function submitPassword() {
+async function submitPassword() {
   const panel = document.querySelector(".password-panel");
   const message = document.getElementById("passwordMessage");
-
-  if (state.password === ENGINEERING_PIN) {
-    panel.classList.remove("error");
-    showScreen("engineering");
-    return;
-  }
-
-  panel.classList.add("error");
-  message.textContent = "Invalid PIN";
+  const pin = state.password;
   state.password = "";
   updatePasswordDisplay();
+  try {
+    const response = await fetch("/api/engineering/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin })
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(response.status === 429 ? "Too many attempts. Wait 60 seconds." : "Invalid PIN");
+    }
+    // Cancelling the login while its request was in flight must not reopen Engineering.
+    if (currentScreen !== "password") {
+      await fetch("/api/engineering/logout", { method: "POST" });
+      return;
+    }
+    engineeringUnlocked = true;
+    clearTimeout(engineeringExpiryTimer);
+    engineeringExpiryTimer = setTimeout(() => {
+      engineeringUnlocked = false;
+      fetch("/api/engineering/logout", { method: "POST" }).catch(() => {});
+      if (engineeringScreens.has(currentScreen)) showPasswordScreen();
+    }, result.expires_in_seconds * 1000);
+    panel.classList.remove("error");
+    showScreen("engineering");
+  } catch (error) {
+    engineeringUnlocked = false;
+    panel.classList.add("error");
+    message.textContent = error.message || "Login service unavailable";
+  }
 }
 
 function renderHistory() {
@@ -869,8 +1618,13 @@ function showHistoryDetail(id) {
   document.getElementById("detailWeight").textContent = record.weight;
   document.getElementById("detailShape").textContent = record.shape;
   document.getElementById("detailConfidence").textContent = record.confidence;
+  const scoreLabel=document.getElementById("detailScoreLabel");if(scoreLabel)scoreLabel.textContent=record.classifier_result?.reference_only?"Reference score":"Confidence";
   document.getElementById("detailStatus").textContent = record.status;
   renderFrequencyCards("detail", record);
+  renderSavedPhoto("detail", record);
+  renderScalePreparationSummary("detailScalePreparation", record);
+  renderGeometrySummary("detailGeometrySummary",record.geometry_evidence);
+  renderReferenceSummary("detailReferenceSummary",record);
   showScreen("historyDetail");
 }
 
@@ -895,6 +1649,7 @@ function showTeachingDetail(id) {
   document.getElementById("teachingDetailPurity").textContent = record.purity || "Known";
   document.getElementById("teachingDetailStatus").textContent = record.status;
   renderFrequencyCards("teachingDetail", record);
+  renderSavedPhoto("teachingDetail", record);
   showScreen("teachingDetail");
 }
 
@@ -911,7 +1666,8 @@ function formatCalibrationFrequencyAir(entry) {
   const ch2Count = Number(entry.ch2?.sample_count || 0);
   const ch1 = entry.ch1 ? `CH1 ${Number(entry.ch1.rms ?? 0).toFixed(6)} ${entry.ch1.unit || "V"} | ${Number(entry.ch1.std ?? 0).toFixed(6)} std | n=${ch1Count}` : "CH1 --";
   const ch2 = entry.ch2 ? `CH2 ${Number(entry.ch2.rms ?? 0).toFixed(6)} ${entry.ch2.unit || "V"} | ${Number(entry.ch2.std ?? 0).toFixed(6)} std | n=${ch2Count}` : "CH2 pending";
-  return `${ch1}\n${ch2}`;
+  const hz = Number(entry.frequency_hz);
+  return `${hz > 0 ? (hz / 1000).toFixed(2) + " kHz\n" : ""}${ch1}\n${ch2}`;
 }
 
 function formatRecordFrequencyStep(sequence, command) {
@@ -925,24 +1681,30 @@ function formatRecordFrequencyStep(sequence, command) {
   const ch2Text = ch2
     ? `CH2 ${Number(ch2.rms ?? 0).toFixed(6)} ${ch2.unit || "V"} | ${Number(ch2.std ?? 0).toFixed(6)} std | n=${Number(ch2.sample_count || 0)}`
     : "CH2 pending";
-  return `${ch1Text}\n${ch2Text}`;
+  const hz = Number(step?.frequency_hz);
+  const label = Number.isFinite(hz) && hz > 0 ? `${(hz / 1000).toFixed(2)} kHz\n` : "";
+  return `${label}${ch1Text}\n${ch2Text}`;
 }
 
 function renderFrequencyCards(prefix, record) {
   const sequence = record?.frequency_sequence || [];
-  document.getElementById(`${prefix}F1`).textContent = formatRecordFrequencyStep(sequence, "f1");
-  document.getElementById(`${prefix}F2`).textContent = formatRecordFrequencyStep(sequence, "f2");
-  document.getElementById(`${prefix}F3`).textContent = formatRecordFrequencyStep(sequence, "f3");
+  for (let slot = 1; slot <= 4; slot += 1) {
+    const node = document.getElementById(`${prefix}F${slot}`);
+    node.textContent = formatRecordFrequencyStep(sequence, `f${slot}`);
+    if (slot === 4 && node.textContent === "--") node.textContent = "Not recorded in this capture";
+  }
 }
 
 function renderClassifierStatus(payload) {
+  const reference=payload?.selected_algorithm==="gold_reference_v1";
+  document.getElementById("classifierTrainButton").textContent=reference?"Check reference model":"Compute Model";
   const classCounts = payload?.class_counts || {};
   const classReadiness = payload?.class_readiness || [];
   const warnings = payload?.warnings || [];
   document.getElementById("classifierTotalRecords").textContent = payload?.teaching_record_count ?? 0;
   document.getElementById("classifierEligibleRecords").textContent = payload?.eligible_record_count ?? 0;
   document.getElementById("classifierClassCount").textContent = payload?.class_count ?? 0;
-  document.getElementById("classifierModelStatus").textContent = payload?.model_exists ? "Ready" : "Not trained";
+  document.getElementById("classifierModelStatus").textContent = reference ? (payload?.reference_ready?"Reference ready":"Needs setup") : payload?.model_exists ? "Ready" : "Not trained";
   document.getElementById("classifierTrainedAt").textContent = payload?.model_trained_at || "--";
   document.getElementById("classifierCalibration").textContent = payload?.calibrated_at || "--";
   document.getElementById("classifierExcludedRecords").textContent = payload?.excluded_record_count ?? 0;
@@ -991,10 +1753,12 @@ function renderClassifierStatus(payload) {
       }).join("")
     : "<span>No eligible classes yet</span><strong>--</strong>";
 
+  if(reference)classList.textContent="External 916 / 999 reference pipeline; HMI teaching records do not retrain it.";
   const warningList = document.getElementById("classifierWarnings");
   const excluded = (payload?.excluded_preview || []).map((item) => `${item.label || item.id || "Record"}: ${item.reason}`);
   const messages = warnings.length ? warnings : excluded;
-  warningList.innerHTML = messages.length
+  if(reference)warningList.textContent=messages.join(" ");
+  else warningList.innerHTML = messages.length
     ? messages.slice(0, 8).map((message) => `<span>${message}</span>`).join("")
     : "<span>No warnings</span>";
 }
@@ -1026,10 +1790,10 @@ async function trainClassifierModel() {
     await loadClassifierStatus();
   } catch (error) {
     const warningList = document.getElementById("classifierWarnings");
-    warningList.innerHTML = `<span>${error.message || "Classifier training failed"}</span>`;
+    warningList.textContent = error.message || "Classifier training failed";
   } finally {
     button.disabled = false;
-    button.textContent = "Compute Model";
+    button.textContent = state.classifierAlgorithm==="gold_reference_v1"?"Check reference model":"Compute Model";
   }
 }
 
@@ -1045,13 +1809,14 @@ async function saveClassifierAlgorithm() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || payload.error || "Unable to save classifier method");
+    state.classifierAlgorithm=payload.classifier_algorithm;
     await loadClassifierStatus();
     if (warningList) {
-      warningList.innerHTML = "<span>Classifier method saved. Press Compute Model to rebuild this model.</span>";
+      warningList.textContent = payload.classifier_algorithm==="gold_reference_v1"?"Reference mode saved. Run fresh four-frequency air calibration; no training is performed here.":"Classifier method saved. Press Compute Model to rebuild this model.";
     }
   } catch (error) {
     if (warningList) {
-      warningList.innerHTML = `<span>${error.message || "Classifier method save failed"}</span>`;
+      warningList.textContent = error.message || "Classifier method save failed";
     }
   }
 }
@@ -1074,6 +1839,7 @@ function renderCalibration(record) {
   document.getElementById("calF1Air").textContent = formatCalibrationFrequencyAir(air.f1);
   document.getElementById("calF2Air").textContent = formatCalibrationFrequencyAir(air.f2);
   document.getElementById("calF3Air").textContent = formatCalibrationFrequencyAir(air.f3);
+  document.getElementById("calF4Air").textContent = air.f4 ? formatCalibrationFrequencyAir(air.f4) : "Not recorded in this calibration";
   document.getElementById("calValidationStatus").textContent = record.validation_status || "Not validated";
   document.getElementById("calValidationDrift").textContent =
     record.max_drift_pct === undefined || record.max_drift_pct === null ? "--" : `${Number(record.max_drift_pct).toFixed(3)}%`;
@@ -1110,7 +1876,7 @@ function runCalibrationProgress(mode) {
   const settleSeconds = 5;
   const sampleSeconds = 11;
   const perFrequencySeconds = settleSeconds + sampleSeconds;
-  const total = mode === "validate" ? 15 : perFrequencySeconds * 3;
+  const total = mode === "validate" ? 15 : perFrequencySeconds * state.multiFrequenciesKhz.length;
   const progressBar = document.getElementById("calibrationProgressBar");
   const progressText = document.getElementById("calibrationProgressText");
   const ring = document.getElementById("calibrationRingMeter");
@@ -1122,7 +1888,7 @@ function runCalibrationProgress(mode) {
   const request = mode === "validate" ? validateCalibration({ deferResultScreen: true }) : saveCalibration({ deferResultScreen: true });
 
   stage.textContent = mode === "validate" ? "Validating Air Baseline" : "Switching to F1";
-  durationLabel.textContent = mode === "validate" ? "Validation" : "3 frequencies";
+  durationLabel.textContent = mode === "validate" ? "Validation" : `${state.multiFrequenciesKhz.length} frequencies`;
   frequencyLabel.textContent = mode === "validate" ? "Air check" : "F1";
   sampleLabel.textContent = mode === "validate" ? "Sampling air" : `CH1/CH2 0 / ${sampleTarget}`;
 
@@ -1134,7 +1900,7 @@ function runCalibrationProgress(mode) {
     elapsed += 1;
     const progress = finished ? 100 : Math.min(99, Math.round((elapsed / total) * 100));
     if (mode !== "validate") {
-      const zeroBased = Math.min(2, Math.floor(Math.max(0, elapsed - 1) / perFrequencySeconds));
+      const zeroBased = Math.min(state.multiFrequenciesKhz.length - 1, Math.floor(Math.max(0, elapsed - 1) / perFrequencySeconds));
       const slot = zeroBased + 1;
       const slotElapsed = Math.max(0, elapsed - zeroBased * perFrequencySeconds);
       const sample = slotElapsed <= settleSeconds ? 0 : Math.min(sampleTarget, Math.round(((slotElapsed - settleSeconds) / sampleSeconds) * sampleTarget));
@@ -1162,7 +1928,7 @@ async function saveCalibration(options = {}) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        frequency_hz: getCurrentFrequencyValue(),
+        frequency_hz: getCurrentFrequencyValue() * 1000,
         frequency_slot: state.activeFrequencySlot
       })
     });
@@ -1191,7 +1957,7 @@ async function validateCalibration(options = {}) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        frequency_hz: getCurrentFrequencyValue(),
+        frequency_hz: getCurrentFrequencyValue() * 1000,
         frequency_slot: state.activeFrequencySlot
       })
     });
@@ -1348,7 +2114,8 @@ function startTeachingRecord() {
   const settleSeconds = 5;
   const sampleSeconds = 11;
   const perFrequencySeconds = settleSeconds + sampleSeconds;
-  const total = perFrequencySeconds * 3;
+  const planSlots = teachingState.mode === "validate" && state.classifierAlgorithm !== "gold_reference_v1" ? [1, 3] : state.multiFrequenciesKhz.map((_, index) => index + 1);
+  const total = perFrequencySeconds * planSlots.length;
   const progressBar = document.getElementById("teachingProgressBar");
   const progressText = document.getElementById("teachingProgressText");
   const ring = document.getElementById("teachingRingMeter");
@@ -1364,8 +2131,8 @@ function startTeachingRecord() {
   const timer = setInterval(() => {
     elapsed += 1;
     const progress = finished ? 100 : Math.min(99, Math.round((elapsed / total) * 100));
-    const zeroBased = Math.min(2, Math.floor(Math.max(0, elapsed - 1) / perFrequencySeconds));
-    const slot = zeroBased + 1;
+    const zeroBased = Math.min(planSlots.length - 1, Math.floor(Math.max(0, elapsed - 1) / perFrequencySeconds));
+    const slot = planSlots[zeroBased];
     const slotElapsed = Math.max(0, elapsed - zeroBased * perFrequencySeconds);
     const sample = slotElapsed <= settleSeconds ? 0 : Math.min(sampleTarget, Math.round(((slotElapsed - settleSeconds) / sampleSeconds) * sampleTarget));
     if (sample === 0) {
@@ -1399,7 +2166,9 @@ async function runTeachingValidation(options = {}) {
     weight: `${teachingState.weight || "0"} g`,
     ...dimensionPayload,
     vision_measurement: teachingState.visionMeasurement,
-    frequency_hz: currentFrequency,
+    geometry_reading_id: teachingState.geometryReading?.reading_id || null,
+    scale_preparation_id: teachingState.scalePreparationId,
+    frequency_hz: currentFrequency * 1000,
     frequency_slot: state.activeFrequencySlot
   };
 
@@ -1443,7 +2212,9 @@ async function saveTeachingRecord(options = {}) {
     weight: `${teachingState.weight || "0"} g`,
     ...dimensionPayload,
     vision_measurement: teachingState.visionMeasurement,
-    frequency_hz: currentFrequency,
+    geometry_reading_id: teachingState.geometryReading?.reading_id || null,
+    scale_preparation_id: teachingState.scalePreparationId,
+    frequency_hz: currentFrequency * 1000,
     frequency_slot: state.activeFrequencySlot
   };
 
@@ -1479,6 +2250,7 @@ async function saveTeachingRecord(options = {}) {
 }
 
 function renderTeachingSaved(record) {
+  renderReferenceSummary("teachingSavedReferenceSummary",record);
   const validateMode = teachingState.mode === "validate";
   document.getElementById("teachingSavedEyebrow").textContent = validateMode ? "Validation Result" : "Teaching Record Saved";
   document.getElementById("teachingSavedAgainButton").textContent = validateMode ? "Validate Again" : "Teach Again";
@@ -1493,6 +2265,7 @@ function renderTeachingSaved(record) {
   document.getElementById("teachingSavedPurity").textContent = record.purity || "Known";
   document.getElementById("teachingSavedValidation").textContent = record.validation_result || (validateMode ? "FAIL" : "N/A");
   document.getElementById("teachingSavedConfidence").textContent = record.confidence || (validateMode ? "0%" : "--");
+  const scoreLabel=document.getElementById("teachingSavedScoreLabel");if(scoreLabel)scoreLabel.textContent=record.classifier_result?.reference_only?"Reference score":"Confidence";
   renderFrequencyCards("teachingSaved", record);
 }
 
@@ -1513,14 +2286,7 @@ async function confirmDelete() {
   const panel = document.querySelector("#deletePasswordScreen .password-panel");
   const message = document.getElementById("deletePasswordMessage");
 
-  if (deletePassword !== ADMIN_PIN) {
-    panel.classList.add("error");
-    message.textContent = "Invalid PIN";
-    deletePassword = "";
-    updateDeletePasswordDisplay();
-    return;
-  }
-
+  // ACCESS-01: deletion PIN validation remains on the server.
   const isTeachingDelete = Boolean(selectedTeachingId);
   const deleteUrl = isTeachingDelete
     ? `/api/teaching/${selectedTeachingId}/delete`
@@ -1533,20 +2299,19 @@ async function confirmDelete() {
       body: JSON.stringify({ pin: deletePassword })
     });
 
-    if (!response.ok) throw new Error("Delete failed");
+    if (!response.ok) throw new Error(response.status === 403 ? "Invalid PIN" : "Delete failed; check login/service");
     if (isTeachingDelete) {
       await loadTeachingRecords();
     } else {
       await loadHistoryRecords();
     }
   } catch (error) {
-    if (isTeachingDelete) {
-      teachingRecords = teachingRecords.filter((record) => record.id !== selectedTeachingId);
-      renderTeachingRecords();
-    } else {
-      historyRecords = historyRecords.filter((record) => record.id !== selectedHistoryId);
-      renderHistory();
-    }
+    // A refused/failed deletion must never look successful in the local table.
+    panel.classList.add("error");
+    message.textContent = error.message;
+    deletePassword = "";
+    updateDeletePasswordDisplay();
+    return;
   }
 
   selectedHistoryId = null;
@@ -1567,16 +2332,16 @@ function startMeasurement() {
   let progress = 0;
   let matchingTicks = 0;
   let resultStarted = false;
-  const stages = [
-    { limit: 12, title: "F1 Measuring", note: "Switching to F1 and waiting for signal to settle." },
-    { limit: 22, title: "F1 Complete", note: "F1 reading captured successfully." },
-    { limit: 40, title: "F2 Measuring", note: "Switching to F2 and taking the next reading." },
-    { limit: 52, title: "F2 Complete", note: "F2 reading captured successfully." },
-    { limit: 72, title: "F3 Measuring", note: "Switching to F3 and collecting the final reading." },
-    { limit: 84, title: "F3 Complete", note: "F3 reading captured successfully." },
-    { limit: 92, title: "Analyzing", note: "Computing calibrated signal features." },
-    { limit: 100, title: "Classifying", note: "Applying the selected detector model." }
-  ];
+  const commands = state.classifierAlgorithm === "binary_brass_ch1_f1" ? [1]
+    : state.classifierAlgorithm === "binary_brass_ch2_f1_f3" ? [1, 3]
+    : state.multiFrequenciesKhz.map((_, index) => index + 1);
+  // This timer is an estimate; actual completion still comes from the server response.
+  const stages = commands.map((slot, index) => ({
+    limit: 10 + ((index + 1) / commands.length) * 74,
+    title: `Acquiring F${slot} (estimated)`,
+    note: `Planned ${state.multiFrequenciesKhz[slot - 1]} kHz. Keep the item still.`
+  }));
+  stages.push({ limit: 100, title: "Processing", note: "Waiting for the acquisition and classifier result." });
 
   state.progressTimer = setInterval(() => {
     if (progress < 92) {
@@ -1619,15 +2384,21 @@ async function showResult() {
         shape: getMeasurementShapeLabel(),
         ...dimensionPayload,
         vision_measurement: state.visionMeasurement,
-        frequency_hz: currentFrequency,
+        geometry_reading_id: state.geometryReading?.reading_id || null,
+        scale_preparation_id: state.scalePreparationId,
+        frequency_hz: currentFrequency * 1000,
         frequency_slot: state.activeFrequencySlot
       })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || "Unable to verify material");
+    if (!response.ok) {
+      const error = new Error(payload.message || "Unable to verify material");
+      error.record = payload.id ? payload : null;
+      throw error;
+    }
     record = payload;
   } catch (error) {
-    record = {
+    record = error.record || {
       result: "Unable to Detect Material",
       confidence: "0%",
       weight: `${state.weight || "0"} g`,
@@ -1650,6 +2421,11 @@ async function showResult() {
   statusNode.classList.toggle("signal-warn", needsVerification);
   statusNode.classList.toggle("down", false);
 
+  cameraSavedPhoto = localPhoto(record);
+  renderSavedPhoto("result", record);
+  renderScalePreparationSummary("resultScalePreparation", record);
+  renderGeometrySummary("resultGeometrySummary",record.geometry_evidence);
+  renderReferenceSummary("resultReferenceSummary",record);
   await loadHistoryRecords();
   showScreen("result");
 }
@@ -1692,21 +2468,22 @@ async function loadAcquisitionMode() {
     if (!response.ok) throw new Error("Unable to read settings");
     const settings = await response.json();
     state.acquisitionMode = settings.acquisition_mode === "daq" ? "daq" : "simulator";
+    state.classifierAlgorithm = settings.classifier_algorithm;
     const threshold = Number(settings.confidence_threshold_pct);
     state.confidenceThresholdPct = Number.isFinite(threshold) ? threshold : 40;
     state.detectorConfidenceInput = String(Math.round(state.confidenceThresholdPct));
-    const loadedFrequencies = Array.isArray(settings.multi_frequencies_khz) ? settings.multi_frequencies_khz : [10, 20, 30];
-    state.multiFrequenciesKhz = loadedFrequencies.slice(0, 3).map((value, index) => {
+    const loadedFrequencies = Array.isArray(settings.multi_frequencies_khz) ? settings.multi_frequencies_khz : [8, 10, 15, 20];
+    state.multiFrequenciesKhz = loadedFrequencies.slice(0, 4).map((value, index) => {
       const parsed = Number(value);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : [10, 20, 30][index];
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : [8, 10, 15, 20][index];
     });
     const slot = Number.parseInt(settings.active_frequency_slot, 10);
-    state.activeFrequencySlot = slot >= 1 && slot <= 3 ? slot : 1;
+    state.activeFrequencySlot = slot >= 1 && slot <= state.multiFrequenciesKhz.length ? slot : 1;
   } catch (error) {
     state.acquisitionMode = "simulator";
     state.confidenceThresholdPct = 40;
     state.detectorConfidenceInput = "40";
-    state.multiFrequenciesKhz = [10, 20, 30];
+    state.multiFrequenciesKhz = [8, 10, 15, 20];
     state.activeFrequencySlot = 1;
   }
 
@@ -1768,13 +2545,14 @@ async function saveFrequencySettings() {
         active_frequency_slot: state.activeFrequencySlot
       })
     });
-    if (!response.ok) throw new Error("Unable to save frequency settings");
+    if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || "Unable to save frequency settings"); }
     const settings = await response.json();
-    state.multiFrequenciesKhz = (settings.multi_frequencies_khz || [10, 20, 30]).slice(0, 3);
+    state.multiFrequenciesKhz = (settings.multi_frequencies_khz || [8, 10, 15, 20]).slice(0, 4);
     const slot = Number.parseInt(settings.active_frequency_slot, 10);
-    state.activeFrequencySlot = slot >= 1 && slot <= 3 ? slot : state.activeFrequencySlot;
+    state.activeFrequencySlot = slot >= 1 && slot <= state.multiFrequenciesKhz.length ? slot : state.activeFrequencySlot;
   } catch (error) {
-    // Keep local values for demo continuity.
+    document.getElementById("frequencyModeStatus").textContent = error.message || "Frequency settings were not saved";
+    return;
   }
   updateFrequencyModeSelection();
   showScreen("engineering");
@@ -1982,43 +2760,146 @@ async function readAverageLoadCell() {
   }
 }
 
-async function zeroLoadCell() {
-  const status = document.getElementById("loadCellStatus");
-  status.textContent = "Zeroing";
-  const wasHeld = state.loadCellHeld;
-  state.loadCellHeld = false;
-  updateLoadCellHoldButton();
+// REV 2026-10-18 / ZERO-02: no placement until the server verifies actual zero.
+function scaleNode(id) { return document.getElementById(id); }
+function scalePreparationBack() {
+  return scalePreparationContext === "engineering" ? "loadCell" : scalePreparationContext === "teaching" ? "teaching" : "home";
+}
+function scaleNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(5) : "--";
+}
+function renderScalePreparationSummary(id, record) {
+  const node = scaleNode(id), result = record.scale_preparation;
+  node.hidden = !result;
+  node.textContent = result ? `Empty-pan zero: ${scaleNumber(result.residual?.average)} g; spread ${scaleNumber(result.residual?.range)} g; ${result.residual?.samples_valid || 0} stable samples. Internal: ${result.internal?.status || "unknown"}.` : "";
+}
+function renderScalePreparation(job) {
+  const running = job.state === "running";
+  scalePreparationBusy = running;
+  scalePreparationResult = job.state === "ready" && job.result?.zero_verified === true ? job : null;
+  scaleNode("scalePreparationStatus").textContent = job.message || "Remove all items before starting.";
+  scaleNode("scalePreparationStart").disabled = running;
+  scaleNode("scalePreparationCancel").disabled = running;
+  scaleNode("scalePreparationContinue").disabled = !scalePreparationResult;
+  scaleNode("scalePreparationConfirm").disabled = running;
+  scaleNode("scaleRepeatInternal").disabled = running;
+  scaleNode("scalePreparationSave").disabled = running;
+  const result = job.result;
+  const internal = result?.internal || job.startup_internal;
+  const labels = { completed: "Completed this preparation", already_completed_this_startup: "Completed earlier this startup; reused", unsupported: "Not supported by this balance", skipped: "Skipped in Engineering settings" };
+  scaleNode("scalePreparationInternal").textContent = internal ? `Internal: ${labels[internal.status] || internal.status}${internal.command ? " (" + internal.command + ")" : ""}${internal.deviation_raw ? "; deviation " + internal.deviation_raw + " [" + internal.deviation_unit + "]" : ""}${internal.completed_at ? "; " + internal.completed_at : ""}` : "Internal check: due once this Weight-service startup.";
+  scaleNode("scalePreparationReadings").textContent = result ? `Before zero: ${scaleNumber(result.initial.average)} g. After zero: ${scaleNumber(result.residual.average)} g; standard deviation ${scaleNumber(result.residual.std_g)} g; spread ${scaleNumber(result.residual.range)} g; ${result.residual.samples_valid} stable samples.` : "";
+}
+async function pollScalePreparation() {
+  clearTimeout(scalePreparationTimer);
+  if (currentScreen !== "scalePrepare") return;
   try {
-    const response = await fetch("/api/load-cell/zero", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.ok) {
-      throw new Error(payload.zero_error || payload.error || "Unable to zero load cell");
+    const response = await fetch("/api/load-cell/preparation/status", { cache: "no-store" });
+    const job = await response.json();
+    if (!response.ok) throw new Error(job.message || "Weight service unavailable");
+    if (currentScreen !== "scalePrepare") return;
+    // A failed POST must never adopt the previous item's READY result.
+    const currentJob = job.id && (job.id === scalePreparationJobId || (scalePreparationPreviousId && job.id !== scalePreparationPreviousId));
+    if (job.state === "ready" && !currentJob) {
+      renderScalePreparation({ state: "idle", startup_internal: job.startup_internal, message: "This is a previous preparation. Confirm the empty pan and press Prepare." });
+      return;
     }
-    renderLoadCellReading({
-      ok: true,
-      weight_g: null,
-      unit: "g",
-      stable: false,
-      status: "zeroing",
-      raw_response: payload.zero_response || "TI",
-      port: payload.port || "/dev/ttyUSB0",
-      timestamp: payload.timestamp || "--"
-    });
-    setTimeout(() => {
-      if (!state.loadCellHeld) {
-        refreshLoadCellReading();
-      }
-    }, 800);
+    renderScalePreparation(job);
+    if (job.state === "running") scalePreparationTimer = setTimeout(pollScalePreparation, 500);
   } catch (error) {
-    renderLoadCellReading({ ok: false, error: "Unable to zero load cell" });
-  } finally {
-    state.loadCellHeld = wasHeld;
-    updateLoadCellHoldButton();
+    // A lost HTTP response does not prove that an internal operation has stopped.
+    scaleNode("scalePreparationStatus").textContent = `${error.message}. Keep the pan empty; retrying status.`;
+    scalePreparationTimer = setTimeout(pollScalePreparation, 1500);
   }
+}
+async function openScalePreparation(context) {
+  if (scalePreparationBusy) return;
+  scalePreparationContext = context;
+  scalePreparationResult = null;
+  scalePreparationPreviousId = null;
+  scalePreparationJobId = null;
+  scaleNode("scalePreparationConfirm").checked = false;
+  scaleNode("scaleRepeatInternal").checked = false;
+  const engineer = context !== "measurement" && engineeringUnlocked;
+  scaleNode("scalePreparationEngineering").hidden = !engineer;
+  scaleNode("scalePreparationContinue").textContent = context === "engineering" ? "Back to scale" : "Place item";
+  renderScalePreparation({ state: "idle" });
+  await showScreen("scalePrepare");
+  if (engineer) {
+    try {
+      const response = await fetch("/api/settings", { cache: "no-store" });
+      if (!response.ok) throw new Error("Unable to load scale settings");
+      const settings = (await response.json()).scale_preparation || {};
+      for (const [key, fallback] of Object.entries({ empty_limit_g: 0.1, zero_tolerance_g: 0.01, max_spread_g: 0.02, internal_mode: "auto" })) {
+        scaleNode("scaleSetting_" + key).value = settings[key] ?? fallback;
+      }
+    } catch (error) { scaleNode("scalePreparationSettingsStatus").textContent = error.message; }
+  }
+  // Resume an operation after a page reload; do not start a second adjustment.
+  // A previously READY result belongs to the prior item, so only adopt RUNNING.
+  try {
+    const response = await fetch("/api/load-cell/preparation/status", { cache: "no-store" });
+    const job = await response.json();
+    if (response.ok) scalePreparationPreviousId = job.id || "idle";
+    if (response.ok && job.state === "running") {
+      scalePreparationJobId = job.id;
+      renderScalePreparation(job);
+      scalePreparationTimer = setTimeout(pollScalePreparation, 500);
+    } else if (response.ok) {
+      renderScalePreparation({ state: "idle", startup_internal: job.startup_internal });
+    }
+  } catch (error) { scaleNode("scalePreparationStatus").textContent = "Weight service unavailable. Empty the pan, then try Prepare."; }
+}
+async function startScalePreparation() {
+  if (scalePreparationBusy) return;
+  if (!scaleNode("scalePreparationConfirm").checked) {
+    scaleNode("scalePreparationStatus").textContent = "Remove every item, then tick the empty-pan confirmation.";
+    return;
+  }
+  clearTimeout(scalePreparationTimer);
+  renderScalePreparation({ state: "running", message: "Keep the pan empty. Starting preparation..." });
+  const repeat = scalePreparationContext !== "measurement" && engineeringUnlocked && scaleNode("scaleRepeatInternal").checked;
+  try {
+    const response = await fetch(repeat ? "/api/calibration/scale/prepare" : "/api/load-cell/preparation/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pan_empty_confirmed: true, repeat_internal: repeat })
+    });
+    const job = await response.json();
+    if (!response.ok) throw new Error(job.message || job.error || "Preparation could not start");
+    scalePreparationJobId = job.id;
+    renderScalePreparation(job.state === "ready" ? { ...job, state: "running", message: "Confirming preparation status..." } : job);
+  } catch (error) {
+    scaleNode("scalePreparationStatus").textContent = `${error.message}. Checking balance status; keep the pan empty.`;
+  }
+  // Always ask the server after POST, including a lost response or a busy reply.
+  scalePreparationTimer = setTimeout(pollScalePreparation, 500);
+}
+async function saveScalePreparationSettings() {
+  if (scalePreparationBusy) return;
+  const settings = {};
+  for (const key of ["empty_limit_g", "zero_tolerance_g", "max_spread_g"]) settings[key] = Number(scaleNode("scaleSetting_" + key).value);
+  settings.internal_mode = scaleNode("scaleSetting_internal_mode").value;
+  try {
+    const response = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scale_preparation: settings }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || result.error || "Settings not saved; log into Engineering again");
+    scaleNode("scalePreparationSettingsStatus").textContent = "Saved. Applies to the next preparation; startup check stays latched unless Repeat is selected.";
+  } catch (error) { scaleNode("scalePreparationSettingsStatus").textContent = error.message; }
+}
+scaleNode("scalePreparationStart").addEventListener("click", startScalePreparation);
+scaleNode("scalePreparationSave").addEventListener("click", saveScalePreparationSettings);
+scaleNode("scalePreparationCancel").addEventListener("click", () => { if (!scalePreparationBusy) showScreen(scalePreparationBack()); });
+scaleNode("scalePreparationContinue").addEventListener("click", () => {
+  if (!scalePreparationResult || scalePreparationBusy) return;
+  if (scalePreparationContext === "measurement") state.scalePreparationId = scalePreparationResult.id;
+  if (scalePreparationContext === "teaching") teachingState.scalePreparationId = scalePreparationResult.id;
+  const next = scalePreparationContext === "engineering" ? "loadCell" : scalePreparationContext === "teaching" ? "teachingPlace" : "place";
+  scalePreparationResult = null;
+  showScreen(next);
+});
+
+async function zeroLoadCell() {
+  await openScalePreparation("engineering");
 }
 
 async function prepareTeachingScale() {
@@ -2043,24 +2924,8 @@ async function prepareTeachingDimensionsFromVision() {
 }
 
 async function zeroMeasurementScaleBeforePlacement() {
-  const button = document.getElementById("startButton");
-  const originalText = button.textContent;
-  button.textContent = "Zeroing Scale...";
-  button.disabled = true;
   resetMeasurementInputs();
-  try {
-    await fetch("/api/load-cell/zero", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-  } catch (error) {
-    // Continue to placement; the weight page reports scale read errors.
-  } finally {
-    button.textContent = originalText;
-    button.disabled = false;
-  }
-  showScreen("place");
+  await openScalePreparation("measurement");
 }
 
 async function prepareMeasurementScale() {
@@ -2120,29 +2985,11 @@ async function sampleMeasurementWeight() {
 
 async function zeroTeachingScaleBeforePlacement(mode) {
   teachingState.mode = mode;
-  const button = mode === "validate"
-    ? document.getElementById("teachingValidateButton")
-    : document.getElementById("teachingStartButton");
-  const originalText = button.textContent;
-  button.textContent = "Zeroing...";
-  button.disabled = true;
   resetTeachingInputs();
-  try {
-    await fetch("/api/load-cell/zero", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-  } catch (error) {
-    // Continue anyway; the weight screen can still report scale read errors.
-  } finally {
-    button.textContent = originalText;
-    button.disabled = false;
-  }
   document.getElementById("teachingStage").textContent = "F1 Measuring";
   document.querySelector("#teachingRecordScreen .measure-copy p").textContent = "Switching to F1 and preparing live signal acquisition.";
   document.getElementById("teachingRecordButton").textContent = "Next";
-  showScreen("teachingPlace");
+  await openScalePreparation("teaching");
 }
 
 async function sampleTeachingWeight() {
@@ -2205,7 +3052,14 @@ async function startLoadCellMonitor() {
 document.getElementById("startButton").addEventListener("click", () => {
   zeroMeasurementScaleBeforePlacement();
 });
-document.getElementById("placeContinueButton").addEventListener("click", () => showScreen("shape"));
+document.getElementById("placeContinueButton").addEventListener("click", () => {
+  if (!yoloCanContinue()) { updateYoloGate(); return; }
+  if (visionYoloConfig?.enabled && visionLastDetection?.eligible) {
+    state.shape = visionLastDetection.label === "coin" ? "Coin" : "Bar";
+    updateShapeSelection();
+  }
+  showScreen("shape");
+});
 document.getElementById("weightBackButton").addEventListener("click", () => showScreen("shape"));
 document.getElementById("measurementWeightSampleButton").addEventListener("click", sampleMeasurementWeight);
 document.getElementById("weightNextButton").addEventListener("click", async () => {
@@ -2234,10 +3088,13 @@ document.getElementById("otherShapeBackButton").addEventListener("click", () => 
 document.getElementById("otherShapeNextButton").addEventListener("click", () => {
   prepareMeasurementScale();
 });
-document.getElementById("newMeasurementButton").addEventListener("click", () => {
-  resetMeasurementInputs();
-  showScreen("home");
-});
+document.getElementById("newMeasurementButton").addEventListener("click", () => confirmItemRemoved(async () => {
+  resetMeasurementInputs(); await showScreen("home");
+}));
+document.getElementById("resultAnotherButton").addEventListener("click", () => confirmItemRemoved(zeroMeasurementScaleBeforePlacement));
+document.getElementById("engineeringReadinessButton").addEventListener("click", () => showScreen("readiness"));
+document.getElementById("readinessRefreshButton").addEventListener("click", loadReadiness);
+document.getElementById("readinessBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("detailsButton").addEventListener("click", async () => {
   await loadHistoryRecords();
   showScreen("history");
@@ -2260,6 +3117,26 @@ document.getElementById("menuExitButton").addEventListener("click", () => {
   window.close();
 });
 document.getElementById("modeToggleButton").addEventListener("click", toggleAcquisitionMode);
+document.getElementById("engineeringVisionButton").addEventListener("click", openVisionSettings);
+document.getElementById("visionBackButton").addEventListener("click", () => showScreen("engineering"));
+document.querySelectorAll(".geometry-measure").forEach(button=>button.addEventListener("click",()=>measureGeometry(button.dataset.kind,button.dataset.manual==="1")));
+document.getElementById("geometryReferenceButton").addEventListener("click",()=>geometryEngineeringAction("reference"));
+document.getElementById("geometryGuideButton").addEventListener("click",()=>showApiReference("geometry"));
+document.getElementById("geometryStatusButton").addEventListener("click",()=>geometryEngineeringAction("status"));
+document.getElementById("geometrySettingsSaveButton").addEventListener("click",()=>geometryEngineeringAction("settings"));
+document.getElementById("referenceModelPath").addEventListener("change",()=>{
+  document.getElementById("referenceProfileConfirmed").checked=false;
+  document.getElementById("referenceModelStatus").textContent="Model changed. Confirm its training acquisition profile, then validate/select it.";
+});
+document.getElementById("referenceTestButton").addEventListener("click",()=>submitReferenceModel(true));
+document.getElementById("referenceSaveButton").addEventListener("click",()=>submitReferenceModel(false));
+document.getElementById("referenceUseButton").addEventListener("click",useReferenceMode);
+document.getElementById("assetsScanButton").addEventListener("click", scanSystemAssets);
+document.getElementById("assetsModelsSaveButton").addEventListener("click", ()=>saveAssetConfiguration("models"));
+document.getElementById("assetsApiSaveButton").addEventListener("click", ()=>saveAssetConfiguration("api"));
+document.getElementById("assetsReferenceButton").addEventListener("click", showApiReference);
+document.getElementById("visionSaveButton").addEventListener("click", () => submitVisionSettings(false));
+document.getElementById("visionTestButton").addEventListener("click", () => submitVisionSettings(true));
 document.getElementById("engineeringLiveViewButton").addEventListener("click", () => showScreen("liveView"));
 document.getElementById("engineeringFrequencyButton").addEventListener("click", async () => {
   await loadAcquisitionMode();
@@ -2307,12 +3184,19 @@ document.getElementById("detectorSettingsSaveButton").addEventListener("click", 
 document.getElementById("frequencySlot1Button").addEventListener("click", () => selectFrequencySlot(1));
 document.getElementById("frequencySlot2Button").addEventListener("click", () => selectFrequencySlot(2));
 document.getElementById("frequencySlot3Button").addEventListener("click", () => selectFrequencySlot(3));
+document.getElementById("frequencySlot4Button").addEventListener("click", () => selectFrequencySlot(4));
+document.getElementById("fourFrequencyPresetButton").addEventListener("click", () => {
+  state.multiFrequenciesKhz = [8, 10, 15, 20];
+  state.activeFrequencySlot = 1;
+  updateFrequencyModeSelection();
+  document.getElementById("frequencyModeStatus").textContent = "8 / 10 / 15 / 20 kHz selected. Press Save, then recalibrate.";
+});
 document.getElementById("frequencyModeBackButton").addEventListener("click", () => showScreen("engineering"));
 document.getElementById("frequencyModeSaveButton").addEventListener("click", saveFrequencySettings);
 document.getElementById("editFrequencyButton").addEventListener("click", () => showScreen("frequencyEdit"));
 document.getElementById("frequencyEditBackButton").addEventListener("click", () => showScreen("frequencyMode"));
 document.getElementById("frequencyEditSetButton").addEventListener("click", () => showScreen("frequencyMode"));
-document.getElementById("historyBackButton").addEventListener("click", () => showScreen("engineering"));
+document.getElementById("historyBackButton").addEventListener("click", () => showScreen(historyReturnScreen));
 document.getElementById("historyHomeButton").addEventListener("click", () => showScreen("home"));
 document.getElementById("detailBackButton").addEventListener("click", () => showScreen("history"));
 document.getElementById("detailHomeButton").addEventListener("click", () => showScreen("home"));
@@ -2383,12 +3267,29 @@ document.getElementById("teachingDimensionNextButton").addEventListener("click",
 });
 document.getElementById("teachingDimensionsTabButton").addEventListener("click", () => selectTeachingDimensionPanel("dimensions"));
 document.getElementById("teachingImageTabButton").addEventListener("click", () => selectTeachingDimensionPanel("image"));
-document.getElementById("teachingRefreshImageButton").addEventListener("click", loadTeachingDetectedImage);
+document.getElementById("teachingRefreshImageButton").addEventListener("click", () => {
+  teachingCameraMode = "live";
+  loadTeachingDetectedImage();
+});
+document.getElementById("teachingCapturedImageButton").addEventListener("click", () => {
+  teachingCameraMode = cameraSavedPhoto ? "saved" : "captured";
+  loadTeachingDetectedImage();
+});
+document.getElementById("cameraAnnotationButton").addEventListener("click", () => {
+  cameraAnnotationsEnabled = !cameraAnnotationsEnabled;
+  loadTeachingDetectedImage();
+});
+document.getElementById("cameraDebugButton").addEventListener("click", () => {
+  if (!cameraDebugAllowed()) return;
+  cameraDebugEnabled = !cameraDebugEnabled;
+  loadTeachingDetectedImage();
+});
+document.getElementById("cameraSavePhotoButton").addEventListener("click", saveCameraPhoto);
+document.getElementById("cameraShapeSelect").addEventListener("change", loadTeachingDetectedImage);
 document.getElementById("teachingRemoveBackButton").addEventListener("click", () => showScreen("teaching"));
-document.getElementById("teachingRemoveNextButton").addEventListener("click", () => showScreen("teachingSaved"));
+document.getElementById("teachingRemoveNextButton").addEventListener("click", () => confirmItemRemoved(() => showScreen("teachingSaved")));
 document.getElementById("teachingSavedAgainButton").addEventListener("click", () => {
-  resetTeachingInputs();
-  showScreen("teachingPlace");
+  zeroTeachingScaleBeforePlacement(teachingState.mode || "teach");
 });
 document.getElementById("teachingSavedDoneButton").addEventListener("click", () => showScreen("teaching"));
 document.getElementById("teachingRecordsBackButton").addEventListener("click", () => showScreen("teaching"));
@@ -2616,7 +3517,7 @@ document.getElementById("teachingDimensionKeypad").addEventListener("click", (ev
 document.getElementById("frequencySettingsKeypad").addEventListener("click", (event) => {
   const key = event.target.dataset.frequencySettingsKey;
   if (!key) return;
-  const index = Math.max(0, Math.min(2, Number(state.activeFrequencySlot || 1) - 1));
+  const index = Math.max(0, Math.min(3, Number(state.activeFrequencySlot || 1) - 1));
   let current = String(state.multiFrequenciesKhz[index] ?? 0);
   if (key === "clear") {
     current = "";
@@ -2655,48 +3556,121 @@ document.getElementById("detectorSettingsKeypad").addEventListener("click", (eve
   updateDetectorConfidenceDisplay();
 });
 
-function updateCarousel() {
-  const cards = Array.from(document.querySelectorAll(".sample-card"));
-  const prevIndex = (state.carouselIndex - 1 + cards.length) % cards.length;
-  const nextIndex = (state.carouselIndex + 1) % cards.length;
+// REV 2026-10-18 / RATES-LIST-01: stable, scrollable rows replace rotating prices.
+const metalRateRows = [
+  ["Gold 999", "XAU", 0.999], ["Gold 916", "XAU", 0.916],
+  ["Gold 750", "XAU", 0.750], ["Silver 999", "XAG", 0.999],
+  ["Silver 925", "XAG", 0.925], ["Platinum", "XPT", 1], ["Palladium", "XPD", 1]
+];
+let referenceRates = null;
+let referenceRatesBusy = false;
+let referenceRatesOffline = false;
+let referenceRatesTimer = null;
 
-  cards.forEach((card, index) => {
-    card.classList.toggle("prev", index === prevIndex);
-    card.classList.toggle("active", index === state.carouselIndex);
-    card.classList.toggle("next", index === nextIndex);
+function rateTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown quote time" : date.toLocaleString("en-MY", {
+    timeZone:"Asia/Kuala_Lumpur", day:"2-digit", month:"short", year:"numeric",
+    hour:"2-digit", minute:"2-digit", hour12:false
+  }) + " MYT";
+}
+
+function initializeMetalRateRows() {
+  const list = document.getElementById("metalRatesList");
+  metalRateRows.forEach(([label], index) => {
+    const row = document.createElement("article");
+    row.className = "metal-rate-row";
+    row.setAttribute("role", "listitem");
+    const name = document.createElement("strong");
+    name.textContent = label;
+    row.appendChild(name);
+    for (const part of ["Price", "Trend", "Time"]) {
+      const node = document.createElement(part === "Price" ? "strong" : "span");
+      node.id = `metalRate${index}${part}`;
+      node.className = `metal-rate-${part.toLowerCase()}`;
+      row.appendChild(node);
+    }
+    list.appendChild(row);
   });
-
-  updateActiveRate(cards[state.carouselIndex]);
+  renderReferenceRates();
 }
 
-function updateActiveRate(card) {
-  const rateCard = document.getElementById("activeRateCard");
-  const rateMove = document.getElementById("activeRateMove");
+function renderReferenceRates() {
+  metalRateRows.forEach(([label, symbol, purity], index) => {
+    const quote = referenceRates?.metals?.[symbol];
+    const price = document.getElementById(`metalRate${index}Price`);
+    const trend = document.getElementById(`metalRate${index}Trend`);
+    const time = document.getElementById(`metalRate${index}Time`);
+    trend.className = "metal-rate-trend flat";
+    if (!Number.isFinite(quote?.myr_per_g) || quote.myr_per_g <= 0) {
+      price.textContent = "—";
+      trend.textContent = referenceRates?.pending && !referenceRatesOffline ? "Loading" : "Unavailable";
+      time.textContent = "No quote available";
+      return;
+    }
+    price.textContent = `RM ${(quote.myr_per_g * purity).toFixed(2)}/g`;
+    const stale = referenceRatesOffline || quote.stale;
+    const change = quote.change_pct;
+    if (stale) trend.textContent = "STALE / last known";
+    else if (!Number.isFinite(change)) trend.textContent = "Trend pending";
+    else {
+      trend.textContent = `${change > 0 ? "▲" : change < 0 ? "▼" : "—"} ${Math.abs(change).toFixed(2)}%`;
+      trend.classList.add(change > 0 ? "up" : change < 0 ? "down" : "flat");
+    }
+    time.textContent = `${stale ? "Last quote" : "Quote"}: ${rateTime(quote.updated_at)} · FX ${quote.fx_date}`;
+    trend.title = quote.baseline_at ? `Compared with ${rateTime(quote.baseline_at)}` : "A second successful quote is needed";
+  });
+  const status = document.getElementById("metalRatesStatus");
+  const button = document.getElementById("refreshRatesButton");
+  const cooldown = Number(referenceRates?.manual_retry_after) || 0;
+  button.disabled = referenceRatesBusy || (!referenceRatesOffline && (referenceRates?.pending || cooldown > 0));
+  button.textContent = referenceRates?.pending && !referenceRatesOffline ? "Refreshing…"
+    : cooldown > 0 && !referenceRatesOffline ? `Wait ${cooldown}s` : referenceRatesOffline ? "Retry refresh" : "Refresh";
+  status.textContent = referenceRatesOffline ? "Price service unavailable. Saved quotes are marked stale."
+    : referenceRates?.pending ? "Refreshing prices..."
+    : Object.keys(referenceRates?.errors || {}).length ? "Some prices could not be updated; check stale/unavailable rows."
+    : "Reference prices · Scroll to view every metal";
+}
 
-  document.getElementById("activeRateLabel").textContent = card.dataset.rateLabel;
-  document.getElementById("activeRatePrice").textContent = card.dataset.ratePrice;
-  document.getElementById("activeRateSource").textContent = `Source: ${card.dataset.rateSource}`;
-  rateMove.textContent = card.dataset.rateMove;
+function stopReferenceRatesPolling() {
+  clearTimeout(referenceRatesTimer);
+  referenceRatesTimer = null;
+}
 
-  rateCard.classList.remove("gold-rate", "silver-rate", "palladium-rate");
-  rateMove.classList.remove("up", "down", "flat");
-
-  if (card.classList.contains("silver")) {
-    rateCard.classList.add("silver-rate");
-  } else if (card.classList.contains("palladium")) {
-    rateCard.classList.add("palladium-rate");
-  } else {
-    rateCard.classList.add("gold-rate");
+async function refreshReferenceRates(manual = false) {
+  if (referenceRatesBusy || document.hidden || !screens.home.classList.contains("active")) return;
+  stopReferenceRatesPolling();
+  referenceRatesBusy = true;
+  renderReferenceRates();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(manual ? "/api/metal-rates/refresh" : "/api/metal-rates", {
+      method:manual ? "POST" : "GET", cache:"no-store", signal:controller.signal
+    });
+    if (!response.ok) throw new Error("Rates unavailable");
+    const data = await response.json();
+    if (data.currency !== "MYR" || data.unit !== "g" || !data.metals || Array.isArray(data.metals)) throw new Error("Invalid rates response");
+    referenceRates = data;
+    referenceRatesOffline = false;
+  } catch (error) {
+    referenceRatesOffline = true;
+  } finally {
+    clearTimeout(timeout);
+    referenceRatesBusy = false;
+    renderReferenceRates();
+    if (!document.hidden && screens.home.classList.contains("active")) {
+      const waiting = referenceRates?.pending || referenceRates?.manual_retry_after > 0;
+      referenceRatesTimer = setTimeout(() => refreshReferenceRates(), !referenceRatesOffline && waiting ? 5000 : 60000);
+    }
   }
-
-  rateMove.classList.add(card.dataset.rateTrend || "flat");
 }
 
-setInterval(() => {
-  const cards = Array.from(document.querySelectorAll(".sample-card"));
-  state.carouselIndex = (state.carouselIndex + 1) % cards.length;
-  updateCarousel();
-}, 10000);
+document.getElementById("refreshRatesButton").addEventListener("click", () => refreshReferenceRates(true));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopReferenceRatesPolling();
+  else refreshReferenceRates();
+});
 
 let bottomMessageIndex = 0;
 setInterval(() => {
@@ -2711,7 +3685,6 @@ setInterval(() => {
 
 updateSystemClock();
 setInterval(updateSystemClock, 1000);
-updateCarousel();
 updateShapeSelection();
 updateDimensionDisplay();
 updateTeachingMaterialSelection();
@@ -2724,9 +3697,10 @@ setWeightControls("measurement", { sampling: false, ready: false, sampleAvailabl
 setWeightProgress(weightScreenConfig("measurement"), 0, 10, "Waiting to sample");
 setWeightControls("teaching", { sampling: false, ready: false, sampleAvailable: false });
 setWeightProgress(weightScreenConfig("teaching"), 0, 10, "Waiting to sample");
-initializeCarouselImages();
 loadHistoryRecords();
-loadCalibration();
-loadTeachingRecords();
+// ACCESS-01: private records/calibration are loaded after login.
 updateDetectorConfidenceDisplay();
 loadAcquisitionMode();
+
+initializeMetalRateRows();
+refreshReferenceRates();

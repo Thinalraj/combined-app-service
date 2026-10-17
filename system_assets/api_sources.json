@@ -1,0 +1,23 @@
+{
+  "services": {
+    "weight": "http://127.0.0.1:8002",
+    "vision": "http://127.0.0.1:8003",
+    "signal": "http://127.0.0.1:8001"
+  },
+  "metals": {
+    "url": "https://api.gold-api.com/price/{symbol}",
+    "price_field": "price",
+    "time_field": "updatedAt",
+    "symbol_field": "symbol",
+    "currency_field": "currency",
+    "unit": "USD/troy_ounce"
+  },
+  "fx": {
+    "url": "https://api.frankfurter.dev/v2/rate/USD/MYR",
+    "rate_field": "rate",
+    "date_field": "date",
+    "base_field": "base",
+    "quote_field": "quote",
+    "unit": "MYR/USD"
+  }
+}

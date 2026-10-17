@@ -1,0 +1,6 @@
+{
+  "signal_mode": "hardware",
+  "python_executable": "",
+  "weight_port": "COM5",
+  "weight_baudrate": 9600
+}

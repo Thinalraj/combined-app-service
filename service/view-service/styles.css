@@ -2212,3 +2212,225 @@ output {
     min-height: 46px;
   }
 }
+
+/* REV 2026-10-18 / CAMERA-01: shared compact preview in both operating modes. */
+.camera-preview-host:empty { display: none; }
+.camera-preview-widget {
+  width: min(100%, 320px);
+  min-height: 0;
+  margin: 8px auto;
+  padding: 10px;
+  gap: 6px;
+}
+.camera-preview-widget .teaching-detected-image {
+  width: 100%;
+  height: min(22vh, 200px);
+  min-height: 0;
+  object-fit: contain;
+}
+.camera-preview-widget img[hidden],
+.camera-preview-widget button[hidden] { display: none; }
+.camera-preview-widget .button-row { gap: 6px; margin-top: 4px; }
+.camera-preview-widget button { padding: 8px 12px; font-size: 13px; }
+.camera-preview-widget p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+
+/* PHOTO-01: overlays are independent of clean photos in every shape mode. */
+.camera-image-frame { position: relative; width: 100%; line-height: 0; }
+.camera-image-frame img { display: block; }
+.camera-image-frame svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.camera-image-frame svg[hidden], .saved-photo-panel[hidden],
+.camera-preview-widget [hidden] { display: none; }
+.camera-preview-widget .button-row { flex-wrap: wrap; }
+.camera-overlay-toggle { border: 1px solid #15803d; border-radius: 18px; background: #eaf5ee; color: #14532d; }
+.camera-overlay-toggle[aria-pressed="true"] { background: #15803d; color: white; }
+.camera-preview-widget select { max-width: 100%; margin-top: 6px; }
+.saved-photo-panel { margin: 8px 0; padding: 8px; border: 1px solid #cbd5e1; border-radius: 10px; }
+.saved-photo-panel iframe { width: 100%; height: 220px; border: 0; }
+.saved-photo-panel a, .camera-preview-widget a { display: inline-block; margin: 4px 8px 0 0; font-size: 12px; }
+#placeScreen, #measureScreen, #resultScreen, #liveViewScreen, #teachingDimensionScreen { overflow-y: auto; min-height: 0; }
+#placeScreen > *, #measureScreen > *, #resultScreen > *, #liveViewScreen > *, #teachingDimensionScreen > * { flex-shrink: 0; }
+
+/* REV 2026-10-18 / RATES-LIST-01: prices scroll independently of primary actions. */
+#homeScreen { min-height: 0; height: calc(100% - 68px); }
+#homeScreen .metal-list-panel {
+  width: 100%; max-width: none; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.metal-list-panel .rates-head { height: auto; min-height: 38px; gap: 12px; flex-shrink: 0; }
+.metal-list-panel .rates-head .eyebrow { margin: 0; }
+#refreshRatesButton {
+  background: #15803d; border-color: #22c55e; color: #fff;
+  min-height: 38px; padding: 6px 14px; min-width: 112px; font-size: 14px;
+}
+#refreshRatesButton:disabled { background: #254c35; color: #fff; opacity: 0.7; }
+.rates-status { font-size: 11px; color: var(--muted); line-height: 1.3; padding: 4px 0; }
+.metal-rates-list {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  touch-action: pan-y; scrollbar-gutter: stable;
+}
+.metal-rates-list:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+.metal-rate-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 3px 12px;
+  padding: 10px 8px; border-bottom: 1px solid var(--border);
+}
+.metal-rate-row > strong:first-child { color: var(--yellow); font-size: 16px; }
+.metal-rate-price { font-size: 18px; text-align: right; }
+.metal-rate-trend { font-size: 12px; grid-column: 2; text-align: right; }
+.metal-rate-time { font-size: 11px; color: var(--muted); grid-column: 1 / -1; overflow-wrap: anywhere; }
+.rates-note { font-size: 10px; color: var(--muted); line-height: 1.3; margin-top: 4px; flex-shrink: 0; }
+#homeScreen > #startButton, #homeScreen > .status-strip { flex-shrink: 0; }
+@media (max-width: 520px) {
+  .metal-rate-row { gap: 3px 8px; }
+  .metal-rate-row > strong:first-child, .metal-rate-price { font-size: 14px; }
+}
+@media (min-width: 1200px) and (min-height: 600px) {
+  #homeScreen { height: calc(100% - 60px); }
+}
+
+/* REV 2026-10-18 / ZERO-02: scroll instructions without hiding preparation actions. */
+#scalePrepareScreen { height: calc(100% - 68px); min-height: 0; overflow: hidden; }
+.scale-preparation-content { flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y; padding: 0 6px 8px; }
+.scale-preparation-content h2 { margin: 8px 0; font-size: 22px; }
+.scale-preparation-content p, .scale-record-summary { font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.scale-empty-confirm { display: flex; align-items: center; gap: 10px; padding: 12px 0; font-size: 14px; }
+.scale-empty-confirm input { width: 22px; height: 22px; flex: 0 0 auto; }
+.scale-preparation-actions { grid-template-columns: 1fr 1fr 1fr; flex-shrink: 0; margin-top: 8px; }
+.scale-preparation-actions button { min-height: 42px; padding: 8px 12px; }
+#scalePreparationEngineering[hidden], .scale-record-summary[hidden] { display: none; }
+#scalePreparationEngineering { border-top: 1px solid var(--border); padding-top: 10px; }
+.scale-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.scale-settings-grid label { display: grid; gap: 4px; font-size: 12px; }
+.scale-settings-grid input, .scale-settings-grid select { width: 100%; min-height: 36px; padding: 6px; border-radius: 6px; }
+
+@media (min-width: 1200px) and (min-height: 600px) {
+  #scalePrepareScreen { height: calc(100% - 60px); }
+}
+
+/* CAMERA-DEBUG-01: HTML diagnostics leave raw JPEGs and annotation files clean. */
+.camera-debug-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 2; pointer-events: none;
+  margin: 0; padding: 5px; white-space: pre-wrap; line-height: 1.3;
+  font: 10px/1.3 monospace; color: #fff; background: rgba(0, 0, 0, .72);
+}
+.camera-debug-details { width: 100%; font-size: 12px; text-align: left; }
+.camera-debug-details pre { max-height: 160px; overflow: auto; margin: 6px 0; font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.camera-preview-widget [hidden] { display: none; }
+
+/* REV 2026-10-18 / DISPLAY-02: a bounded shell, scrollable content, fixed action row.
+   The header and buttons reserve their space. Long messages cannot move them off-screen. */
+.app-shell {
+  display: flex; flex-direction: column; width: min(800px, 100vw);
+  height: min(480px, 100dvh); min-height: 0; max-height: 100dvh;
+}
+.app-shell > .top-bar { flex: 0 0 68px; min-width: 0; }
+.app-shell > .screen { height: auto !important; min-height: 0; min-width: 0; overflow: hidden; }
+.app-shell > .screen.active { flex: 1 1 0; gap: 8px; }
+.screen-body {
+  display: flex; flex-direction: column; gap: 8px;
+  flex: 1 1 0; min-height: 0; min-width: 0; overflow: auto; padding-right: 4px;
+}
+.screen-body > * { flex-shrink: 0; min-width: 0; }
+.screen-body > .left-scroll-panel { flex: 1 1 auto; min-height: 0; }
+.app-shell .screen > .screen-actions {
+  flex: 0 0 auto; position: static; margin: 0 !important; width: 100%;
+  background: var(--bg); z-index: 3;
+}
+.screen-actions > button { min-height: 44px; padding: 8px; white-space: normal !important; }
+.screen-body .settings-panel { min-height: min-content; padding: 16px; gap: 10px; }
+.screen-body .calibration-start-panel { grid-template-columns: 150px minmax(0, 1fr); gap: 18px; padding: 18px; }
+.screen-body .calibration-copy { min-width: 0; }
+.screen-body .calibration-copy h2 { font-size: 30px; }
+.screen-body .calibration-copy p:not(.eyebrow) { font-size: 16px; line-height: 1.35; margin-top: 8px; }
+.screen-body .calibration-empty-icon { height: 150px; }
+.screen-body .calibration-note { min-width: 0; flex-wrap: wrap; gap: 6px; }
+.screen-body .calibration-note span { max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+#loadCellRaw, #loadCellUpdated {
+  display: block; max-height: 72px; overflow: auto; max-width: 100%;
+  white-space: pre-wrap; overflow-wrap: anywhere; text-align: left;
+}
+#loadCellScreen .settings-panel { padding: 16px; }
+#loadCellScreen .load-cell-grid { width: 100%; margin-top: 4px; }
+#loadCellScreen .metric-card { min-width: 0; }
+#loadCellScreen .metric-card strong { font-size: 22px; overflow-wrap: anywhere; }
+#liveViewScreen .screen-body .live-view-shell { flex: 0 0 auto; min-height: min-content; }
+#liveViewScreen .screen-body .live-view-grid { min-height: 0; }
+#homeScreen > .status-strip { min-height: 22px; font-size: 11px; overflow-wrap: anywhere; }
+#homeScreen > #startButton { min-height: 48px; padding: 8px 16px; font-size: 24px; }
+.rates-note { font-size: 10px; line-height: 1.25; }
+.camera-preview-widget .muted-copy { max-height: 64px; overflow: auto; }
+.app-scroll, .screen-body, .left-scroll-panel, .metal-rates-list,
+.scale-preparation-content, .camera-debug-details pre, #loadCellRaw, #loadCellUpdated {
+  scrollbar-color: rgba(255,159,26,.85) rgba(255,255,255,.08);
+  scrollbar-width: auto; scrollbar-gutter: stable; overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+:is(.app-scroll,.screen-body,.left-scroll-panel,.metal-rates-list,.scale-preparation-content,.camera-debug-details pre,#loadCellRaw,#loadCellUpdated)::-webkit-scrollbar { width: 18px; height: 18px; }
+:is(.app-scroll,.screen-body,.left-scroll-panel,.metal-rates-list,.scale-preparation-content,.camera-debug-details pre,#loadCellRaw,#loadCellUpdated)::-webkit-scrollbar-track { background: rgba(255,255,255,.08); border-radius: 9px; }
+:is(.app-scroll,.screen-body,.left-scroll-panel,.metal-rates-list,.scale-preparation-content,.camera-debug-details pre,#loadCellRaw,#loadCellUpdated)::-webkit-scrollbar-thumb { background: linear-gradient(180deg,var(--orange),var(--yellow)); border: 3px solid #0b0d10; border-radius: 9px; }
+@media (max-width: 600px) {
+  .screen-body .calibration-start-panel { grid-template-columns: minmax(0, 1fr); }
+  .screen-body .calibration-empty-icon { display: none; }
+  #teachingScreen .screen-actions, #calibrationScreen .screen-actions, #loadCellScreen .screen-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .live-view-toolbar { grid-template-columns: minmax(0,1fr); }
+  .brand-name { font-size: 24px; } h1 { font-size: 13px; }
+  .system-clock { min-width: 0; } .top-actions { gap: 6px; }
+}
+@media (min-width: 1200px) and (min-height: 600px) {
+  .app-shell { width: min(800px, calc(100vw / 1.5)); height: min(480px, calc(100dvh / 1.5)); max-height: none; }
+  .app-shell > .top-bar { flex-basis: 60px; }
+}
+
+/* FREQ-04: four profiles wrap without enlarging the action area. */
+#frequencyModeScreen .calibration-note { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; max-width: 480px; }
+#frequencyModeScreen .calibration-note button { min-width: 0; padding: 8px; white-space: normal; }
+#frequencySlot4Button { border-color: var(--yellow) !important; color: var(--yellow) !important; }
+#frequencySlot4Button.selected { background: rgba(255,216,77,.18) !important; }
+.calibration-frequency-card:nth-child(4) { border-left-color: var(--yellow); }
+.frequency-help { font-size: 12px; line-height: 1.4; max-width: 480px; text-align: left; }
+#teachingScreen .screen-actions button, #calibrationScreen .screen-actions button { min-height: 44px; }
+
+/* Shared texture also covers scrolling error text and dynamically inserted panels. */
+.app-shell * { scrollbar-color: rgba(255,159,26,.85) rgba(255,255,255,.08); scrollbar-width: auto; }
+.app-shell *::-webkit-scrollbar { width: 18px; height: 18px; }
+.app-shell *::-webkit-scrollbar-track { background: rgba(255,255,255,.08); border-radius: 9px; }
+.app-shell *::-webkit-scrollbar-thumb { background: linear-gradient(180deg,var(--orange),var(--yellow)); border: 3px solid #0b0d10; border-radius: 9px; }
+
+/* REV 2026-10-18 / YOLO-01: compact controls and separate mask/status overlays. */
+#engineeringScreen .engineering-actions { grid-template-columns: repeat(5,minmax(0,1fr)); }
+.vision-settings-panel { justify-items: stretch; text-align: left; }
+.vision-settings-panel label { display: grid; gap: 5px; font-size: 13px; }
+.vision-settings-panel > label:first-of-type { display: flex; align-items: center; gap: 10px; }
+.vision-settings-panel input:not([type="checkbox"]) { width: 100%; min-height: 38px; border-radius: 6px; padding: 8px; }
+.vision-settings-panel input[type="checkbox"] { width: 22px; height: 22px; }
+.vision-settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.vision-settings-panel details, #visionSettingsStatus { font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.vision-settings-actions { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.vision-detection-status { border: 1px solid var(--orange); border-radius: 8px; padding: 6px; color: var(--yellow); }
+.vision-detection-status.vision-ready { border-color: var(--green); color: var(--green); }
+@media (max-width: 600px) { #engineeringScreen .engineering-actions { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+
+/* ASSETS-01: long asset names and API JSON stay inside the existing scroll body. */
+.asset-path { overflow-wrap:anywhere; font-size:12px; }
+.asset-details { margin:10px 0; }
+.asset-details label { display:block; margin:8px 0; }
+.asset-details select, #visionModelPath { width:100%; min-width:0; }
+#assetsApiConfig { width:100%; box-sizing:border-box; font:12px monospace; resize:vertical; }
+#assetsInventory, #assetsReference { max-height:180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+
+/* GEOMETRY-01: optional readouts stay in scroll content, never over the footer. */
+.geometry-panel { padding:12px; border:1px solid var(--orange); border-radius:12px; }
+.geometry-panel p,.geometry-summary { font-size:13px; line-height:1.4; overflow-wrap:anywhere; white-space:normal; }
+.geometry-panel .button-row { flex-wrap:wrap; margin-top:8px; }
+.geometry-summary { border-left:3px solid var(--orange); padding-left:8px; }
+#geometrySettingsJson { width:100%; box-sizing:border-box; resize:vertical; font:12px monospace; }
+
+/* REFERENCE-01: wrap research-model status inside the existing scroll bodies. */
+.reference-summary { font-size:13px; line-height:1.4; border-left:3px solid var(--orange); padding-left:8px; overflow-wrap:anywhere; }
+
+/* FINISH-01: new panels stay inside existing bounded scroll bodies. */
+.removal-panel, .readiness-row { padding: 12px; margin: 12px 0; border: 1px solid var(--line, #ded6ca); border-radius: 12px; min-width: 0; }
+.removal-panel p, .readiness-row p, #readinessStatus { overflow-wrap: anywhere; white-space: normal; }
+.removal-panel label { display: flex; gap: 10px; align-items: start; line-height: 1.4; }
+.removal-panel input { flex: 0 0 auto; width: 22px; height: 22px; }
+.readiness-row pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+#resultScreen .screen-actions { flex-wrap: wrap; }

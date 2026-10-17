@@ -1,0 +1,15 @@
+{
+  "adapter": "gold_reference_v1",
+  "model_path": "metal/signal_plus_geometry.joblib",
+  "min_score": 0.8,
+  "frequency_hz": [
+    8000,
+    10000,
+    15000,
+    20000
+  ],
+  "amplitude_v_peak": 1.0,
+  "signal_definition": "raw_ac_rms_v_delta_pct",
+  "profile_confirmed": false,
+  "profile_model_sha256": null
+}

@@ -1,0 +1,6 @@
+﻿
+# Local generated files
+__pycache__/
+*.py[cod]
+/gold_export/
+/service/view-service/metal_rates_cache.json

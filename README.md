@@ -40,3 +40,11 @@ The Chrome launcher uses a separate kiosk profile so an already-open personal
 Chrome session cannot consume and ignore the kiosk flags.
 
 The HMI is available at `http://127.0.0.1:8080`.
+
+## FINISH-01 startup and final checks
+
+Normal launchers now use `launch_stack.py` and `system_assets/runtime.json`.
+Default Signal mode is hardware; simulation must be explicit. Occupied ports
+are rejected. Read `system_assets/FINAL_TEST_GUIDE.md` before the first hardware
+trial. `python system_check.py` and Engineering > System Readiness run passive
+checks; use an explicit `--only SENSOR --read` for an individual sensor test.
