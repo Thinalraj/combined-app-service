@@ -3872,6 +3872,7 @@ let referenceRatesBusy = false;
 let referenceRatesOffline = false;
 let referenceRatesTimer = null;
 let rateCardIndex = 0;
+let rateCarouselTimer = null;
 function moveRateCard(step) {
   rateCardIndex = (rateCardIndex + step + metalRateRows.length) % metalRateRows.length;
   [...document.getElementById("metalRatesList").children].forEach((row,index) => {
@@ -3881,13 +3882,31 @@ function moveRateCard(step) {
     row.classList.toggle("next",offset===1);
     row.setAttribute("aria-hidden",String(offset!==0));
   });
-  document.getElementById("rateCardPosition").textContent = `${rateCardIndex+1} / ${metalRateRows.length}`;
+  const position = document.getElementById("rateCardPosition");
+  if (position) position.textContent = `${rateCardIndex+1} / ${metalRateRows.length}`;
 }
-document.getElementById("ratesPreviousButton").addEventListener("click",()=>moveRateCard(-1));
-document.getElementById("ratesNextButton").addEventListener("click",()=>moveRateCard(1));
-document.getElementById("metalRatesList").addEventListener("keydown",event=>{
+const metalRatesCarousel = document.getElementById("metalRatesList");
+metalRatesCarousel.addEventListener("keydown",event=>{
   if (["ArrowLeft","ArrowRight"].includes(event.key)) {event.preventDefault();moveRateCard(event.key==="ArrowLeft"?-1:1);}
 });
+metalRatesCarousel.addEventListener("click", event => {
+  const card = event.target.closest(".metal-rate-row");
+  if (!card) return;
+  const index = [...metalRatesCarousel.children].indexOf(card);
+  if (index >= 0) moveRateCard(index - rateCardIndex);
+});
+let carouselPointerStartX = null;
+metalRatesCarousel.addEventListener("pointerdown", event => {
+  carouselPointerStartX = event.clientX;
+});
+metalRatesCarousel.addEventListener("pointerup", event => {
+  if (carouselPointerStartX === null) return;
+  const delta = event.clientX - carouselPointerStartX;
+  carouselPointerStartX = null;
+  if (Math.abs(delta) > 35) moveRateCard(delta < 0 ? 1 : -1);
+});
+metalRatesCarousel.addEventListener("pointercancel", () => { carouselPointerStartX = null; });
+rateCarouselTimer = window.setInterval(() => moveRateCard(1), 5000);
 
 function rateTime(value) {
   const date = new Date(value);

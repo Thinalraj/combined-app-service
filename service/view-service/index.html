@@ -36,11 +36,10 @@
         <section class="rates-panel metal-list-panel" aria-label="Reference precious-metal prices">
           <div class="rates-head">
             <p class="eyebrow">Precious Metal Reference Prices</p>
-            <button id="refreshRatesButton" type="button">Refresh</button>
+            <button id="refreshRatesButton" class="refresh-rates-button" type="button" aria-label="Refresh prices" title="Refresh prices"><span aria-hidden="true">↻</span><span class="refresh-label">Refresh</span></button>
           </div>
           <p id="metalRatesStatus" class="rates-status" role="status">Loading saved prices...</p>
           <div id="metalRatesList" class="metal-rates-list rate-carousel" role="list" tabindex="0" aria-label="Metal price carousel"></div>
-          <div class="carousel-controls"><button id="ratesPreviousButton" class="secondary" aria-label="Previous metal" type="button">❮ Previous</button><span id="rateCardPosition" aria-live="polite"></span><button id="ratesNextButton" class="secondary" aria-label="Next metal" type="button">Next ❯</button></div>
           <p class="rates-note">MYR per gram of metal content. Excludes workmanship, dealer margins and fees.</p>
           <p class="rates-note">Gold API + Frankfurter · Auto-update 00:00 MYT · Changes since previous quote</p>
         </section>

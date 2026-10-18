@@ -2655,6 +2655,35 @@ output {
 .verification-progress-group .event-progress { height: 9px; margin: 0 0 4px; }
 .verification-progress-group .event-progress span { transition: width .25s ease; }
 
+/* TOUCH-FIRST-HOME-01: compact, human-centred controls for the price deck. */
+#metalRatesList.rate-carousel { cursor: grab; touch-action: pan-y; }
+#metalRatesList.rate-carousel:active { cursor: grabbing; }
+#homeScreen .rates-status,
+#homeScreen .rates-note { color: rgba(168, 176, 186, .55); font-size: 9px; line-height: 1.1; }
+#homeScreen .rates-status { letter-spacing: .01em; }
+#homeScreen .rates-note { opacity: .72; }
+#homeScreen .carousel-controls { display: none; }
+.refresh-rates-button {
+  align-items: center;
+  background: rgba(0, 213, 255, .08);
+  border: 1px solid rgba(0, 213, 255, .32);
+  border-radius: 999px;
+  color: #b7f5ff;
+  display: inline-flex;
+  gap: 5px;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 3px 10px 3px 7px;
+  transition: background .2s ease, border-color .2s ease, transform .2s ease;
+}
+.refresh-rates-button span:first-child { font-size: 20px; line-height: 1; }
+.refresh-rates-button .refresh-label { font-size: 10px; font-weight: 700; }
+.refresh-rates-button:hover,
+.refresh-rates-button:focus-visible { background: rgba(0, 213, 255, .18); border-color: var(--cyan); }
+.refresh-rates-button:active { transform: rotate(-18deg) scale(.96); }
+.refresh-rates-button:disabled { opacity: .45; }
+
 #resultScreen #cameraPreviewWidget::before { content: "Removal preview"; display: block; font-size: 11px; color: var(--muted); }
 #resultScreen .result-panel { width: 100%; max-width: none; }
 #scalePrepareScreen .scale-preparation-actions { grid-template-columns: repeat(4,minmax(0,1fr)); }
