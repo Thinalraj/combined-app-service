@@ -206,6 +206,19 @@ async function showScreen(name) {
   }
   const previousScreen = currentScreen;
   currentScreen = name;
+  document.body.classList.toggle("engineering-session",engineeringUnlocked);
+  clearTimeout(manualDetectionTimer);
+  if(name==="home") {document.getElementById("platformEmptyConfirm").checked=false;updateCustomerStart();}
+  if(name==="place") {
+    document.getElementById("manualShapeButton").hidden=true;
+    manualDetectionTimer=setTimeout(async()=>{
+      if(currentScreen!=="place" || placementBusy)return;
+      document.getElementById("manualShapeButton").hidden=false;
+      if(yoloCanContinue())return;
+      const manual=await showNotice("Unable to detect the item. Choose its shape manually?","Detection",true,"Choose manually","Keep trying");
+      if(manual && currentScreen==="place"){manualShapeMode=true;showScreen("shape");}
+    },12000);
+  }
   if (previousScreen !== name && removalScreen()) {removalNode("Confirm").checked = false;removalNode("Manual").checked=false;}
   Object.values(screens).forEach((screen) => screen.classList.remove("active"));
   screens[name].classList.add("active");
@@ -269,14 +282,15 @@ let placementCaptureId = null, placementBusy = false, placementCycle = 0, manual
 let lastResultRecord = null;
 let noticeResolve = null;
 const cameraFailureScreens = new Set();
-function showNotice(message, title = "Please check", question = false) {
+function showNotice(message, title = "Please check", question = false, acceptLabel = null, cancelLabel = "Cancel") {
   const dialog = document.getElementById("noticeDialog");
   if (noticeResolve) noticeResolve(false);
   document.getElementById("noticePhotoLinks").hidden = true;
   document.getElementById("noticeTitle").textContent = title;
   document.getElementById("noticeMessage").textContent = String(message || "Operation unavailable");
   document.getElementById("noticeCancel").hidden = !question;
-  document.getElementById("noticeAccept").textContent = question ? "Continue with visual check" : "OK";
+  document.getElementById("noticeAccept").textContent = acceptLabel || (question ? "Continue with visual check" : "OK");
+  document.getElementById("noticeCancel").textContent = cancelLabel;
   if (!dialog.open) dialog.showModal();
   return new Promise(resolve => { noticeResolve = resolve; });
 }
@@ -288,9 +302,20 @@ function closeNotice(answer = false) {
 document.getElementById("noticeAccept").addEventListener("click", () => closeNotice(true));
 document.getElementById("noticeCancel").addEventListener("click", () => closeNotice(false));
 document.getElementById("noticeDialog").addEventListener("cancel", event => {event.preventDefault();closeNotice(false);});
+function customerResultLabel(record) {
+  const ref=record?.classifier_result;
+  if(ref?.reference_only) {
+    if(ref.eligibility?.eligible!==true)return "Not eligible";
+    const grade=Number(ref.reference_grade);
+    return [916,999].includes(grade)?`${grade} reference match`:"Reference match";
+  }
+  return record?.needs_verification?"Not eligible":record?.result || "Not eligible";
+}
 function showResultDetails() {
   const r = lastResultRecord || {};
-  showNotice([r.status, document.getElementById("resultReferenceSummary").textContent,
+  if(!engineeringUnlocked) {
+    showNotice(customerResultLabel(r)+".","Result");
+  } else showNotice([r.status, document.getElementById("resultReferenceSummary").textContent,
     document.getElementById("resultGeometrySummary").textContent,
     document.getElementById("resultScalePreparation").textContent,
     r.image_capture_error ? "Photo: " + r.image_capture_error : ""].filter(Boolean).join("\n\n"), "Result details");
@@ -310,6 +335,7 @@ let visionLastDetection = null;
 let visionStableFrames = 0;
 let visionDetectionReceived = 0;
 let visionGateTimer = null;
+let manualDetectionTimer = null;
 
 function yoloBoxOverlap(a, b) {
   if (!a || !b) return 0;
@@ -335,6 +361,7 @@ function updateYoloGate(message = "") {
   const d = visionLastDetection;
   node.textContent = message || (d ? `${d.message}${d.confidence != null ? " · " + (d.confidence*100).toFixed(0) + "%" : ""}${d.eligible ? " · steady " + visionStableFrames + "/3" : ""}` : "Waiting for live object detection");
   if (d?.eligible && !yoloCanContinue() && visionStableFrames >= 3) node.textContent = "Detection expired; waiting for a fresh frame";
+  if(currentScreen==="place")node.textContent=placementBusy?"Saving photo…":d?.count>1?"Place one item only":autoReady?d.label+" detected":"Detecting…";
   node.classList.toggle("vision-ready", Boolean(yoloCanContinue() && visionYoloConfig?.enabled));
 }
 function resetYoloDetection(message = "") {
@@ -469,9 +496,9 @@ async function measureGeometry(kind,manual=false) {
   document.querySelectorAll(".geometry-measure").forEach(button=>button.disabled=true);
   const next=document.getElementById(teaching?"teachingDimensionNextButton":"dimensionNextButton");next.disabled=true;
   stopTeachingCameraPreview();
-  status.textContent="Measuring repeated camera frames, then stable mass. Keep item still...";
+  status.textContent=teaching?"Measuring repeated camera frames, then stable mass. Keep item still...":"Measuring automatically…";
   try {
-    const response=await fetch("/api/vision/geometry/measure",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({shape,manual_height_mm:manual?thickness:null})});
+    const response=await fetch("/api/vision/geometry/measure",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({shape,manual_height_mm:manual?thickness:null,customer_simple:!teaching}),signal:AbortSignal.timeout(35000)});
     const value=await response.json();
     if (!response.ok) throw new Error(value.message||"Geometry measurement failed");
     if (currentScreen!==screen || screenNavigation!==navigation || (teaching?getTeachingShapeLabel():getMeasurementShapeLabel())!==shape
@@ -492,7 +519,11 @@ async function measureGeometry(kind,manual=false) {
     if(shape==="Bar"&&!Number.isFinite(value.length_mm))missing.push("length");
     if(!Number.isFinite(value.height_mm))missing.push("thickness");
     status.textContent=missing.length ? "Available dimensions kept. Unavailable: "+missing.join(", ")+". Enter the missing values manually." : "Mask dimensions filled. Footprint and density remain separate evidence.";
-  } catch(error) {if(currentScreen===screen){status.textContent="Measurement unavailable · enter known dimensions or retry";showNotice(error.message,"Geometry measurement");}}
+    return value;
+  } catch(error) {
+    if(currentScreen===screen){status.textContent="Automatic measurement unavailable";if(teaching)showNotice(error.message,"Geometry measurement");}
+    return null;
+  }
   finally {
     geometryBusy=false;next.disabled=false;
     document.querySelectorAll(".geometry-measure").forEach(button=>button.disabled=false);
@@ -784,7 +815,7 @@ async function confirmItemRemoved(next) {
     removalConfirmBusy = true;
     const screen = currentScreen, navigation = screenNavigation;
     try {
-      manual = await showNotice("Sensors have not confirmed an empty pan. Inspect the physical pan. Continue using your visual confirmation? No zero or internal adjustment will run.", "Manual removal confirmation", true);
+      manual = await showNotice("Check the platform is empty. Continue with your visual confirmation?", "Manual removal confirmation", true);
       if (screen !== currentScreen || navigation !== screenNavigation || !manual) return;
     } finally {removalConfirmBusy = false;}
   }
@@ -1025,7 +1056,7 @@ function loadTeachingDetectedImage() {
         : "No captured result available. Take a measurement first.";
       if (!removalLive && !cameraFailureScreens.has(currentScreen)) {
         cameraFailureScreens.add(currentScreen);
-        showNotice(error.message || "Check Image service on port 8003.", "Camera unavailable");
+        showNotice(engineeringUnlocked ? error.message : "Camera unavailable. Ask the operator.", "Camera unavailable");
       }
       delay = 2000;
     } finally {
@@ -1406,7 +1437,7 @@ function dimensionsAreValid() {
     length: state.lengthMm,
     thickness: state.thicknessMm
   };
-  return config.required.every((field) => Number.parseFloat(values[field] || "0") > 0);
+  return config.required.filter(field=>field!=="thickness").every((field) => Number.parseFloat(values[field] || "0") > 0);
 }
 
 function weightIsValidTeaching() {
@@ -2472,6 +2503,7 @@ async function showResult() {
         geometry_reading_id: state.geometryReading?.reading_id || null,
         scale_preparation_id: state.scalePreparationId,
         placement_capture_id: placementCaptureId,
+        customer_simple: true,
         frequency_hz: currentFrequency * 1000,
         frequency_slot: state.activeFrequencySlot
       })
@@ -2497,7 +2529,7 @@ async function showResult() {
   }
 
   if (navigation!==screenNavigation || currentScreen!=="measure") return;
-  document.getElementById("resultMaterial").textContent = record.result || "Unable to Detect Material";
+  document.getElementById("resultMaterial").textContent = customerResultLabel(record);
   document.getElementById("resultConfidence").textContent = "";
   document.getElementById("resultWeight").textContent = record.weight || `${state.weight || "0"} g`;
   document.getElementById("resultShape").textContent = record.shape || getMeasurementShapeLabel();
@@ -2870,7 +2902,8 @@ function renderScalePreparation(job) {
   scaleNode("scalePreparationSpinner").hidden = !running;
   scaleNode("scalePreparationStatus").setAttribute("aria-busy",String(running));
   scalePreparationResult = job.state === "ready" && job.result?.zero_verified === true ? job : null;
-  scaleNode("scalePreparationStatus").textContent = job.message || "Remove all items before starting.";
+  scaleNode("scalePreparationStatus").textContent = ["engineering","teaching"].includes(scalePreparationContext) ? job.message || "Remove all items before starting." : running ? "Preparing… keep the platform empty" : job.state==="ready" ? "Ready" : job.state==="failed" ? "Preparation failed. Ask the operator." : "Confirm the platform is empty, then prepare.";
+  document.getElementById("scalePrepareScreen").classList.toggle("customer-preparation",!["engineering","teaching"].includes(scalePreparationContext));
   scaleNode("scalePreparationStart").disabled = running;
   scaleNode("scalePreparationSkip").disabled=running;
   scaleNode("scalePreparationCancel").disabled = running;
@@ -2902,7 +2935,7 @@ async function pollScalePreparation() {
     if (job.state === "running") scalePreparationTimer = setTimeout(pollScalePreparation, 500);
   } catch (error) {
     // A lost HTTP response does not prove that an internal operation has stopped.
-    scaleNode("scalePreparationStatus").textContent = `${error.message}. Keep the pan empty; retrying status.`;
+    scaleNode("scalePreparationStatus").textContent = engineeringUnlocked ? `${error.message}. Keep the pan empty; retrying status.` : "Connection lost. Keep the platform empty.";
     scalePreparationTimer = setTimeout(pollScalePreparation, 1500);
   }
 }
@@ -2948,7 +2981,7 @@ async function openScalePreparation(context) {
 async function startScalePreparation() {
   if (scalePreparationBusy) return;
   if (!scaleNode("scalePreparationConfirm").checked) {
-    scaleNode("scalePreparationStatus").textContent = "Remove every item, then tick the empty-pan confirmation.";
+    scaleNode("scalePreparationStatus").textContent = "Tick the empty-platform checkbox first.";
     return;
   }
   clearTimeout(scalePreparationTimer);
@@ -2964,7 +2997,7 @@ async function startScalePreparation() {
     scalePreparationJobId = job.id;
     renderScalePreparation(job.state === "ready" ? { ...job, state: "running", message: "Confirming preparation status..." } : job);
   } catch (error) {
-    scaleNode("scalePreparationStatus").textContent = `${error.message}. Checking balance status; keep the pan empty.`;
+    scaleNode("scalePreparationStatus").textContent = engineeringUnlocked ? `${error.message}. Checking balance status; keep the pan empty.` : "Checking preparation. Keep the platform empty.";
   }
   // Always ask the server after POST, including a lost response or a busy reply.
   scalePreparationTimer = setTimeout(pollScalePreparation, 500);
@@ -3057,25 +3090,27 @@ async function prepareMeasurementScale() {
 }
 
 async function prepareMeasurementDimensionsFromVision() {
+  await showScreen("dimension");
+  if(currentScreen!=="dimension")return;
+  document.getElementById("dimensionSkipButton").disabled=true;
+  const navigation=screenNavigation;
+  document.getElementById("dimensionScreen").classList.remove("manual-dimensions");
   await refreshYoloStatus();
-  if (visionYoloConfig?.enabled && ["Coin","Bar"].includes(getMeasurementShapeLabel())) {
-    await showScreen("dimension");
-    if(currentScreen==="dimension")await measureGeometry("measurement");
-    return;
+  if(currentScreen!=="dimension" || navigation!==screenNavigation)return;
+  if(visionYoloConfig?.enabled && ["Coin","Bar"].includes(getMeasurementShapeLabel())) {
+    await measureGeometry("measurement");
+  } else if(visionYoloConfig?.enabled===false || !["Coin","Bar"].includes(getMeasurementShapeLabel())) {
+    try {await fetchVisionSize(getMeasurementShapeLabel(),"measurement");}catch(error){}
   }
-  const status = document.getElementById("measurementWeightStatus");
-  const raw = document.getElementById("measurementWeightRaw");
-  status.textContent = "Capturing image dimensions...";
-  raw.textContent = "Calling vision service on port 8003";
-  try {
-    const vision = await fetchVisionSize(getMeasurementShapeLabel(), "measurement");
-    raw.textContent = vision.message || "Vision dimensions captured";
-  } catch (error) {
-    raw.textContent = `${error.message || "Vision unavailable"}; enter dimensions manually`;
-  }
-  state.activeDimensionField = "width";
-  updateDimensionDisplay();
-  showScreen("dimension");
+  if(currentScreen!=="dimension" || navigation!==screenNavigation)return;
+  document.getElementById("dimensionSkipButton").disabled=false;
+  if(dimensionsAreValid()) {startMeasurement();return;}
+  const manual=await showNotice("Automatic dimensions unavailable. Enter them manually or skip this step.","Dimensions",true,"Enter dimensions","Skip");
+  if(currentScreen!=="dimension" || navigation!==screenNavigation)return;
+  if(manual) {
+    state.activeDimensionField="width";updateDimensionDisplay();
+    document.getElementById("dimensionScreen").classList.add("manual-dimensions");
+  } else startMeasurement();
 }
 
 async function sampleMeasurementWeight() {
@@ -3105,7 +3140,7 @@ async function sampleMeasurementWeight() {
   } catch (error) {
     status.textContent = "Scale reading failed";
     raw.textContent = "Try Sample Again";
-    showNotice(error.message || "Check the balance connection.", "Scale reading failed");
+    showNotice(engineeringUnlocked ? error.message : "Could not read the weight. Try again.", "Scale reading failed");
     setWeightProgress(config, 0, 10, "Reading failed", "error");
     setWeightControls("measurement", { sampling: false, ready: false, sampleAvailable: true });
   } finally {
@@ -3148,7 +3183,7 @@ async function sampleTeachingWeight() {
   } catch (error) {
     status.textContent = "Scale reading failed";
     raw.textContent = "Try Sample Again";
-    showNotice(error.message || "Check the balance connection.", "Scale reading failed");
+    showNotice(engineeringUnlocked ? error.message : "Could not read the weight. Try again.", "Scale reading failed");
     setWeightProgress(config, 0, 10, "Reading failed", "error");
     setWeightControls("teaching", { sampling: false, ready: false, sampleAvailable: true });
   } finally {
@@ -3185,7 +3220,7 @@ async function startLoadCellMonitor() {
 let startupNeedsRemoval=false, startupPresenceBusy=false;
 async function offerStartupManualZero() {
   if(currentScreen!=="home")return;
-  const answer=showNotice("An object was detected during startup. Remove all items, then open manual preparation and confirm the physical pan is empty before zeroing. Nothing will zero automatically.","Startup platform check",true);
+  const answer=showNotice("Remove the item, then prepare the empty platform.","Startup platform check",true);
   document.getElementById("noticeAccept").textContent="Open manual zero";
   if(await answer && currentScreen==="home")await openScalePreparation("startup");
 }
@@ -3219,7 +3254,7 @@ async function checkStartupPlatform() {
   } catch(error) {
     status.textContent="Startup check unavailable · inspect pan manually";
   } finally {
-    clearTimeout(timer);startupPresenceBusy=false;start.disabled=false;status.setAttribute("aria-busy","false");
+    clearTimeout(timer);startupPresenceBusy=false;updateCustomerStart();status.setAttribute("aria-busy","false");
   }
 }
 function finishStartupPresence() {
@@ -3229,7 +3264,7 @@ function finishStartupPresence() {
   status.textContent="Startup check complete";
 }
 document.getElementById("startButton").addEventListener("click", () => {
-  if(startupPresenceBusy)return;
+  if(startupPresenceBusy || !document.getElementById("platformEmptyConfirm").checked)return;
   if(startupNeedsRemoval)offerStartupManualZero();
   else zeroMeasurementScaleBeforePlacement();
 });
@@ -3290,6 +3325,7 @@ document.getElementById("weightNextButton").addEventListener("click", async () =
   await prepareMeasurementDimensionsFromVision();
 });
 document.getElementById("dimensionBackButton").addEventListener("click", () => showScreen("weight"));
+document.getElementById("dimensionSkipButton").addEventListener("click",()=>{if(!geometryBusy)startMeasurement();});
 document.getElementById("dimensionNextButton").addEventListener("click", () => {
   if (!dimensionsAreValid()) return;
   startMeasurement();
@@ -3979,5 +4015,25 @@ loadAcquisitionMode();
 initializeMetalRateRows();
 refreshReferenceRates();
 
+function updateCustomerStart() {
+  document.getElementById("startButton").disabled=startupPresenceBusy || !document.getElementById("platformEmptyConfirm").checked;
+}
+document.getElementById("platformEmptyConfirm").addEventListener("change",updateCustomerStart);
+
 // Startup inspection only: these GET requests never zero, tare or adjust.
 checkStartupPlatform();
+
+// NUC-05: kiosk photo overlays never navigate away or open an inaccessible tab.
+function closePhotoViewer() {
+  document.getElementById("photoViewerFrame").src="about:blank";
+  document.getElementById("photoViewerDialog").close();
+}
+document.getElementById("photoViewerBack").addEventListener("click",closePhotoViewer);
+document.getElementById("photoViewerDialog").addEventListener("cancel",event=>{event.preventDefault();closePhotoViewer();});
+document.addEventListener("click",event=>{
+  const link=event.target.closest?.("a");if(!link)return;
+  const url=new URL(link.href,location.href);
+  if(url.origin!==location.origin || !/^\/api\/(verification|teaching)\/image\/[A-Za-z0-9_.-]+\.html$/.test(url.pathname))return;
+  event.preventDefault();document.getElementById("photoViewerFrame").src=url.pathname;
+  document.getElementById("photoViewerDialog").showModal();
+});

@@ -2552,3 +2552,36 @@ output {
 
 #noticePhotoLinks { font-size: 13px; line-height: 1.6; }
 #noticePhotoLinks a { color: #8ce7b2; }
+
+/* NUC-05: concise customer controls; technical Engineering screens retain data. */
+.home-empty-confirm { display:flex; align-items:center; gap:8px; font-size:12px; min-height:24px; }
+.home-empty-confirm input { width:22px; height:22px; accent-color:#25bf69; }
+#placeScreen .auto-detect-action { grid-column:3; }
+#placeScreen:has(#manualShapeButton[hidden]) .auto-detect-action { grid-column:2 / 4; }
+#dimensionScreen .screen-body { overflow:hidden; justify-content:center; }
+#dimensionScreen .screen-body > .weight-layout { display:none; }
+#dimensionScreen.manual-dimensions .screen-body > .weight-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center; }
+#dimensionScreen #userGeometryPanel, #dimensionScreen #thicknessFieldButton,
+#dimensionScreen .dimension-meta { display:none !important; }
+#dimensionScreen .screen-actions { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#dimensionScreen:not(.manual-dimensions) #dimensionNextButton { display:none; }
+#dimensionScreen.manual-dimensions .customer-auto-measure { display:none; }
+.customer-auto-measure { text-align:center; font-size:20px; }
+.customer-auto-measure::before { content:""; display:block; width:30px; height:30px; border:4px solid #46515d; border-top-color:#25bf69; border-radius:50%; margin:0 auto 12px; animation:processing-spin 1s linear infinite; }
+#measurementWeightRaw, #measureScreen #dimensionSummary { display:none; }
+#scalePrepareScreen.customer-preparation .scale-preparation-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px 18px; align-content:center; overflow:hidden; }
+.customer-preparation .scale-preparation-content > h2 { grid-column:2; grid-row:1; margin:0; font-size:20px; }
+.customer-preparation .scale-preparation-content > p:first-of-type,
+.customer-preparation #scalePreparationInternal,
+.customer-preparation #scalePreparationReadings { display:none; }
+.customer-preparation #scalePreparationCameraHost { grid-column:1; grid-row:1 / 6; align-self:center; min-height:0; }
+.customer-preparation .scale-empty-confirm { grid-column:2; grid-row:2; margin:0; padding:8px 0; font-size:15px; }
+.customer-preparation #scalePreparationSpinner { grid-column:2; grid-row:3; }
+.customer-preparation #scalePreparationStatus { grid-column:2; grid-row:4; font-size:14px; margin:0; }
+.customer-preparation .camera-image-frame { height:clamp(120px,43dvh,240px); }
+.customer-preparation #scalePreparationSkip { font-size:12px; }
+.photo-viewer-dialog { width:min(900px,96vw); height:88dvh; max-height:92dvh; padding:12px; border:1px solid #25bf69; border-radius:12px; background:#11161c; color:white; }
+.photo-viewer-dialog::backdrop { background:rgba(0,0,0,.85); }
+.photo-viewer-dialog[open] { display:flex; flex-direction:column; gap:10px; }
+#photoViewerBack { flex:0 0 auto; min-height:44px; padding:8px 20px; align-self:flex-start; }
+#photoViewerFrame { width:100%; flex:1; min-height:0; border:0; background:#111827; }

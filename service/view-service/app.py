@@ -4747,7 +4747,7 @@ def verify_measurement():
         save_measurements(records)
         return jsonify(record), 409
     if selected_classifier_algorithm()=="gold_reference_v1":
-        try:reference_preflight(calibration,shape,geometry)
+        try:reference_preflight(calibration,shape,geometry,optional_geometry=payload.get("customer_simple") is True)
         except Exception as exc:
             prediction=reference_unavailable(str(exc))
             record={"id":record_id,"date":now.strftime("%d %b %Y"),"time":now.strftime("%H:%M"),
@@ -4892,7 +4892,7 @@ def verify_measurement():
         status_text=classifier_prediction["decision_message"] if classifier_prediction else "Reference comparison unavailable"
         score_threshold_pct=classifier_prediction.get("threshold",80.) if classifier_prediction else 80.
     geometry_evidence = geometry_evidence_for_record(payload, shape)
-    if selected_classifier_algorithm()=="gold_reference_v1":
+    if selected_classifier_algorithm()=="gold_reference_v1" and payload.get("customer_simple") is not True:
         density=(geometry_evidence or {}).get("density_check",{})
         status_text += (" Density: "+density.get("message","unavailable")+".")
     record = {
@@ -5809,11 +5809,11 @@ def reference_model_select():
     except Exception as exc:return jsonify(error="reference_model_not_selected",message=str(exc)),400
 
 
-def reference_preflight(calibration,shape,geometry):
+def reference_preflight(calibration,shape,geometry,optional_geometry=False):
     cfg=reference_configuration();reference_profile_check(cfg,load_settings());REFERENCE_MODEL.validate(cfg)
     reference_feature_row({"mode":calibration.get("acquisition_mode"),
         "reference_signal_sequence":calibration.get("reference_signal_sequence")},calibration,
-        shape,geometry["sample_area_mm2"],geometry["thickness_mm"],cfg)
+        shape,geometry["sample_area_mm2"],geometry["thickness_mm"],cfg,validate_geometry=not optional_geometry)
 
 
 def reference_profile_check(cfg,settings):
@@ -5894,13 +5894,18 @@ def geometry_measure_api():
         if result.get("ok") is not True or result.get("schema")!="thinal-geometry-v1":
             raise ValueError("Image service did not return a valid geometry reading")
         preview=result.pop("preview",None)
-        try:
-            prep=service_json_request("GET",service_base_url("weight"),"/preparation/status",timeout=5.)
-            weight=read_weight_service_average(sample_count=5)
-            weight["zero_verified"]=trusted_scale_preparation(prep)
-        except RuntimeError as exc:weight={"ok":False,"stable":False,"message":str(exc)}
+        if body.get("customer_simple") is True:
+            # NUC-05: no density calculation or redundant scale read in customer metrology.
+            weight={"ok":False,"stable":False,"message":"Density disabled for customer workflow"}
+            result["density_check"]={"available":False,"disabled":True,"message":"Disabled"}
+        else:
+            try:
+                prep=service_json_request("GET",service_base_url("weight"),"/preparation/status",timeout=5.)
+                weight=read_weight_service_average(sample_count=5)
+                weight["zero_verified"]=trusted_scale_preparation(prep)
+            except RuntimeError as exc:weight={"ok":False,"stable":False,"message":str(exc)}
+            result["density_check"]=density_check(result,weight)
         result["mass_measurement"]=weight
-        result["density_check"]=density_check(result,weight)
         result["reading_id"]="G-"+uuid.uuid4().hex
         result["saved_at_epoch"]=time.time()
         assets.write_json(GEOMETRY_READINGS_DIR/(result["reading_id"]+".json"),result)

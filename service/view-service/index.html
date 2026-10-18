@@ -45,6 +45,7 @@
           <p class="rates-note">Gold API + Frankfurter · Auto-update 00:00 MYT · Changes since previous quote</p>
         </section>
 
+        <label class="home-empty-confirm"><input id="platformEmptyConfirm" type="checkbox"> I have visually checked the platform is empty.</label>
         <button class="primary-action" id="startButton" type="button" disabled>
           Start Verification
         </button>
@@ -93,14 +94,14 @@
       <section class="screen" id="placeScreen">
         <div class="screen-body app-scroll">
         <div class="instruction-panel">
-          <h2>Automatic detection</h2>
-          <p id="autoDetectSummary" role="status">Keep one item flat and still in the frame</p>
+          <h2>Open the door and place the item</h2>
+          <p>Close the door. Keep the item still.</p><p id="autoDetectSummary" role="status">Detecting automatically…</p>
           <div class="camera-preview-host" id="userPlaceCameraHost"></div>
         </div>
         </div>
         <div class="screen-actions button-row">
           <button class="secondary" data-back-home type="button">Cancel</button>
-          <button class="secondary" id="manualShapeButton" type="button">Unable / incorrect? Choose manually</button>
+          <button class="secondary" id="manualShapeButton" type="button" hidden>Unable / incorrect? Choose manually</button>
           <button class="primary auto-detect-action" id="placeContinueButton" type="button">Detecting automatically…</button>
         </div>
       </section>
@@ -119,8 +120,8 @@
           </div>
           <div class="selection-panel compact-panel" id="measurementScalePanel">
             <p class="eyebrow">Automatic Scale</p>
-            <h2>Average 10 Readings</h2>
-            <p>The measured weight is taken from the load cell and saved with the verification record.</p>
+            <h2>Measuring weight</h2>
+            <p>Keep the item still.</p>
             <div class="scale-progress" id="measurementWeightProgress" aria-live="polite">
               <div class="scale-progress-header">
                 <span id="measurementWeightProgressLabel">Waiting to sample</span>
@@ -142,6 +143,7 @@
 
       <section class="screen" id="dimensionScreen">
         <div class="screen-body app-scroll">
+        <p class="customer-auto-measure" role="status">Measuring automatically…</p>
 <div class="camera-preview-host" id="userDimensionCameraHost"></div>
 <details class="geometry-panel" id="userGeometryPanel" hidden open>
           <summary>Mask footprint, height &amp; density</summary>
@@ -197,13 +199,14 @@
         </div>
         <div class="screen-actions button-row">
           <button class="secondary" id="dimensionBackButton" type="button">Back</button>
+          <button class="secondary" id="dimensionSkipButton" type="button">Skip</button>
           <button class="primary" id="dimensionNextButton" type="button">Next</button>
         </div>
       </section>
 
       <section class="screen" id="shapeScreen">
         <div class="screen-body app-scroll">
-        <p class="manual-shape-note">Manual correction · automatic detection is available using Back. Choosing a shape cannot establish gold identity or bypass model acceptance checks.</p>
+        <p class="manual-shape-note">Select the item shape.</p>
         <div class="shape-grid" id="shapeGrid">
           <button class="shape-option" type="button" data-shape="Ring">
             <span class="ring-icon"></span>
@@ -316,7 +319,7 @@
         </div>
         </div>
         <div class="screen-actions button-row">
-          <button class="secondary" id="resultDetailsButton" type="button">Details</button>
+          <button class="secondary" id="resultDetailsButton" type="button">Result / Photo</button>
           <button class="secondary" id="detailsButton" type="button">History</button>
           <button class="secondary" id="newMeasurementButton" type="button">Home</button>
           <button class="primary" id="resultAnotherButton" type="button">Another Item</button>
@@ -1409,6 +1412,10 @@
       <h2 id="noticeTitle">Please check</h2><p id="noticeMessage"></p>
       <p id="noticePhotoLinks" hidden><a id="noticeRawPhoto" download>Download original photograph</a> · <a id="noticeOverlayPhoto" target="_blank" rel="noopener">Open photo / annotations</a></p>
       <div class="button-row"><button id="noticeCancel" class="secondary" type="button" hidden>Cancel</button><button id="noticeAccept" class="primary" type="button">OK</button></div>
+    </dialog>
+    <dialog id="photoViewerDialog" class="photo-viewer-dialog" aria-label="Saved photograph">
+      <button id="photoViewerBack" class="primary" type="button">Back</button>
+      <iframe id="photoViewerFrame" title="Photograph and annotations" sandbox="allow-same-origin" src="about:blank"></iframe>
     </dialog>
     <script src="app.js"></script>
   </body>

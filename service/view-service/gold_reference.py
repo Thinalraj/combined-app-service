@@ -67,7 +67,7 @@ def raw_step(payload,command):
             "sample_size":payload.get("sample_size"),"source":"adp2230_raw_ac_rms_v"}
 
 
-def feature_row(collection,calibration,shape,area_mm2,thickness_mm,cfg):
+def feature_row(collection,calibration,shape,area_mm2,thickness_mm,cfg,validate_geometry=True):
     if not cfg["profile_confirmed"]:
         raise ValueError("Confirm the training frequency/amplitude/raw-RMS profile in Engineering")
     if collection.get("mode")!="signal_service" or calibration.get("acquisition_mode")!="signal_service":
@@ -75,8 +75,10 @@ def feature_row(collection,calibration,shape,area_mm2,thickness_mm,cfg):
     shape=str(shape).strip().title()
     if shape not in ("Coin","Bar"):
         raise ValueError("This reference model supports Coin and Bar only")
-    row={"shape":shape,"area_mm2":finite(area_mm2,"formula area",True),
-         "thickness_mm":finite(thickness_mm,"thickness",True)}
+    # NUC-05: preflight can validate acquisition with optional geometry.
+    # Actual prediction still requires real positive geometry; no dummy/imputed input.
+    row={"shape":shape,"area_mm2":finite(area_mm2,"formula area",True) if validate_geometry else area_mm2,
+         "thickness_mm":finite(thickness_mm,"thickness",True) if validate_geometry else thickness_mm}
     sequence=collection.get("reference_signal_sequence")
     air=calibration.get("reference_signal_sequence")
     def mapping(values):
