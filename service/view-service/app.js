@@ -211,13 +211,7 @@ async function showScreen(name) {
   if(name==="home") {document.getElementById("platformEmptyConfirm").checked=false;updateCustomerStart();}
   if(name==="place") {
     document.getElementById("manualShapeButton").hidden=true;
-    manualDetectionTimer=setTimeout(async()=>{
-      if(currentScreen!=="place" || placementBusy)return;
-      document.getElementById("manualShapeButton").hidden=false;
-      if(yoloCanContinue())return;
-      const manual=await showNotice("Unable to detect the item. Choose its shape manually?","Detection",true,"Choose manually","Keep trying");
-      if(manual && currentScreen==="place"){manualShapeMode=true;showScreen("shape");}
-    },12000);
+    document.getElementById("autoDetectSummary").textContent="Place one item flat and still, then press Detect Shape.";
   }
   if (previousScreen !== name && removalScreen()) {removalNode("Confirm").checked = false;removalNode("Manual").checked=false;}
   Object.values(screens).forEach((screen) => screen.classList.remove("active"));
@@ -353,8 +347,8 @@ function yoloCanContinue() {
 }
 function updateYoloGate(message = "") {
   const autoReady = yoloCanContinue() && visionYoloConfig?.enabled === true;
-  document.getElementById("placeContinueButton").disabled = !autoReady || placementBusy;
-  document.getElementById("placeContinueButton").textContent = placementBusy ? "Saving photograph…" : autoReady ? "Use detected " + visionLastDetection.label + " →" : "Detecting automatically…";
+  document.getElementById("placeContinueButton").disabled = placementBusy;
+  document.getElementById("placeContinueButton").textContent = placementBusy ? "Saving photograph…" : autoReady ? "Use detected " + visionLastDetection.label + " →" : "Detect Shape";
   document.getElementById("autoDetectSummary").textContent = autoReady ? visionLastDetection.message : "Keep one item flat and still in the frame";
   const node = document.getElementById("cameraDetectionStatus");
   node.hidden = visionYoloConfig?.enabled === false || teachingCameraMode !== "live" || currentScreen === "scalePrepare";
@@ -3323,7 +3317,22 @@ async function capturePlacementPhoto() {
   } finally {clearTimeout(timer);}
 }
 document.getElementById("placeContinueButton").addEventListener("click", async () => {
-  if (placementBusy || !yoloCanContinue() || !visionYoloConfig?.enabled) return;
+  if (placementBusy) return;
+  if (!visionYoloConfig?.enabled || !yoloCanContinue()) {
+    document.getElementById("manualShapeButton").hidden = false;
+    const manual = await showNotice(
+      "Unable to perform Auto Shape Detection. Kindly proceed with Manual Entry.",
+      "Shape Detection",
+      true,
+      "Proceed with Manual Entry",
+      "Retry Detection"
+    );
+    if (manual && currentScreen === "place") {
+      manualShapeMode = true;
+      showScreen("shape");
+    }
+    return;
+  }
   manualShapeMode = false;
   state.shape = visionLastDetection.label === "coin" ? "Coin" : "Bar";
   updateShapeSelection(); placementBusy = true; updateYoloGate();
