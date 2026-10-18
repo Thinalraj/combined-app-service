@@ -1811,7 +1811,8 @@ function renderFrequencyCards(prefix, record) {
 
 function renderClassifierStatus(payload) {
   const reference=payload?.selected_algorithm==="gold_reference_v1";
-  document.getElementById("classifierTrainButton").textContent=reference?"Check reference model":"Compute Model";
+  const externalModel=reference || payload?.selected_algorithm==="frequency_nb";
+  document.getElementById("classifierTrainButton").textContent=reference?"Check reference model":externalModel?"Check supplied model":"Compute Model";
   const classCounts = payload?.class_counts || {};
   const classReadiness = payload?.class_readiness || [];
   const warnings = payload?.warnings || [];
@@ -1895,6 +1896,11 @@ async function loadClassifierStatus() {
 
 async function trainClassifierModel() {
   const button = document.getElementById("classifierTrainButton");
+  if (state.classifierAlgorithm === "frequency_nb") {
+    await loadClassifierStatus();
+    document.getElementById("classifierWarnings").textContent = "The supplied model-nb.joblib is loaded directly; no retraining is performed here.";
+    return;
+  }
   button.disabled = true;
   button.textContent = "Computing...";
   try {
@@ -1907,7 +1913,7 @@ async function trainClassifierModel() {
     warningList.textContent = error.message || "Classifier training failed";
   } finally {
     button.disabled = false;
-    button.textContent = state.classifierAlgorithm==="gold_reference_v1"?"Check reference model":"Compute Model";
+    button.textContent = state.classifierAlgorithm==="gold_reference_v1"?"Check reference model":state.classifierAlgorithm==="frequency_nb"?"Check supplied model":"Compute Model";
   }
 }
 
@@ -2443,46 +2449,65 @@ function startMeasurement() {
     `${dimensionPayload.width_mm} x ${dimensionPayload.length_mm} x ${dimensionPayload.thickness_mm} mm (${geometry.contactRatio.toFixed(1)}%)`;
   showScreen("measure");
 
-  let progress = 0;
-  let matchingTicks = 0;
-  let resultStarted = false;
   const commands = state.classifierAlgorithm === "binary_brass_ch1_f1" ? [1]
     : state.classifierAlgorithm === "binary_brass_ch2_f1_f3" ? [1, 3]
     : state.multiFrequenciesKhz.map((_, index) => index + 1);
-  // This timer is an estimate; actual completion still comes from the server response.
+  const collectionBar = document.getElementById("signalCollectionProgressBar");
+  const collectionText = document.getElementById("signalCollectionProgressText");
+  const collectionStage = document.getElementById("signalCollectionStage");
+  const classificationBar = document.getElementById("classificationProgressBar");
+  const classificationText = document.getElementById("classificationProgressText");
+  const classificationStage = document.getElementById("classificationStage");
+  let collectionProgress = 0;
+  let classificationProgress = 0;
+  let collectionFinished = false;
+  collectionBar.style.width = "0%";
+  collectionText.textContent = "0%";
+  classificationBar.style.width = "0%";
+  classificationText.textContent = "0%";
+  collectionStage.textContent = `Collecting ${commands.map((slot) => `F${slot}`).join(" + ")} signal`;
+  classificationStage.textContent = "Classification waiting";
+  measureStage.textContent = "Collecting signal";
+  measureInstruction.textContent = "Keep the item still while signal samples are collected.";
+
+  // Collection and classification are deliberately independent events. The
+  // collection estimate never becomes a fake portion of the classifier bar.
   const stages = commands.map((slot, index) => ({
-    limit: 10 + ((index + 1) / commands.length) * 74,
-    title: `Acquiring F${slot} (estimated)`,
+    limit: ((index + 1) / commands.length) * 100,
+    title: `Collecting F${slot} (estimated)`,
     note: `Planned ${state.multiFrequenciesKhz[slot - 1]} kHz. Keep the item still.`
   }));
-  stages.push({ limit: 100, title: "Processing", note: "Waiting for the acquisition and classifier result." });
-
+  const resultPromise = showResult();
   state.progressTimer = setInterval(() => {
-    if (progress < 92) {
-      progress += 2;
+    if (!collectionFinished) {
+      collectionProgress = Math.min(100, collectionProgress + 4);
+      const stage = stages.find((item) => collectionProgress <= item.limit) || stages[stages.length - 1];
+      collectionBar.style.width = `${collectionProgress}%`;
+      collectionText.textContent = `${collectionProgress}%`;
+      measureStage.textContent = stage.title;
+      measureInstruction.textContent = stage.note;
+      if (collectionProgress >= 100) {
+        collectionFinished = true;
+        collectionStage.textContent = "Signal collection complete";
+        classificationStage.textContent = "Classifying sample";
+        measureStage.textContent = "Classifying";
+        measureInstruction.textContent = "Processing the classifier result. Please wait...";
+      }
     } else {
-      matchingTicks += 1;
-      progress = 92 + (matchingTicks % 8);
-    }
-    const stage = stages.find((item) => progress <= item.limit) || stages[stages.length - 1];
-    measureStage.textContent = progress >= 92 ? "Classifying" : stage.title;
-    measureInstruction.textContent = progress >= 92
-      ? "Processing classifier result. Please wait..."
-      : stage.note;
-    progressText.textContent = `${progress}%`;
-    progressBar.style.width = `${progress}%`;
-    ringMeter.style.strokeDashoffset = `${314 - (314 * progress) / 100}`;
-
-    if (progress >= 92 && !resultStarted) {
-      resultStarted = true;
-      showResult().finally(() => {
-        clearInterval(state.progressTimer);
-        progressText.textContent = "100%";
-        progressBar.style.width = "100%";
-        ringMeter.style.strokeDashoffset = "0";
-      });
+      classificationProgress = Math.min(96, classificationProgress + 3);
+      classificationBar.style.width = `${classificationProgress}%`;
+      classificationText.textContent = `${classificationProgress}%`;
     }
   }, 300);
+  resultPromise.finally(() => {
+    clearInterval(state.progressTimer);
+    collectionBar.style.width = "100%";
+    collectionText.textContent = "100%";
+    collectionStage.textContent = "Signal collection complete";
+    classificationBar.style.width = "100%";
+    classificationText.textContent = "100%";
+    classificationStage.textContent = "Classification complete";
+  });
 }
 
 async function showResult() {

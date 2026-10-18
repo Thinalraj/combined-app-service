@@ -2544,6 +2544,117 @@ output {
   .rate-carousel .metal-rate-row { transition: none; }
 }
 
+/* HOME-SHOWCASE-01: restore the original rich kiosk presentation while
+   keeping the live-rate carousel and current startup confirmation flow. */
+#homeScreen {
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(255, 216, 77, .10), transparent 35%),
+    radial-gradient(ellipse at 50% 56%, rgba(0, 213, 255, .10), transparent 48%);
+  gap: 5px;
+}
+
+#homeScreen .rates-panel {
+  background: linear-gradient(180deg, rgba(21, 26, 33, .90), rgba(8, 11, 15, .96));
+  border: 1px solid rgba(255, 216, 77, .28);
+  border-radius: 14px;
+  box-shadow: inset 0 0 28px rgba(0, 213, 255, .045), 0 0 24px rgba(0, 0, 0, .35);
+  padding: 8px 12px;
+}
+
+#homeScreen .rates-head {
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 216, 77, .18);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+#homeScreen .rates-head .eyebrow {
+  color: var(--yellow);
+  filter: drop-shadow(0 0 7px rgba(255, 216, 77, .28));
+  letter-spacing: .08em;
+}
+
+#homeScreen .rates-status { color: rgba(168, 224, 235, .78); }
+
+#metalRatesList.rate-carousel {
+  height: 176px;
+  perspective: 700px;
+}
+
+.rate-carousel .metal-rate-row {
+  background: linear-gradient(160deg, rgba(37, 43, 51, .96), rgba(10, 14, 19, .98));
+  border: 1px solid rgba(255, 216, 77, .12);
+  box-shadow: inset 0 0 18px rgba(0, 213, 255, .04);
+  height: 158px;
+  padding: 5px 10px;
+  width: 44%;
+}
+
+.rate-carousel .metal-rate-row.active {
+  border-color: rgba(255, 216, 77, .72);
+  box-shadow: 0 0 30px rgba(255, 216, 77, .20), inset 0 0 26px rgba(255, 216, 77, .07);
+  transform: translateY(-5px) scale(1.08);
+}
+
+.rate-carousel .metal-rate-row.previous,
+.rate-carousel .metal-rate-row.next {
+  opacity: .52;
+  filter: saturate(.8);
+}
+
+.rate-carousel .metal-rate-row strong:not(.metal-rate-price) {
+  color: var(--yellow);
+  font-size: 15px;
+  letter-spacing: .04em;
+  text-shadow: 0 0 9px rgba(255, 216, 77, .35);
+}
+
+.rate-carousel .metal-rate-price {
+  color: #fff4bd;
+  font-size: 25px;
+  text-shadow: 0 0 12px rgba(255, 216, 77, .30);
+}
+
+.rate-carousel .metal-rate-time { color: var(--dim); }
+.rate-carousel .active .object { animation: bullion-drift 3s ease-in-out infinite, bullion-glow 2.4s ease-in-out infinite; }
+
+@keyframes bullion-glow {
+  0%, 100% { filter: drop-shadow(0 10px 13px rgba(255, 216, 77, .18)); }
+  50% { filter: drop-shadow(0 10px 22px rgba(255, 216, 77, .52)); }
+}
+
+#homeScreen .carousel-controls button {
+  background: rgba(23, 26, 32, .92);
+  border-color: rgba(0, 213, 255, .35);
+  color: #b7f5ff;
+}
+
+#homeScreen .primary-action {
+  box-shadow: 0 0 22px rgba(255, 159, 26, .28);
+  font-size: 22px;
+  letter-spacing: .02em;
+}
+
+@media (max-height: 430px) {
+  #metalRatesList.rate-carousel { height: 132px; }
+  .rate-carousel .metal-rate-row { height: 122px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rate-carousel .active .object { animation: none; }
+}
+
+/* VERIFICATION-EVENTS-01: signal collection and classification have separate
+   progress tracks; the legacy combined indicator is intentionally hidden. */
+#measureScreen .measure-panel > .progress-ring,
+#measureScreen .measure-copy > .progress-bar { display: none; }
+.verification-progress-group { display: grid; gap: 3px; margin-top: 8px; }
+.verification-progress-header { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+.verification-progress-header strong { color: var(--text); font-size: 11px; }
+.verification-progress-group .event-progress { height: 9px; margin: 0 0 4px; }
+.verification-progress-group .event-progress span { transition: width .25s ease; }
+
 #resultScreen #cameraPreviewWidget::before { content: "Removal preview"; display: block; font-size: 11px; color: var(--muted); }
 #resultScreen .result-panel { width: 100%; max-width: none; }
 #scalePrepareScreen .scale-preparation-actions { grid-template-columns: repeat(4,minmax(0,1fr)); }

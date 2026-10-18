@@ -278,6 +278,12 @@
             <div class="progress-bar">
               <span id="progressBar"></span>
             </div>
+            <div class="verification-progress-group" aria-label="Verification events">
+              <div class="verification-progress-header"><span id="signalCollectionStage">Collecting signal</span><strong id="signalCollectionProgressText">0%</strong></div>
+              <div class="progress-bar event-progress"><span id="signalCollectionProgressBar"></span></div>
+              <div class="verification-progress-header"><span id="classificationStage">Classification waiting</span><strong id="classificationProgressText">0%</strong></div>
+              <div class="progress-bar event-progress"><span id="classificationProgressBar"></span></div>
+            </div>
             <div class="summary-row">
               <span id="weightSummary">0 g</span>
               <span id="shapeSummary">Ring</span>
@@ -405,6 +411,7 @@
             <label for="classifierAlgorithmSelect">Classifier Method</label>
             <select id="classifierAlgorithmSelect">
               <option value="two_pass_frequency_rf">Gold Standard</option>
+              <option value="frequency_nb">Frequency Naive Bayes</option>
               <option value="gold_reference_v1">Known-gold 916/999 reference</option>
               <option value="mahalanobis">Mahalanobis</option>
               <option value="knn_cluster">KNN Cluster</option>

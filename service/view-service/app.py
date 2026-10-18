@@ -191,6 +191,10 @@ CLASSIFIER_ALGORITHMS = {
         "label": "Gold Standard",
         "method": "two-pass frequency-vector random forest classifier",
     },
+    "frequency_nb": {
+        "label": "Frequency Naive Bayes",
+        "method": "frequency-vector Gaussian Naive Bayes classifier",
+    },
 }
 COMPACT_TWO_PASS_FEATURE_KEYS = [
     "weight_g",
@@ -1419,6 +1423,27 @@ def load_frequency_rf_models() -> tuple[dict, dict]:
     return gold_model, purity_model
 
 
+def frequency_nb_model_path() -> Path:
+    return assets.asset_path("algorithms/model-nb.joblib", ".joblib")
+
+
+def load_frequency_nb_model() -> object:
+    if joblib is None:
+        raise ValueError("joblib is not available. Install scikit-learn and joblib to use Frequency Naive Bayes mode.")
+    path = frequency_nb_model_path()
+    if not path.exists():
+        raise ValueError(f"Frequency Naive Bayes model file not found: {path.name}")
+    model = joblib.load(path)
+    if not callable(getattr(model, "predict", None)):
+        raise ValueError("model-nb.joblib must contain a scikit-learn estimator or pipeline")
+    feature_count = getattr(model, "n_features_in_", None)
+    if feature_count is not None and int(feature_count) != len(FREQUENCY_RF_FEATURE_NAMES):
+        raise ValueError(
+            f"model-nb.joblib expects {feature_count} features; expected {len(FREQUENCY_RF_FEATURE_NAMES)}"
+        )
+    return model
+
+
 def _frequency_rf_feature_value(
     frequency_sequence: list[dict],
     calibration: dict,
@@ -1896,6 +1921,12 @@ def classifier_status_payload() -> dict:
         model_method = CLASSIFIER_ALGORITHMS["two_pass_frequency_rf"]["method"]
         model_algorithm = "two_pass_frequency_rf"
         feature_keys = FREQUENCY_RF_FEATURE_NAMES
+    if selected_algorithm == "frequency_nb":
+        model_exists = frequency_nb_model_path().exists()
+        model_trained_at = None
+        model_method = CLASSIFIER_ALGORITHMS["frequency_nb"]["method"]
+        model_algorithm = "frequency_nb"
+        feature_keys = FREQUENCY_RF_FEATURE_NAMES
 
     return {
         "teaching_record_count": len(records),
@@ -1916,7 +1947,7 @@ def classifier_status_payload() -> dict:
             {"key": key, "label": item["label"], "method": item["method"]}
             for key, item in CLASSIFIER_ALGORITHMS.items()
         ],
-        "model_feature_version": 1 if selected_algorithm == "two_pass_frequency_rf" else model.get("feature_version"),
+        "model_feature_version": 1 if selected_algorithm in {"two_pass_frequency_rf", "frequency_nb"} else model.get("feature_version"),
         "model_record_count": model.get("eligible_record_count"),
         "calibrated_at": calibration.get("calibrated_at"),
         "feature_keys": feature_keys,
@@ -3203,6 +3234,8 @@ def predict_with_binary_brass_ch2_f1_f3(features: dict, model: dict | None = Non
 
 def predict_with_selected_classifier(features: dict) -> dict:
     algorithm = selected_classifier_algorithm()
+    if algorithm == "frequency_nb":
+        return predict_with_frequency_nb(features)
     if algorithm == "two_pass_frequency_rf":
         return predict_with_two_pass_frequency_rf(features)
     model = load_classifier_model()
@@ -3221,6 +3254,44 @@ def predict_with_selected_classifier(features: dict) -> dict:
     if algorithm == "knn_cluster":
         return predict_with_knn_cluster(features, model)
     return predict_with_mahalanobis(features, model)
+
+
+def predict_with_frequency_nb(features: dict) -> dict:
+    feature_names = features.get("feature_names") if isinstance(features.get("feature_names"), list) else []
+    feature_vector = features.get("feature_vector") if isinstance(features.get("feature_vector"), list) else []
+    if feature_names != FREQUENCY_RF_FEATURE_NAMES or len(feature_vector) != len(FREQUENCY_RF_FEATURE_NAMES):
+        raise ValueError("Frequency Naive Bayes feature vector is invalid")
+    model = load_frequency_nb_model()
+    vector_2d = [[float(value) if value is not None else float("nan") for value in feature_vector]]
+    label = str(model.predict(vector_2d)[0])
+    probabilities = model.predict_proba(vector_2d)[0] if hasattr(model, "predict_proba") else []
+    classes = [str(value) for value in getattr(model, "classes_", [])]
+    probability_map = {name: round(float(probability), 6) for name, probability in zip(classes, probabilities)}
+    confidence = max(probability_map.values()) * 100.0 if probability_map else 100.0
+    return {
+        "prediction": label,
+        "nearest_class": label,
+        "result_type": "frequency_nb",
+        "decision_message": f"Frequency Naive Bayes classified this sample as {label}.",
+        "accepted": True,
+        "uncertain": confidence < 55.0,
+        "threshold": 55.0,
+        "distance": round(1.0 - confidence / 100.0, 6),
+        "nearest_gap": None,
+        "confidence": round(confidence, 2),
+        "top_matches": [],
+        "all_matches": [],
+        "classification_method": CLASSIFIER_ALGORITHMS["frequency_nb"]["method"],
+        "model_trained_at": None,
+        "feature_version": 1,
+        "material_result": label,
+        "purity_result": None,
+        "model_version": "model-nb",
+        "feature_names": list(feature_names),
+        "feature_vector": [round(float(value), 6) for value in feature_vector],
+        "nb_prediction": label,
+        "nb_probabilities": probability_map,
+    }
 
 
 def predict_with_two_pass_frequency_rf(features: dict) -> dict:
