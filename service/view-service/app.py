@@ -113,8 +113,11 @@ DAQ_OFFSET_FILE = BASE_DIR / "daq_offset.json"
 FREQUENCY_RF_MODEL_VERSION = "frequency_rf_20260630"
 FREQUENCY_RF_FEATURE_NAMES = list(assets.RF_FEATURE_NAMES)
 ADMIN_PIN = "242218"
-LOAD_CELL_PORT = "/dev/ttyUSB0"
-LOAD_CELL_BAUD = 9600
+# Keep the direct Flask fallback aligned with the standalone weight service.
+# AFIS_WEIGHT_PORT is useful for host-specific overrides without editing code.
+_RUNTIME = assets.read_json("runtime.json", {})
+LOAD_CELL_PORT = os.environ.get("AFIS_WEIGHT_PORT", _RUNTIME.get("weight_port", "/dev/ttyUSB0"))
+LOAD_CELL_BAUD = int(os.environ.get("AFIS_WEIGHT_BAUD", str(_RUNTIME.get("weight_baudrate", 9600))))
 LOAD_CELL_READ_COMMAND = "SI"
 LOAD_CELL_ZERO_COMMAND = "TI"
 LOAD_CELL_READ_WAIT_SECONDS = 0.25
