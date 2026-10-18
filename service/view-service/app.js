@@ -487,7 +487,11 @@ async function measureGeometry(kind,manual=false) {
     if(preview){cameraGeometryBundle=preview;teachingCameraMode="geometry";cameraAnnotationsEnabled=true;}
     if (teaching) updateTeachingDimensionDisplay();else updateDimensionDisplay();
     renderGeometrySummary(prefix+"GeometrySummary",value);
-    status.textContent=value.volume_mm3==null?"Height unavailable. Enter known thickness and retry using that button.":"Mask dimensions filled. Footprint area and density are shown separately from the model formula area.";
+    const missing=[];
+    if(!Number.isFinite(value.width_mm))missing.push(shape==="Coin"?"diameter":"width");
+    if(shape==="Bar"&&!Number.isFinite(value.length_mm))missing.push("length");
+    if(!Number.isFinite(value.height_mm))missing.push("thickness");
+    status.textContent=missing.length ? "Available dimensions kept. Unavailable: "+missing.join(", ")+". Enter the missing values manually." : "Mask dimensions filled. Footprint and density remain separate evidence.";
   } catch(error) {if(currentScreen===screen){status.textContent="Measurement unavailable · enter known dimensions or retry";showNotice(error.message,"Geometry measurement");}}
   finally {
     geometryBusy=false;next.disabled=false;
@@ -1218,7 +1222,7 @@ function updateTeachingDimensionFieldSelection() {
   document.getElementById("teachingThicknessFieldButton").classList.toggle("selected", teachingState.activeDimensionField === "thickness");
 }
 
-function formatDimension(value){const n=Number(value||0);return Number.isFinite(n)?n.toFixed(2).replace(/\.?0+$/,"")||"0":"0";}
+function formatDimension(value){if(value==null || String(value).trim()==="")return "Unavailable";const n=Number(value||0);return Number.isFinite(n)?n.toFixed(2).replace(/\.?0+$/,"")||"0":"0";}
 function updateDimensionDisplay() {
   document.getElementById("userGeometryPanel").hidden=!["Coin","Bar"].includes(getMeasurementShapeLabel());
   const config = getMeasurementDimensionConfig();
@@ -2913,7 +2917,7 @@ async function openScalePreparation(context) {
   const engineer = context !== "measurement" && engineeringUnlocked;
   scaleNode("scalePreparationEngineering").hidden = !engineer;
   scaleNode("scalePreparationSkip").hidden=context==="engineering";
-  scaleNode("scalePreparationContinue").textContent = context === "engineering" ? "Back to scale" : "Place item";
+  scaleNode("scalePreparationContinue").textContent = context === "engineering" ? "Back to scale" : context === "startup" ? "Done / Home" : "Place item";
   renderScalePreparation({ state: "idle" });
   await showScreen("scalePrepare");
   if (engineer) {
@@ -2984,7 +2988,8 @@ scaleNode("scalePreparationContinue").addEventListener("click", () => {
   if (!scalePreparationResult || scalePreparationBusy) return;
   if (scalePreparationContext === "measurement") state.scalePreparationId = scalePreparationResult.id;
   if (scalePreparationContext === "teaching") teachingState.scalePreparationId = scalePreparationResult.id;
-  const next = scalePreparationContext === "engineering" ? "loadCell" : scalePreparationContext === "teaching" ? "teachingPlace" : "place";
+  if(scalePreparationContext==="startup")finishStartupPresence();
+  const next = scalePreparationContext === "engineering" ? "loadCell" : scalePreparationContext === "startup" ? "home" : scalePreparationContext === "teaching" ? "teachingPlace" : "place";
   scalePreparationResult = null;
   showScreen(next);
 });
@@ -3042,7 +3047,8 @@ document.getElementById("scalePreparationSkip").addEventListener("click", () => 
   if(scalePreparationContext==="teaching")teachingState.scalePreparationId=null;
   else state.scalePreparationId=null;
   scalePreparationResult=null;
-  showScreen(scalePreparationContext==="teaching"?"teachingPlace":"place");
+  if(scalePreparationContext==="startup")finishStartupPresence();
+  showScreen(scalePreparationContext==="startup"?"home":scalePreparationContext==="teaching"?"teachingPlace":"place");
 });
 
 async function prepareMeasurementScale() {
@@ -3174,8 +3180,58 @@ async function startLoadCellMonitor() {
   await readSingleLoadCell();
 }
 
+// NUC-04: one non-actuating camera presence check per View-service startup.
+// A model miss is NOT proof of an empty platform. Manual zero remains explicit.
+let startupNeedsRemoval=false, startupPresenceBusy=false;
+async function offerStartupManualZero() {
+  if(currentScreen!=="home")return;
+  const answer=showNotice("An object was detected during startup. Remove all items, then open manual preparation and confirm the physical pan is empty before zeroing. Nothing will zero automatically.","Startup platform check",true);
+  document.getElementById("noticeAccept").textContent="Open manual zero";
+  if(await answer && currentScreen==="home")await openScalePreparation("startup");
+}
+async function checkStartupPlatform() {
+  if(startupPresenceBusy)return;
+  startupPresenceBusy=true;
+  const start=document.getElementById("startButton"),status=document.getElementById("startupPlatformStatus");
+  start.disabled=true;status.textContent="Checking startup platform…";status.setAttribute("aria-busy","true");
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
+  try {
+    const options={cache:"no-store",signal:controller.signal};
+    let response=await fetch("/api/status",options),identity=await response.json();
+    if(!response.ok || !identity.runtime?.pid)throw new Error("Runtime unavailable");
+    const key="afisStartupPresence:"+identity.runtime.pid+":"+identity.runtime.build;
+    if(sessionStorage.getItem(key)==="clear") {status.textContent="Startup check complete";return;}
+    startupNeedsRemoval=sessionStorage.getItem(key)==="occupied";
+    if(!startupNeedsRemoval) {
+      response=await fetch("/api/vision/yolo/status",options);
+      const config=await response.json();
+      if(!response.ok || !config.enabled)throw new Error("Detector unavailable");
+      response=await fetch("/api/vision/yolo/frame",options);
+      const frame=await response.json(),d=frame.detection;
+      if(!response.ok || !Number.isInteger(d?.count) || d.count<0)throw new Error("Detection unavailable");
+      startupNeedsRemoval=d.count>0;
+      sessionStorage.setItem(key,startupNeedsRemoval?"occupied":"clear");
+    }
+    // Save only the startup key, not a claim of zero or physical emptiness.
+    status.dataset.startupKey=key;
+    status.textContent=startupNeedsRemoval?"Startup object detected · remove before manual zero":"No model objects detected at startup";
+    if(startupNeedsRemoval)await offerStartupManualZero();
+  } catch(error) {
+    status.textContent="Startup check unavailable · inspect pan manually";
+  } finally {
+    clearTimeout(timer);startupPresenceBusy=false;start.disabled=false;status.setAttribute("aria-busy","false");
+  }
+}
+function finishStartupPresence() {
+  startupNeedsRemoval=false;
+  const status=document.getElementById("startupPlatformStatus"),key=status.dataset.startupKey;
+  if(key)sessionStorage.setItem(key,"clear");
+  status.textContent="Startup check complete";
+}
 document.getElementById("startButton").addEventListener("click", () => {
-  zeroMeasurementScaleBeforePlacement();
+  if(startupPresenceBusy)return;
+  if(startupNeedsRemoval)offerStartupManualZero();
+  else zeroMeasurementScaleBeforePlacement();
 });
 // NUC-03: automatic selection goes directly to mass. Manual is a fallback.
 async function beginManualMeasurement() {
@@ -3922,3 +3978,6 @@ loadAcquisitionMode();
 
 initializeMetalRateRows();
 refreshReferenceRates();
+
+// Startup inspection only: these GET requests never zero, tare or adjust.
+checkStartupPlatform();

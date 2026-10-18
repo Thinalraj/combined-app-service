@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import sys
 
-BUILD = "NUC-03"
+BUILD = "NUC-04"
 
 
 def identity(service):

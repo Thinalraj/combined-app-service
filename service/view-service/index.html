@@ -45,13 +45,13 @@
           <p class="rates-note">Gold API + Frankfurter · Auto-update 00:00 MYT · Changes since previous quote</p>
         </section>
 
-        <button class="primary-action" id="startButton" type="button">
+        <button class="primary-action" id="startButton" type="button" disabled>
           Start Verification
         </button>
 
         <footer class="status-strip">
           <span class="dot ready"></span>
-          <span>System Ready</span>
+          <span id="startupPlatformStatus" role="status" aria-busy="true">Checking startup platform…</span>
           <span class="divider"></span>
           <span id="bottomMessage">Verify your sample now</span>
         </footer>

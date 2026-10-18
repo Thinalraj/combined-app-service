@@ -94,32 +94,45 @@ def measure_live(engine,capture,rays_factory,detector,vision,shape,manual=None):
                 frame.update(plane=fit_plane(top,config),source="object_top_plane")
             except ValueError:pass
         frames.append(frame);last_image=image
-    heights=[f["height"] for f in frames if f["height"] is not None]
-    usable=manual is not None or (len(heights)==len(frames) and float(np.std(heights))<=config["max_height_std_mm"])
-    physical=all(f["plane"] is not None for f in frames)
-    sources={f["source"] for f in frames}
-    if physical and len(sources)!=1:raise ValueError("Depth plane availability changed; retry or enter dimensions manually")
-    areas=[];dims=[];volumes=[]
-    if physical:
-        for frame in frames:
-            height=manual if manual is not None else frame["height"] if usable else 0.
-            projection_height=height if frame["source"]=="live_support_plane" else 0.
-            area=mask_area(frame["mask"],frame["plane"],projection_height,frame["rays"])
-            areas.append(area);dims.append(dimensions(frame["mask"],frame["plane"],projection_height,frame["rays"],shape,area))
-            if usable:volumes.append(area*height)
-        cv=float(np.std(areas)/np.mean(areas)*100)
-        if cv>config["max_area_cv_pct"]:raise ValueError("Mask area changed too much; keep item still and retry")
-    else:cv=None
+    # NUC-04: missing/intermittent depth is partial data, not an HTTP failure.
+    # Never average support-plane and object-top projections together.
     warnings=list(dict.fromkeys(f["warning"] for f in frames if f["warning"]))
+    groups={source:[f for f in frames if f["plane"] is not None and f["source"]==source]
+            for source in ("live_support_plane","object_top_plane")}
+    selected=max(groups.values(),key=len)
+    if len(groups["live_support_plane"])>=2:
+        selected=groups["live_support_plane"]
+    if len(selected)<len(frames):
+        warnings.append("Depth incomplete or plane source changed; physical dimensions use only the consistent valid subset.")
+    heights=[f["height"] for f in selected if f["height"] is not None]
+    usable=manual is not None or (len(heights)>=2 and float(np.std(heights))<=config["max_height_std_mm"])
+    height=float(manual if manual is not None else np.mean(heights)) if usable else None
+    areas=[];dims=[]
+    for frame in selected:
+        projection_height=(height or 0.) if frame["source"]=="live_support_plane" else 0.
+        try:
+            area=mask_area(frame["mask"],frame["plane"],projection_height,frame["rays"])
+            dimension=dimensions(frame["mask"],frame["plane"],projection_height,frame["rays"],shape,area)
+            if not all(math.isfinite(dimension[k]) and dimension[k]>0 for k in ("width_mm","length_mm")):
+                raise ValueError("Invalid projected dimensions")
+            areas.append(area);dims.append(dimension)
+        except (ValueError,FloatingPointError) as exc:
+            warnings.append("Physical dimensions unavailable for one frame: "+str(exc))
+    physical=bool(areas)
+    cv=float(np.std(areas)/np.mean(areas)*100) if physical else None
+    if physical and cv>config["max_area_cv_pct"]:
+        warnings.append("Physical dimensions unstable; enter independently measured dimensions.")
+        physical=False;areas=[];dims=[];cv=None
     if not physical:warnings.append("Only pixel mask available. Enter independently measured dimensions; no box size is substituted.")
     if not usable:warnings.append("Thickness/volume unavailable; use a known manual thickness.")
-    height=float(manual if manual is not None else np.mean(heights)) if usable else None
+    volumes=[area*height for area in areas] if physical and usable else []
     result={"schema":"thinal-geometry-v1","geometry_mode":"live_mask","ok":True,"shape":shape,
         "camera_session":engine.session,"reference_id":None,"reference_created_at":None,
         "camera_fingerprint":signature,"vision_revision":d["revision"],"samples":len(frames),
         "area_mm2":float(np.mean(areas)) if physical else None,"area_std_mm2":float(np.std(areas)) if physical else None,
         "area_cv_pct":cv,"area_px":float(np.mean([f["mask"].sum() for f in frames])),
-        "area_reference":next(iter(sources)) if physical else "pixel_mask_only",
+        "area_reference":selected[0]["source"] if physical else "pixel_mask_only",
+        "dimension_samples":len(dims),"height_samples":len(heights),
         "height_mm":height,"height_std_mm":0. if manual is not None else float(np.std(heights)) if usable else None,
         "height_source":"manual_known" if manual is not None else "depth_above_support" if usable else "unavailable",
         "volume_mm3":float(np.mean(volumes)) if physical and usable else None,
