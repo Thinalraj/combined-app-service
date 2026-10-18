@@ -142,10 +142,12 @@ class Preparation:
         state = self.snapshot()
         return state["state"] == "running" or bool(state.get("needs_recovery"))
 
-    def start(self, empty_confirmed, settings, repeat_internal=False):
+    def start(self, empty_confirmed, settings, repeat_internal=False, recover_zero=False):
         if empty_confirmed is not True:
             raise ValueError("Remove every item and confirm that the pan is empty")
         settings = validate_settings(settings)
+        if recover_zero and repeat_internal:
+            raise ValueError("Recovery zero and repeat_internal cannot run together")
         with self.lock:
             if self.state["state"] == "running":
                 return False
@@ -155,8 +157,9 @@ class Preparation:
                 self.startup_internal = None
             self.state = {"id": uuid.uuid4().hex, "state": "running", "stage": "waiting",
                 "message": "Keep the pan empty until preparation finishes", "result": None,
+                "recovery_requested": recover_zero,
                 "needs_recovery": recovery, "log": [], "settings": settings}
-        threading.Thread(target=self._worker, args=(settings, repeat_internal), daemon=True).start()
+        threading.Thread(target=self._worker, args=(settings, repeat_internal, recover_zero), daemon=True).start()
         return True
 
     def _log(self, command, response):
@@ -164,7 +167,7 @@ class Preparation:
             if len(self.state["log"]) < 600:
                 self.state["log"].append({"command": command, "response": response[:500]})
 
-    def _worker(self, settings, repeat_internal=False):
+    def _worker(self, settings, repeat_internal=False, recover_zero=False):
         commands, active = set(), None
         try:
             with self.serial_lock, self.open_serial() as ser:
@@ -172,9 +175,10 @@ class Preparation:
                 self.update(stage="capabilities", message="Reading supported balance commands")
                 rows = transaction(ser, "I0", timeout=15, log=self._log)
                 commands = {row[3] for row in rows if len(row) >= 4}
-                zero = "Z" if "Z" in commands else "ZI" if "ZI" in commands else None
+                # Never force zero (ZI) in an unattended preparation or recovery.
+                zero = "Z" if "Z" in commands else None
                 if not zero:
-                    raise RuntimeError("Balance does not advertise Z/ZI; no zero command was sent")
+                    raise RuntimeError("Balance does not advertise stable Z; no zero command was sent")
                 device = transaction(ser, "I2", log=self._log)[-1][2:] if "I2" in commands else []
                 if self.last_device is not None and device != self.last_device:
                     self.device_disconnected()
@@ -184,12 +188,15 @@ class Preparation:
                 if "TAC" in commands:
                     transaction(ser, "TAC", log=self._log)
                 initial = stable_average(ser, self.read_weight, count=5)
-                if abs(initial["average"]) > settings["empty_limit_g"] or initial["range"] > settings["max_spread_g"]:
-                    raise RuntimeError("Empty-pan reading is outside the configured limit; remove item or inspect zero offset")
-                mode = settings["internal_mode"]
+                if initial["range"] > settings["max_spread_g"]:
+                    raise RuntimeError("Empty-pan reading is unstable; no zero command was sent")
+                if abs(initial["average"]) > settings["empty_limit_g"] and not recover_zero:
+                    raise RuntimeError("Empty-pan reading is outside the configured limit; use confirmed zero recovery only after physically inspecting the empty platform")
+                # Recovery is a deliberate operation; never run a calibration/adjustment during it.
+                mode = "skip" if recover_zero else settings["internal_mode"]
                 command = ("TST3" if "TST3" in commands else None) if mode == "auto" else {"test": "TST3", "adjust": "C3", "skip": None}[mode]
                 internal = {"status": "skipped" if mode == "skip" else "unsupported", "command": None}
-                if self.startup_internal and not repeat_internal:
+                if self.startup_internal and not repeat_internal and not recover_zero:
                     internal = {**copy.deepcopy(self.startup_internal), "status": "already_completed_this_startup"}
                     command = None
                 if command:
@@ -213,6 +220,7 @@ class Preparation:
                 self.update(stage="residual", message="Averaging 10 consecutive stable readings after zero")
                 residual = stable_average(ser, self.read_weight, count=10)
                 result = {"device": device, "commands": sorted(commands), "internal": internal,
+                    "recovery_requested": recover_zero,
                     "zero_command": zero, "initial": initial, "residual": residual,
                     "settings": settings, "zero_verified": abs(residual["average"]) <= settings["zero_tolerance_g"] and residual["range"] <= settings["max_spread_g"],
                     "verified_at": datetime.now(timezone.utc).isoformat()}

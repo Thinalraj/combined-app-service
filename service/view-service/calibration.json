@@ -1,165 +1,288 @@
 {
-  "calibrated_at": "23 Jun 2026 14:41",
-  "sample_count": 90,
+  "calibrated_at": "18 Oct 2026 08:54",
+  "sample_count": 4,
   "samples_per_frequency": 30,
-  "duration_seconds": 48,
+  "duration_seconds": 37.276,
   "condition": "No material / air reading",
-  "acquisition_mode": "daq",
-  "frequency_hz": 8.0,
-  "frequency_slot": 1,
+  "acquisition_mode": "signal_service",
+  "frequency_hz": 15000.0,
+  "frequency_slot": 3,
   "frequency_sequence": [
     {
       "frequency_command": "f1",
+      "frequency_hz": 8000.0,
       "settle_seconds": 5.0,
       "channels": {
         "ch1": {
-          "rms": 0.4678,
-          "std": 0.007241,
+          "rms": 0.340327,
+          "rms_raw": 0.32443,
+          "std": 0.0,
           "quality": 1.0,
           "unit": "V",
-          "source": "/dev/ttyACM0",
+          "source": "signal_service",
           "command": "",
-          "sample_count": 30
+          "sample_count": 1
         },
         "ch2": {
-          "rms": 0.855133,
-          "std": 0.016291,
+          "rms": 0.360766,
+          "rms_raw": 0.32443,
+          "std": 0.0,
           "quality": 1.0,
           "unit": "V",
-          "source": "/dev/ttyACM0",
+          "source": "signal_service_mirrored",
           "command": "",
-          "sample_count": 30
+          "sample_count": 1
         }
       }
     },
     {
       "frequency_command": "f2",
+      "frequency_hz": 10000.0,
       "settle_seconds": 5.0,
       "channels": {
         "ch1": {
-          "rms": 0.521467,
-          "std": 0.006791,
+          "rms": 0.455426,
+          "rms_raw": 0.434153,
+          "std": 0.0,
           "quality": 1.0,
           "unit": "V",
-          "source": "/dev/ttyACM0",
+          "source": "signal_service",
           "command": "",
-          "sample_count": 30
+          "sample_count": 1
         },
         "ch2": {
-          "rms": 0.9479,
-          "std": 0.012731,
+          "rms": 0.482778,
+          "rms_raw": 0.434153,
+          "std": 0.0,
           "quality": 1.0,
           "unit": "V",
-          "source": "/dev/ttyACM0",
+          "source": "signal_service_mirrored",
           "command": "",
-          "sample_count": 30
+          "sample_count": 1
         }
       }
     },
     {
       "frequency_command": "f3",
+      "frequency_hz": 15000.0,
       "settle_seconds": 5.0,
       "channels": {
         "ch1": {
-          "rms": 0.570233,
-          "std": 0.003757,
+          "rms": 0.624379,
+          "rms_raw": 0.595214,
+          "std": 0.0,
           "quality": 1.0,
           "unit": "V",
-          "source": "/dev/ttyACM0",
+          "source": "signal_service",
           "command": "",
-          "sample_count": 30
+          "sample_count": 1
         },
         "ch2": {
-          "rms": 1.049533,
-          "std": 0.006622,
+          "rms": 0.661878,
+          "rms_raw": 0.595214,
+          "std": 0.0,
           "quality": 1.0,
           "unit": "V",
-          "source": "/dev/ttyACM0",
+          "source": "signal_service_mirrored",
           "command": "",
-          "sample_count": 30
+          "sample_count": 1
+        }
+      }
+    },
+    {
+      "frequency_command": "f4",
+      "frequency_hz": 20000.0,
+      "settle_seconds": 5.0,
+      "channels": {
+        "ch1": {
+          "rms": 0.672054,
+          "rms_raw": 0.640662,
+          "std": 0.0,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "signal_service",
+          "command": "",
+          "sample_count": 1
+        },
+        "ch2": {
+          "rms": 0.712416,
+          "rms_raw": 0.640662,
+          "std": 0.0,
+          "quality": 1.0,
+          "unit": "V",
+          "source": "signal_service_mirrored",
+          "command": "",
+          "sample_count": 1
         }
       }
     }
   ],
+  "reference_signal_sequence": [
+    {
+      "frequency_command": "f1",
+      "frequency_hz": 8000,
+      "amplitude_v_peak": 1.0,
+      "simulate": false,
+      "ac_rms_v": 0.32442972367464623,
+      "std_v": 3.2671080822368634e-05,
+      "sample_size": 30,
+      "source": "adp2230_raw_ac_rms_v"
+    },
+    {
+      "frequency_command": "f2",
+      "frequency_hz": 10000,
+      "amplitude_v_peak": 1.0,
+      "simulate": false,
+      "ac_rms_v": 0.4341529485829917,
+      "std_v": 0.00035704973727972053,
+      "sample_size": 30,
+      "source": "adp2230_raw_ac_rms_v"
+    },
+    {
+      "frequency_command": "f3",
+      "frequency_hz": 15000,
+      "amplitude_v_peak": 1.0,
+      "simulate": false,
+      "ac_rms_v": 0.5952137900650355,
+      "std_v": 7.48355158631038e-05,
+      "sample_size": 30,
+      "source": "adp2230_raw_ac_rms_v"
+    },
+    {
+      "frequency_command": "f4",
+      "frequency_hz": 20000,
+      "amplitude_v_peak": 1.0,
+      "simulate": false,
+      "ac_rms_v": 0.6406615975488528,
+      "std_v": 0.0005018156091902206,
+      "sample_size": 30,
+      "source": "adp2230_raw_ac_rms_v"
+    }
+  ],
   "frequency_air": {
     "f1": {
+      "frequency_hz": 8000.0,
       "ch1": {
-        "rms": 0.4678,
-        "std": 0.007241,
+        "rms": 0.340327,
+        "rms_raw": 0.32443,
+        "std": 0.0,
         "quality": 1.0,
         "unit": "V",
-        "source": "/dev/ttyACM0",
+        "source": "signal_service",
         "command": "",
-        "sample_count": 30
+        "sample_count": 1
       },
       "ch2": {
-        "rms": 0.855133,
-        "std": 0.016291,
+        "rms": 0.360766,
+        "rms_raw": 0.32443,
+        "std": 0.0,
         "quality": 1.0,
         "unit": "V",
-        "source": "/dev/ttyACM0",
+        "source": "signal_service_mirrored",
         "command": "",
-        "sample_count": 30
+        "sample_count": 1
       }
     },
     "f2": {
+      "frequency_hz": 10000.0,
       "ch1": {
-        "rms": 0.521467,
-        "std": 0.006791,
+        "rms": 0.455426,
+        "rms_raw": 0.434153,
+        "std": 0.0,
         "quality": 1.0,
         "unit": "V",
-        "source": "/dev/ttyACM0",
+        "source": "signal_service",
         "command": "",
-        "sample_count": 30
+        "sample_count": 1
       },
       "ch2": {
-        "rms": 0.9479,
-        "std": 0.012731,
+        "rms": 0.482778,
+        "rms_raw": 0.434153,
+        "std": 0.0,
         "quality": 1.0,
         "unit": "V",
-        "source": "/dev/ttyACM0",
+        "source": "signal_service_mirrored",
         "command": "",
-        "sample_count": 30
+        "sample_count": 1
       }
     },
     "f3": {
+      "frequency_hz": 15000.0,
       "ch1": {
-        "rms": 0.570233,
-        "std": 0.003757,
+        "rms": 0.624379,
+        "rms_raw": 0.595214,
+        "std": 0.0,
         "quality": 1.0,
         "unit": "V",
-        "source": "/dev/ttyACM0",
+        "source": "signal_service",
         "command": "",
-        "sample_count": 30
+        "sample_count": 1
       },
       "ch2": {
-        "rms": 1.049533,
-        "std": 0.006622,
+        "rms": 0.661878,
+        "rms_raw": 0.595214,
+        "std": 0.0,
         "quality": 1.0,
         "unit": "V",
-        "source": "/dev/ttyACM0",
+        "source": "signal_service_mirrored",
         "command": "",
-        "sample_count": 30
+        "sample_count": 1
+      }
+    },
+    "f4": {
+      "frequency_hz": 20000.0,
+      "ch1": {
+        "rms": 0.672054,
+        "rms_raw": 0.640662,
+        "std": 0.0,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "signal_service",
+        "command": "",
+        "sample_count": 1
+      },
+      "ch2": {
+        "rms": 0.712416,
+        "rms_raw": 0.640662,
+        "std": 0.0,
+        "quality": 1.0,
+        "unit": "V",
+        "source": "signal_service_mirrored",
+        "command": "",
+        "sample_count": 1
       }
     }
   },
   "ch1": {
-    "mean": 0.519833,
-    "std": 0.042281,
-    "tolerance": 0.126842,
+    "mean": 0.523046,
+    "std": 0.132694,
+    "tolerance": 0.398081,
     "unit": "V RMS",
-    "sample_count": 90,
+    "sample_count": 4,
     "last_device": "ch1",
-    "source": "/dev/ttyACM0"
+    "source": "signal_service"
   },
   "ch2": {
-    "mean": 0.950856,
-    "std": 0.080374,
-    "tolerance": 0.241123,
+    "mean": 0.554459,
+    "std": 0.140663,
+    "tolerance": 0.421989,
     "unit": "V RMS",
-    "sample_count": 90,
+    "sample_count": 4,
     "last_device": "ch2",
-    "source": "/dev/ttyACM0"
+    "source": "signal_service_mirrored"
+  },
+  "raw_measurement": {
+    "ch1_rms_raw": 0.498615,
+    "ch2_rms_raw": 0.498615
+  },
+  "daq_correction": {
+    "enabled": true,
+    "version": 1,
+    "ch1_scale": 1.049,
+    "ch1_offset": 0.0,
+    "ch2_scale": 1.112,
+    "ch2_offset": 0.0,
+    "applied_at": "after_rms_before_features"
   },
   "errors": []
 }

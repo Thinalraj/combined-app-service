@@ -10,6 +10,6 @@
   ],
   "amplitude_v_peak": 1.0,
   "signal_definition": "raw_ac_rms_v_delta_pct",
-  "profile_confirmed": false,
-  "profile_model_sha256": null
+  "profile_confirmed": true,
+  "profile_model_sha256": "fc348af459bd24dbc32edb08b9eaf99e7a739ffaa608090daaaa705fed94ed75"
 }

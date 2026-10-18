@@ -2,14 +2,22 @@
   "acquisition_mode": "daq",
   "confidence_threshold_pct": 40.0,
   "multi_frequencies_khz": [
+    8.0,
     10.0,
-    20.0,
-    30.0
+    15.0,
+    20.0
   ],
   "active_frequency_slot": 3,
-  "classifier_algorithm": "two_pass_frequency_rf",
+  "classifier_algorithm": "gold_reference_v1",
   "service_mode_enabled": true,
   "weight_service_url": "http://127.0.0.1:8002",
   "vision_service_url": "http://127.0.0.1:8003",
-  "signal_service_url": "http://127.0.0.1:8001"
+  "signal_service_url": "http://127.0.0.1:8001",
+  "frequency_plan_note": "",
+  "scale_preparation": {
+    "empty_limit_g": 0.1,
+    "zero_tolerance_g": 0.01,
+    "max_spread_g": 0.02,
+    "internal_mode": "auto"
+  }
 }

@@ -189,6 +189,26 @@ def start_preparation(payload: dict):
     return JSONResponse(preparation.snapshot(), status_code=202)
 
 
+@app.post("/preparation/recover-zero")
+def recover_zero(payload: dict):
+    """Operator-controlled recovery of a mistaken zero reference.
+
+    Unlike routine preparation, allows an existing stable offset. Requires
+    explicit physical empty-platform confirmation and a separate acknowledgement.
+    Never issues forced ZI or automatic calibration.
+    """
+    if payload.get("pan_empty_confirmed") is not True or payload.get("recover_zero_confirmed") is not True:
+        raise HTTPException(400, "Recovery requires explicit pan-empty and zero-recovery confirmations")
+    try:
+        settings = validate_settings(payload.get("settings", {}))
+        started = preparation.start(True, settings, recover_zero=True)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not started:
+        return JSONResponse(preparation.snapshot(), status_code=409)
+    return JSONResponse(preparation.snapshot(), status_code=202)
+
+
 # FINISH-01: configuration/status only; no COM port is opened here.
 @app.get("/status")
 def runtime_status():

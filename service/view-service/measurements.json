@@ -1,1 +1,2521 @@
-[]
+[
+  {
+    "id": "M-20261018-110632-49a98dcc",
+    "date": "18 Oct 2026",
+    "time": "11:06",
+    "scale_preparation": {
+      "id": "dd0f9d7c92184bd7b1cf65887f7207cc",
+      "device": [
+        "WKC6002C 6200.900 g"
+      ],
+      "internal": {
+        "status": "already_completed_this_startup",
+        "command": "TST3",
+        "deviation_raw": "      0.64",
+        "deviation_unit": "device definition units; not assumed g or %",
+        "completed_at": "2026-10-18T01:11:01.391500+00:00"
+      },
+      "recovery_requested": false,
+      "zero_command": "Z",
+      "initial": {
+        "average": -0.039,
+        "std_g": 0.0015491933384829681,
+        "minimum": -0.042,
+        "maximum": -0.038,
+        "range": 0.0040000000000000036,
+        "samples_requested": 5,
+        "samples_valid": 5,
+        "stable_samples": 5,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "residual": {
+        "average": 0.0,
+        "std_g": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "range": 0.0,
+        "samples_requested": 10,
+        "samples_valid": 10,
+        "stable_samples": 10,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "settings": {
+        "empty_limit_g": 0.1,
+        "zero_tolerance_g": 0.01,
+        "max_spread_g": 0.02,
+        "internal_mode": "auto"
+      },
+      "zero_verified": true,
+      "verified_at": "2026-10-18T02:59:57.639704+00:00"
+    },
+    "geometry_evidence": null,
+    "evidence_image": {
+      "capture_id": "a9fc9f02fc1d4a0f8c2217be554bce89",
+      "storage_id": "9a35f071ab33463bac3dfec8aa90f25d",
+      "captured_at": "2026-10-18T03:06:32.303472+00:00",
+      "capture_phase": "before_frequency_sweep",
+      "annotation_status": "auto_unreviewed",
+      "image_url": "/api/verification/image/IMG-9a35f071ab33463bac3dfec8aa90f25d.jpg",
+      "overlay_url": "/api/verification/image/IMG-9a35f071ab33463bac3dfec8aa90f25d.html",
+      "annotation_url": "/api/verification/image/IMG-9a35f071ab33463bac3dfec8aa90f25d.json",
+      "yolo_segmentation_url": "/api/verification/image/IMG-9a35f071ab33463bac3dfec8aa90f25d.txt",
+      "annotation_warning": null,
+      "vision_detection": {
+        "state": "single_object",
+        "message": "Coin detected",
+        "count": 1,
+        "eligible": true,
+        "label": "coin",
+        "confidence": 0.9050239324569702,
+        "bbox_xywhn": [
+          0.5226963043212891,
+          0.5301475842793782,
+          0.10988960266113282,
+          0.20376139746771918
+        ],
+        "revision": "ecc369c283834a82",
+        "roi_xywhn": [
+          0.15,
+          0.15,
+          0.85,
+          0.85
+        ],
+        "inference_ms": 48.2,
+        "scope": "coin/bar model detections within ROI; zero detections do not prove an empty pan",
+        "capture_id": "a9fc9f02fc1d4a0f8c2217be554bce89",
+        "captured_at": "2026-10-18T03:06:32.303472+00:00",
+        "capture_age_ms": 61.5
+      }
+    },
+    "image_capture_error": null,
+    "result": "999 reference match",
+    "weight": "26.995 g",
+    "shape": "Coin",
+    "width_mm": 37.3,
+    "length_mm": 37.3,
+    "thickness_mm": 2.7,
+    "sample_area_mm2": 1092.717,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.283937,
+    "frequency_hz": 15000.0,
+    "frequency_slot": 3,
+    "vision_measurement": {
+      "depth_reference": "camera_to_object; not tray-relative thickness",
+      "diameter_mm": 122.005,
+      "distance_to_camera_mm": 167.099996,
+      "estimated_depth_mm": 167.099996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 122.005,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "capture_id": "33b4eb38a9f044128008e8aefd2eda27",
+        "center": [
+          165,
+          171
+        ],
+        "depth_reference": "camera_to_object; not tray-relative thickness",
+        "detected": true,
+        "diameter_mm": 122.00532523830499,
+        "distance_to_camera_mm": 167.09999577869894,
+        "estimated_depth_mm": 167.09999577869894,
+        "surface_area_mm2": 7079.048812179323,
+        "type": "Coin"
+      },
+      "shape": "Coin",
+      "source": "vision_service",
+      "surface_area_mm2": 7079.049,
+      "timestamp": "18 Oct 2026 11:04:31",
+      "vision_type": "coin",
+      "width_mm": 122.005
+    },
+    "status": "999 reference match at uncalibrated score 99.91%. Gold identity and actual purity are not established; review independent evidence.",
+    "ch1_rms": "0.454570 V RMS",
+    "ch2_rms": "0.481870 V RMS",
+    "raw_measurement": {
+      "ch1_rms_raw": 0.433336,
+      "ch2_rms_raw": 0.433336
+    },
+    "ch1_std": "0.122460 V RMS",
+    "ch2_std": "0.129815 V RMS",
+    "ch1_delta": -0.068476,
+    "ch2_delta": -0.072589,
+    "ch1_delta_pct": -13.092,
+    "ch2_delta_pct": -13.092,
+    "f1_ch1_delta_pct": -15.087,
+    "f1_ch2_delta_pct": -15.087,
+    "f2_ch1_delta_pct": -14.717,
+    "f2_ch2_delta_pct": -14.717,
+    "f3_ch1_delta_pct": -12.771,
+    "f3_ch2_delta_pct": -12.771,
+    "ratio": "0.943346",
+    "matched_record_id": null,
+    "match_score": 0.0008830455052734054,
+    "top_matches": [
+      {
+        "material": "999 reference match",
+        "match_percent": 99.91169544947266,
+        "distance": 0.0008830455052734054,
+        "rank": 1
+      },
+      {
+        "material": "916 reference match",
+        "match_percent": 0.08830455052734054,
+        "distance": 0.9991169544947266,
+        "rank": 2
+      }
+    ],
+    "classifier_result": {
+      "prediction": "999 reference match",
+      "nearest_class": "999 reference match",
+      "result_type": "reference_match",
+      "accepted": true,
+      "uncertain": false,
+      "reference_only": true,
+      "gold_identity_verified": false,
+      "scores_are_calibrated": false,
+      "reference_grade": 999,
+      "confidence": 99.91169544947266,
+      "nearest_gap": 0.9982339089894532,
+      "distance": 0.0008830455052734054,
+      "threshold": 80.0,
+      "top_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 99.91169544947266,
+          "distance": 0.0008830455052734054,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 0.08830455052734054,
+          "distance": 0.9991169544947266,
+          "rank": 2
+        }
+      ],
+      "all_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 99.91169544947266,
+          "distance": 0.0008830455052734054,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 0.08830455052734054,
+          "distance": 0.9991169544947266,
+          "rank": 2
+        }
+      ],
+      "feature_version": 1,
+      "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+      "decision_message": "999 reference match at uncalibrated score 99.91%. Gold identity and actual purity are not established; review independent evidence.",
+      "gold_prediction": null,
+      "purity_prediction": null,
+      "material_result": "Gold identity not determined",
+      "purity_result": null,
+      "nearest_reference_grade": 999,
+      "score": 0.9991169544947266,
+      "simulation": false,
+      "feature_names": [
+        "f1_delta_pct",
+        "f2_delta_pct",
+        "f3_delta_pct",
+        "f4_delta_pct",
+        "area_mm2",
+        "thickness_mm"
+      ],
+      "categorical_features": {
+        "shape": "Coin"
+      },
+      "input_row": {
+        "shape": "Coin",
+        "area_mm2": 1092.717,
+        "thickness_mm": 2.7,
+        "f1_delta_pct": -15.08732889604362,
+        "f2_delta_pct": -14.717265024003462,
+        "f3_delta_pct": -12.77103927451739,
+        "f4_delta_pct": -11.278264098712903
+      },
+      "feature_vector": [
+        -15.08732889604362,
+        -14.717265024003462,
+        -12.77103927451739,
+        -11.278264098712903,
+        1092.717,
+        2.7
+      ],
+      "model_version": "gold_reference_v1:fc348af459bd24db",
+      "model_metadata": {
+        "adapter": "gold_reference_v1",
+        "model_file": "metal/signal_plus_geometry.joblib",
+        "model_sha256": "fc348af459bd24dbc32edb08b9eaf99e7a739ffaa608090daaaa705fed94ed75",
+        "numeric_features": [
+          "f1_delta_pct",
+          "f2_delta_pct",
+          "f3_delta_pct",
+          "f4_delta_pct",
+          "area_mm2",
+          "thickness_mm"
+        ],
+        "categorical_features": [
+          "shape"
+        ],
+        "labels": [
+          916,
+          999
+        ],
+        "sklearn_version": "1.6.1",
+        "bundle_threshold": 0.8,
+        "evaluation_mode": "capture_only_cv_UNVERIFIED_SPECIMEN_INDEPENDENCE",
+        "reference_only": true,
+        "scores_are_calibrated": false
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.27548194422732686,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -15.08732889604362
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.3702575085305073,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -14.717265024003462
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.5191988031684863,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -12.77103927451739
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.56840609059826,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -11.278264098712903
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      }
+    },
+    "classifier_status": {
+      "features": {
+        "shape": "Coin",
+        "area_mm2": 1092.717,
+        "thickness_mm": 2.7,
+        "f1_delta_pct": -15.08732889604362,
+        "f2_delta_pct": -14.717265024003462,
+        "f3_delta_pct": -12.77103927451739,
+        "f4_delta_pct": -11.278264098712903
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.27548194422732686,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -15.08732889604362
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.3702575085305073,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -14.717265024003462
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.5191988031684863,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -12.77103927451739
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.56840609059826,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -11.278264098712903
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      },
+      "reference_only": true
+    },
+    "classifier_features": {
+      "shape": "Coin",
+      "area_mm2": 1092.717,
+      "thickness_mm": 2.7,
+      "f1_delta_pct": -15.08732889604362,
+      "f2_delta_pct": -14.717265024003462,
+      "f3_delta_pct": -12.77103927451739,
+      "f4_delta_pct": -11.278264098712903
+    },
+    "confidence": "99.91%",
+    "confidence_label": "HIGH",
+    "nearest_gap": 0.998234,
+    "acquisition_mode": "signal_service",
+    "daq_correction": {
+      "enabled": true,
+      "version": 1,
+      "ch1_scale": 1.049,
+      "ch1_offset": 0.0,
+      "ch2_scale": 1.112,
+      "ch2_offset": 0.0,
+      "applied_at": "after_rms_before_features"
+    },
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.288981,
+            "rms_raw": 0.275482,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.306336,
+            "rms_raw": 0.275482,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.388401,
+            "rms_raw": 0.370258,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.411727,
+            "rms_raw": 0.370258,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.54464,
+            "rms_raw": 0.519199,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.577349,
+            "rms_raw": 0.519199,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.596258,
+            "rms_raw": 0.568406,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.632067,
+            "rms_raw": 0.568406,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      }
+    ],
+    "reference_signal_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.27548194422732686,
+        "std_v": 4.916029985124159e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.3702575085305073,
+        "std_v": 0.0003518616985070392,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.5191988031684863,
+        "std_v": 4.285026275328895e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.56840609059826,
+        "std_v": 0.0004900707510960354,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      }
+    ],
+    "calibration_used": "18 Oct 2026 08:54",
+    "features_used": {
+      "ch1_rms": 0.45457,
+      "ch2_rms": 0.48187,
+      "delta_ch1": -0.068476,
+      "delta_ch2": -0.072589,
+      "delta_ch1_pct": -13.092,
+      "delta_ch2_pct": -13.092,
+      "raw_ratio": 0.943346,
+      "delta_ratio": 0.943339,
+      "delta_ch1_per_g": -0.002537,
+      "delta_ch2_per_g": -0.002689,
+      "weight_g": 26.995,
+      "shape": "Coin",
+      "width_mm": 37.3,
+      "length_mm": 37.3,
+      "thickness_mm": 2.7,
+      "sample_area_mm2": 1092.717,
+      "coil_area_mm2": 3848.451,
+      "contact_area_ratio": 0.283937,
+      "f1_ch1_rms": 0.288981,
+      "f1_ch1_std": 0.0,
+      "f1_ch1_sample_count": 1,
+      "f1_ch1_air_rms": 0.340327,
+      "f1_ch1_delta_pct": -15.087,
+      "f1_ch1_abs_delta_pct": 15.087,
+      "f1_ch2_rms": 0.306336,
+      "f1_ch2_std": 0.0,
+      "f1_ch2_sample_count": 1,
+      "f1_ch2_air_rms": 0.360766,
+      "f1_ch2_delta_pct": -15.087,
+      "f1_ch2_abs_delta_pct": 15.087,
+      "f2_ch1_rms": 0.388401,
+      "f2_ch1_std": 0.0,
+      "f2_ch1_sample_count": 1,
+      "f2_ch1_air_rms": 0.455426,
+      "f2_ch1_delta_pct": -14.717,
+      "f2_ch1_abs_delta_pct": 14.717,
+      "f2_ch2_rms": 0.411727,
+      "f2_ch2_std": 0.0,
+      "f2_ch2_sample_count": 1,
+      "f2_ch2_air_rms": 0.482778,
+      "f2_ch2_delta_pct": -14.717,
+      "f2_ch2_abs_delta_pct": 14.717,
+      "f3_ch1_rms": 0.54464,
+      "f3_ch1_std": 0.0,
+      "f3_ch1_sample_count": 1,
+      "f3_ch1_air_rms": 0.624379,
+      "f3_ch1_delta_pct": -12.771,
+      "f3_ch1_abs_delta_pct": 12.771,
+      "f3_ch2_rms": 0.577349,
+      "f3_ch2_std": 0.0,
+      "f3_ch2_sample_count": 1,
+      "f3_ch2_air_rms": 0.661878,
+      "f3_ch2_delta_pct": -12.771,
+      "f3_ch2_abs_delta_pct": 12.771,
+      "f4_ch1_rms": 0.596258,
+      "f4_ch1_std": 0.0,
+      "f4_ch1_sample_count": 1,
+      "f4_ch1_air_rms": 0.672054,
+      "f4_ch1_delta_pct": -11.278,
+      "f4_ch1_abs_delta_pct": 11.278,
+      "f4_ch2_rms": 0.632067,
+      "f4_ch2_std": 0.0,
+      "f4_ch2_sample_count": 1,
+      "f4_ch2_air_rms": 0.712416,
+      "f4_ch2_delta_pct": -11.278,
+      "f4_ch2_abs_delta_pct": 11.278,
+      "gain_f1": 1.0,
+      "gain_f3": 1.0,
+      "voltage_freq_ratio": 0.84649,
+      "current_freq_ratio": 0.84649
+    },
+    "feature_version": 3,
+    "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+    "confidence_threshold_pct": 80.0,
+    "needs_verification": true,
+    "model_version": "gold_reference_v1:fc348af459bd24db",
+    "gold_prediction": null,
+    "purity_prediction": null,
+    "feature_names": [
+      "f1_delta_pct",
+      "f2_delta_pct",
+      "f3_delta_pct",
+      "f4_delta_pct",
+      "area_mm2",
+      "thickness_mm"
+    ],
+    "feature_vector": [
+      -15.08732889604362,
+      -14.717265024003462,
+      -12.77103927451739,
+      -11.278264098712903,
+      1092.717,
+      2.7
+    ],
+    "measured_frequency_values": null,
+    "calibration_frequency_air": null
+  },
+  {
+    "id": "M-20261018-105112-fb1135a9",
+    "date": "18 Oct 2026",
+    "time": "10:51",
+    "scale_preparation": {
+      "id": "8a9178c6f33b45d4be13411886e5d742",
+      "device": [
+        "WKC6002C 6200.900 g"
+      ],
+      "internal": {
+        "status": "already_completed_this_startup",
+        "command": "TST3",
+        "deviation_raw": "      0.64",
+        "deviation_unit": "device definition units; not assumed g or %",
+        "completed_at": "2026-10-18T01:11:01.391500+00:00"
+      },
+      "recovery_requested": false,
+      "zero_command": "Z",
+      "initial": {
+        "average": -0.041,
+        "std_g": 0.0,
+        "minimum": -0.041,
+        "maximum": -0.041,
+        "range": 0.0,
+        "samples_requested": 5,
+        "samples_valid": 5,
+        "stable_samples": 5,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "residual": {
+        "average": 0.0,
+        "std_g": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "range": 0.0,
+        "samples_requested": 10,
+        "samples_valid": 10,
+        "stable_samples": 10,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "settings": {
+        "empty_limit_g": 0.1,
+        "zero_tolerance_g": 0.01,
+        "max_spread_g": 0.02,
+        "internal_mode": "auto"
+      },
+      "zero_verified": true,
+      "verified_at": "2026-10-18T02:49:13.964243+00:00"
+    },
+    "geometry_evidence": null,
+    "evidence_image": {
+      "capture_id": "fa222407d26c42e1aa509fa03fc32ff4",
+      "storage_id": "e91a64e217034b72b7fbe171502ab303",
+      "captured_at": "2026-10-18T02:51:12.180750+00:00",
+      "capture_phase": "before_frequency_sweep",
+      "annotation_status": "auto_unreviewed",
+      "image_url": "/api/verification/image/IMG-e91a64e217034b72b7fbe171502ab303.jpg",
+      "overlay_url": "/api/verification/image/IMG-e91a64e217034b72b7fbe171502ab303.html",
+      "annotation_url": "/api/verification/image/IMG-e91a64e217034b72b7fbe171502ab303.json",
+      "yolo_segmentation_url": "/api/verification/image/IMG-e91a64e217034b72b7fbe171502ab303.txt",
+      "annotation_warning": null,
+      "vision_detection": {
+        "state": "single_object",
+        "message": "Bar detected",
+        "count": 1,
+        "eligible": true,
+        "label": "bar",
+        "confidence": 0.9297042489051819,
+        "bbox_xywhn": [
+          0.5162515044212341,
+          0.529571639166938,
+          0.0909658670425415,
+          0.28145374721950955
+        ],
+        "revision": "ecc369c283834a82",
+        "roi_xywhn": [
+          0.15,
+          0.15,
+          0.85,
+          0.85
+        ],
+        "inference_ms": 52.2,
+        "scope": "coin/bar model detections within ROI; zero detections do not prove an empty pan",
+        "capture_id": "fa222407d26c42e1aa509fa03fc32ff4",
+        "captured_at": "2026-10-18T02:51:12.180750+00:00",
+        "capture_age_ms": 63.9
+      }
+    },
+    "image_capture_error": null,
+    "result": "Unable to determine",
+    "weight": "31.382 g",
+    "shape": "Bar",
+    "width_mm": 28.0,
+    "length_mm": 55.0,
+    "thickness_mm": 4.0,
+    "sample_area_mm2": 1540.0,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.400161,
+    "frequency_hz": 15000.0,
+    "frequency_slot": 3,
+    "vision_measurement": {
+      "depth_reference": "camera_to_object; not tray-relative thickness",
+      "diameter_mm": null,
+      "distance_to_camera_mm": 167.299996,
+      "estimated_depth_mm": 167.299996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 99.016,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "capture_id": "702b1da27987419aa4c7e659e1173aa3",
+        "depth_reference": "camera_to_object; not tray-relative thickness",
+        "detected": true,
+        "distance_to_camera_mm": 167.29999577364651,
+        "estimated_depth_mm": 167.29999577364651,
+        "length_mm": 99.01627581342206,
+        "surface_area_mm2": 12360.78222673646,
+        "type": "Bar",
+        "width_mm": 124.83586284368116
+      },
+      "shape": "Bar",
+      "source": "vision_service",
+      "surface_area_mm2": 12360.782,
+      "timestamp": "18 Oct 2026 10:50:26",
+      "vision_type": "bar",
+      "width_mm": 124.836
+    },
+    "status": "Uncalibrated reference matching score below threshold. Gold identity and actual purity are not established; review independent evidence.",
+    "ch1_rms": "0.502103 V RMS",
+    "ch2_rms": "0.532258 V RMS",
+    "raw_measurement": {
+      "ch1_rms_raw": 0.478649,
+      "ch2_rms_raw": 0.478649
+    },
+    "ch1_std": "0.119162 V RMS",
+    "ch2_std": "0.126318 V RMS",
+    "ch1_delta": -0.020943,
+    "ch2_delta": -0.022201,
+    "ch1_delta_pct": -4.004,
+    "ch2_delta_pct": -4.004,
+    "f1_ch1_delta_pct": -1.181,
+    "f1_ch2_delta_pct": -1.181,
+    "f2_ch1_delta_pct": -2.578,
+    "f2_ch2_delta_pct": -2.578,
+    "f3_ch1_delta_pct": -4.755,
+    "f3_ch2_delta_pct": -4.755,
+    "ratio": "0.943345",
+    "matched_record_id": null,
+    "match_score": 0.3958060495571255,
+    "top_matches": [
+      {
+        "material": "999 reference match",
+        "match_percent": 60.41939504428745,
+        "distance": 0.3958060495571255,
+        "rank": 1
+      },
+      {
+        "material": "916 reference match",
+        "match_percent": 39.58060495571255,
+        "distance": 0.6041939504428745,
+        "rank": 2
+      }
+    ],
+    "classifier_result": {
+      "prediction": "Unable to determine",
+      "nearest_class": "999 reference match",
+      "result_type": "unknown",
+      "accepted": false,
+      "uncertain": true,
+      "reference_only": true,
+      "gold_identity_verified": false,
+      "scores_are_calibrated": false,
+      "reference_grade": null,
+      "confidence": 60.41939504428745,
+      "nearest_gap": 0.208387900885749,
+      "distance": 0.3958060495571255,
+      "threshold": 80.0,
+      "top_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 60.41939504428745,
+          "distance": 0.3958060495571255,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 39.58060495571255,
+          "distance": 0.6041939504428745,
+          "rank": 2
+        }
+      ],
+      "all_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 60.41939504428745,
+          "distance": 0.3958060495571255,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 39.58060495571255,
+          "distance": 0.6041939504428745,
+          "rank": 2
+        }
+      ],
+      "feature_version": 1,
+      "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+      "decision_message": "Uncalibrated reference matching score below threshold. Gold identity and actual purity are not established; review independent evidence.",
+      "gold_prediction": null,
+      "purity_prediction": null,
+      "material_result": "Gold identity not determined",
+      "purity_result": null,
+      "nearest_reference_grade": 999,
+      "score": 0.6041939504428745,
+      "simulation": false,
+      "feature_names": [
+        "f1_delta_pct",
+        "f2_delta_pct",
+        "f3_delta_pct",
+        "f4_delta_pct",
+        "area_mm2",
+        "thickness_mm"
+      ],
+      "categorical_features": {
+        "shape": "Bar"
+      },
+      "input_row": {
+        "shape": "Bar",
+        "area_mm2": 1540.0,
+        "thickness_mm": 4.0,
+        "f1_delta_pct": -1.1809565769344301,
+        "f2_delta_pct": -2.57791475585082,
+        "f3_delta_pct": -4.754962200947149,
+        "f4_delta_pct": -5.703106663910662
+      },
+      "feature_vector": [
+        -1.1809565769344301,
+        -2.57791475585082,
+        -4.754962200947149,
+        -5.703106663910662,
+        1540.0,
+        4.0
+      ],
+      "model_version": "gold_reference_v1:fc348af459bd24db",
+      "model_metadata": {
+        "adapter": "gold_reference_v1",
+        "model_file": "metal/signal_plus_geometry.joblib",
+        "model_sha256": "fc348af459bd24dbc32edb08b9eaf99e7a739ffaa608090daaaa705fed94ed75",
+        "numeric_features": [
+          "f1_delta_pct",
+          "f2_delta_pct",
+          "f3_delta_pct",
+          "f4_delta_pct",
+          "area_mm2",
+          "thickness_mm"
+        ],
+        "categorical_features": [
+          "shape"
+        ],
+        "labels": [
+          916,
+          999
+        ],
+        "sklearn_version": "1.6.1",
+        "bundle_threshold": 0.8,
+        "evaluation_mode": "capture_only_cv_UNVERIFIED_SPECIMEN_INDEPENDENCE",
+        "reference_only": true,
+        "scores_are_calibrated": false
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.3205983495153803,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -1.1809565769344301
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.4229608556585093,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -2.57791475585082
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.5669115993326181,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -4.754962200947149
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.6041239832859276,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -5.703106663910662
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      }
+    },
+    "classifier_status": {
+      "features": {
+        "shape": "Bar",
+        "area_mm2": 1540.0,
+        "thickness_mm": 4.0,
+        "f1_delta_pct": -1.1809565769344301,
+        "f2_delta_pct": -2.57791475585082,
+        "f3_delta_pct": -4.754962200947149,
+        "f4_delta_pct": -5.703106663910662
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.3205983495153803,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -1.1809565769344301
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.4229608556585093,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -2.57791475585082
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.5669115993326181,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -4.754962200947149
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.6041239832859276,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -5.703106663910662
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      },
+      "reference_only": true
+    },
+    "classifier_features": {
+      "shape": "Bar",
+      "area_mm2": 1540.0,
+      "thickness_mm": 4.0,
+      "f1_delta_pct": -1.1809565769344301,
+      "f2_delta_pct": -2.57791475585082,
+      "f3_delta_pct": -4.754962200947149,
+      "f4_delta_pct": -5.703106663910662
+    },
+    "confidence": "60.42%",
+    "confidence_label": "LOW",
+    "nearest_gap": 0.208388,
+    "acquisition_mode": "signal_service",
+    "daq_correction": {
+      "enabled": true,
+      "version": 1,
+      "ch1_scale": 1.049,
+      "ch1_offset": 0.0,
+      "ch2_scale": 1.112,
+      "ch2_offset": 0.0,
+      "applied_at": "after_rms_before_features"
+    },
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.336307,
+            "rms_raw": 0.320598,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.356505,
+            "rms_raw": 0.320598,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.443686,
+            "rms_raw": 0.422961,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.470333,
+            "rms_raw": 0.422961,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.594691,
+            "rms_raw": 0.566912,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.630406,
+            "rms_raw": 0.566912,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.633726,
+            "rms_raw": 0.604124,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.671786,
+            "rms_raw": 0.604124,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      }
+    ],
+    "reference_signal_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.3205983495153803,
+        "std_v": 3.0072078288054678e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.4229608556585093,
+        "std_v": 0.0001933393493480419,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.5669115993326181,
+        "std_v": 3.7912552016731776e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.6041239832859276,
+        "std_v": 0.0004988805003302704,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      }
+    ],
+    "calibration_used": "18 Oct 2026 08:54",
+    "features_used": {
+      "ch1_rms": 0.502103,
+      "ch2_rms": 0.532258,
+      "delta_ch1": -0.020943,
+      "delta_ch2": -0.022201,
+      "delta_ch1_pct": -4.004,
+      "delta_ch2_pct": -4.004,
+      "raw_ratio": 0.943345,
+      "delta_ratio": 0.943336,
+      "delta_ch1_per_g": -0.000667,
+      "delta_ch2_per_g": -0.000707,
+      "weight_g": 31.382,
+      "shape": "Bar",
+      "width_mm": 28.0,
+      "length_mm": 55.0,
+      "thickness_mm": 4.0,
+      "sample_area_mm2": 1540.0,
+      "coil_area_mm2": 3848.451,
+      "contact_area_ratio": 0.400161,
+      "f1_ch1_rms": 0.336307,
+      "f1_ch1_std": 0.0,
+      "f1_ch1_sample_count": 1,
+      "f1_ch1_air_rms": 0.340327,
+      "f1_ch1_delta_pct": -1.181,
+      "f1_ch1_abs_delta_pct": 1.181,
+      "f1_ch2_rms": 0.356505,
+      "f1_ch2_std": 0.0,
+      "f1_ch2_sample_count": 1,
+      "f1_ch2_air_rms": 0.360766,
+      "f1_ch2_delta_pct": -1.181,
+      "f1_ch2_abs_delta_pct": 1.181,
+      "f2_ch1_rms": 0.443686,
+      "f2_ch1_std": 0.0,
+      "f2_ch1_sample_count": 1,
+      "f2_ch1_air_rms": 0.455426,
+      "f2_ch1_delta_pct": -2.578,
+      "f2_ch1_abs_delta_pct": 2.578,
+      "f2_ch2_rms": 0.470333,
+      "f2_ch2_std": 0.0,
+      "f2_ch2_sample_count": 1,
+      "f2_ch2_air_rms": 0.482778,
+      "f2_ch2_delta_pct": -2.578,
+      "f2_ch2_abs_delta_pct": 2.578,
+      "f3_ch1_rms": 0.594691,
+      "f3_ch1_std": 0.0,
+      "f3_ch1_sample_count": 1,
+      "f3_ch1_air_rms": 0.624379,
+      "f3_ch1_delta_pct": -4.755,
+      "f3_ch1_abs_delta_pct": 4.755,
+      "f3_ch2_rms": 0.630406,
+      "f3_ch2_std": 0.0,
+      "f3_ch2_sample_count": 1,
+      "f3_ch2_air_rms": 0.661878,
+      "f3_ch2_delta_pct": -4.755,
+      "f3_ch2_abs_delta_pct": 4.755,
+      "f4_ch1_rms": 0.633726,
+      "f4_ch1_std": 0.0,
+      "f4_ch1_sample_count": 1,
+      "f4_ch1_air_rms": 0.672054,
+      "f4_ch1_delta_pct": -5.703,
+      "f4_ch1_abs_delta_pct": 5.703,
+      "f4_ch2_rms": 0.671786,
+      "f4_ch2_std": 0.0,
+      "f4_ch2_sample_count": 1,
+      "f4_ch2_air_rms": 0.712416,
+      "f4_ch2_delta_pct": -5.703,
+      "f4_ch2_abs_delta_pct": 5.703,
+      "gain_f1": 1.0,
+      "gain_f3": 1.0,
+      "voltage_freq_ratio": 4.026249,
+      "current_freq_ratio": 4.026249
+    },
+    "feature_version": 3,
+    "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+    "confidence_threshold_pct": 80.0,
+    "needs_verification": true,
+    "model_version": "gold_reference_v1:fc348af459bd24db",
+    "gold_prediction": null,
+    "purity_prediction": null,
+    "feature_names": [
+      "f1_delta_pct",
+      "f2_delta_pct",
+      "f3_delta_pct",
+      "f4_delta_pct",
+      "area_mm2",
+      "thickness_mm"
+    ],
+    "feature_vector": [
+      -1.1809565769344301,
+      -2.57791475585082,
+      -4.754962200947149,
+      -5.703106663910662,
+      1540.0,
+      4.0
+    ],
+    "measured_frequency_values": null,
+    "calibration_frequency_air": null
+  },
+  {
+    "id": "M-20261018-095325-8dd2be50",
+    "date": "18 Oct 2026",
+    "time": "09:53",
+    "scale_preparation": {
+      "id": "97f2af54135c43a6be060f15360ace7e",
+      "device": [
+        "WKC6002C 6200.900 g"
+      ],
+      "internal": {
+        "status": "already_completed_this_startup",
+        "command": "TST3",
+        "deviation_raw": "      0.64",
+        "deviation_unit": "device definition units; not assumed g or %",
+        "completed_at": "2026-10-18T01:11:01.391500+00:00"
+      },
+      "recovery_requested": false,
+      "zero_command": "Z",
+      "initial": {
+        "average": 0.0,
+        "std_g": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "range": 0.0,
+        "samples_requested": 5,
+        "samples_valid": 5,
+        "stable_samples": 5,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "residual": {
+        "average": 0.0,
+        "std_g": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "range": 0.0,
+        "samples_requested": 10,
+        "samples_valid": 10,
+        "stable_samples": 10,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "settings": {
+        "empty_limit_g": 0.1,
+        "zero_tolerance_g": 0.01,
+        "max_spread_g": 0.02,
+        "internal_mode": "auto"
+      },
+      "zero_verified": true,
+      "verified_at": "2026-10-18T01:40:37.245112+00:00"
+    },
+    "geometry_evidence": null,
+    "evidence_image": {
+      "capture_id": "180502bf94ae4e92964d892fba5cabd9",
+      "storage_id": "5af7516d1e34438abb1f333b3d746206",
+      "captured_at": "2026-10-18T01:53:25.958452+00:00",
+      "capture_phase": "before_frequency_sweep",
+      "annotation_status": "auto_unreviewed",
+      "image_url": "/api/verification/image/IMG-5af7516d1e34438abb1f333b3d746206.jpg",
+      "overlay_url": "/api/verification/image/IMG-5af7516d1e34438abb1f333b3d746206.html",
+      "annotation_url": "/api/verification/image/IMG-5af7516d1e34438abb1f333b3d746206.json",
+      "yolo_segmentation_url": "/api/verification/image/IMG-5af7516d1e34438abb1f333b3d746206.txt",
+      "annotation_warning": null,
+      "vision_detection": {
+        "state": "single_object",
+        "message": "Bar detected",
+        "count": 1,
+        "eligible": true,
+        "label": "bar",
+        "confidence": 0.9348855018615723,
+        "bbox_xywhn": [
+          0.5193707585334778,
+          0.5456587261623806,
+          0.09829614162445069,
+          0.2855626000298394
+        ],
+        "revision": "ecc369c283834a82",
+        "roi_xywhn": [
+          0.15,
+          0.15,
+          0.85,
+          0.85
+        ],
+        "inference_ms": 50.9,
+        "scope": "coin/bar model detections within ROI; zero detections do not prove an empty pan",
+        "capture_id": "180502bf94ae4e92964d892fba5cabd9",
+        "captured_at": "2026-10-18T01:53:25.958452+00:00",
+        "capture_age_ms": 61.1
+      }
+    },
+    "image_capture_error": null,
+    "result": "999 reference match",
+    "weight": "31.161 g",
+    "shape": "Bar",
+    "width_mm": 28.0,
+    "length_mm": 55.0,
+    "thickness_mm": 4.0,
+    "sample_area_mm2": 1540.0,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.400161,
+    "frequency_hz": 15000.0,
+    "frequency_slot": 3,
+    "vision_measurement": {
+      "depth_reference": "camera_to_object; not tray-relative thickness",
+      "diameter_mm": null,
+      "distance_to_camera_mm": 167.299996,
+      "estimated_depth_mm": 167.299996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 99.016,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "capture_id": "9a5f47ea695d404e8524f3049e318453",
+        "depth_reference": "camera_to_object; not tray-relative thickness",
+        "detected": true,
+        "distance_to_camera_mm": 167.29999577364651,
+        "estimated_depth_mm": 167.29999577364651,
+        "length_mm": 99.01627581342206,
+        "surface_area_mm2": 12360.78222673646,
+        "type": "Bar",
+        "width_mm": 124.83586284368116
+      },
+      "shape": "Bar",
+      "source": "vision_service",
+      "surface_area_mm2": 12360.782,
+      "timestamp": "18 Oct 2026 09:52:27",
+      "vision_type": "bar",
+      "width_mm": 124.836
+    },
+    "status": "999 reference match at uncalibrated score 84.01%. Gold identity and actual purity are not established; review independent evidence.",
+    "ch1_rms": "0.493293 V RMS",
+    "ch2_rms": "0.522919 V RMS",
+    "raw_measurement": {
+      "ch1_rms_raw": 0.470251,
+      "ch2_rms_raw": 0.470251
+    },
+    "ch1_std": "0.116277 V RMS",
+    "ch2_std": "0.123261 V RMS",
+    "ch1_delta": -0.029753,
+    "ch2_delta": -0.03154,
+    "ch1_delta_pct": -5.688,
+    "ch2_delta_pct": -5.688,
+    "f1_ch1_delta_pct": -2.611,
+    "f1_ch2_delta_pct": -2.611,
+    "f2_ch1_delta_pct": -4.166,
+    "f2_ch2_delta_pct": -4.167,
+    "f3_ch1_delta_pct": -6.563,
+    "f3_ch2_delta_pct": -6.563,
+    "ratio": "0.943345",
+    "matched_record_id": null,
+    "match_score": 0.1599039589528244,
+    "top_matches": [
+      {
+        "material": "999 reference match",
+        "match_percent": 84.00960410471757,
+        "distance": 0.1599039589528244,
+        "rank": 1
+      },
+      {
+        "material": "916 reference match",
+        "match_percent": 15.99039589528244,
+        "distance": 0.8400960410471756,
+        "rank": 2
+      }
+    ],
+    "classifier_result": {
+      "prediction": "999 reference match",
+      "nearest_class": "999 reference match",
+      "result_type": "reference_match",
+      "accepted": true,
+      "uncertain": false,
+      "reference_only": true,
+      "gold_identity_verified": false,
+      "scores_are_calibrated": false,
+      "reference_grade": 999,
+      "confidence": 84.00960410471757,
+      "nearest_gap": 0.6801920820943512,
+      "distance": 0.1599039589528244,
+      "threshold": 80.0,
+      "top_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 84.00960410471757,
+          "distance": 0.1599039589528244,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 15.99039589528244,
+          "distance": 0.8400960410471756,
+          "rank": 2
+        }
+      ],
+      "all_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 84.00960410471757,
+          "distance": 0.1599039589528244,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 15.99039589528244,
+          "distance": 0.8400960410471756,
+          "rank": 2
+        }
+      ],
+      "feature_version": 1,
+      "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+      "decision_message": "999 reference match at uncalibrated score 84.01%. Gold identity and actual purity are not established; review independent evidence.",
+      "gold_prediction": null,
+      "purity_prediction": null,
+      "material_result": "Gold identity not determined",
+      "purity_result": null,
+      "nearest_reference_grade": 999,
+      "score": 0.8400960410471756,
+      "simulation": false,
+      "feature_names": [
+        "f1_delta_pct",
+        "f2_delta_pct",
+        "f3_delta_pct",
+        "f4_delta_pct",
+        "area_mm2",
+        "thickness_mm"
+      ],
+      "categorical_features": {
+        "shape": "Bar"
+      },
+      "input_row": {
+        "shape": "Bar",
+        "area_mm2": 1540.0,
+        "thickness_mm": 4.0,
+        "f1_delta_pct": -2.611314815643514,
+        "f2_delta_pct": -4.166480106006887,
+        "f3_delta_pct": -6.562807252081017,
+        "f4_delta_pct": -7.465758537060256
+      },
+      "feature_vector": [
+        -2.611314815643514,
+        -4.166480106006887,
+        -6.562807252081017,
+        -7.465758537060256,
+        1540.0,
+        4.0
+      ],
+      "model_version": "gold_reference_v1:fc348af459bd24db",
+      "model_metadata": {
+        "adapter": "gold_reference_v1",
+        "model_file": "metal/signal_plus_geometry.joblib",
+        "model_sha256": "fc348af459bd24dbc32edb08b9eaf99e7a739ffaa608090daaaa705fed94ed75",
+        "numeric_features": [
+          "f1_delta_pct",
+          "f2_delta_pct",
+          "f3_delta_pct",
+          "f4_delta_pct",
+          "area_mm2",
+          "thickness_mm"
+        ],
+        "categorical_features": [
+          "shape"
+        ],
+        "labels": [
+          916,
+          999
+        ],
+        "sklearn_version": "1.6.1",
+        "bundle_threshold": 0.8,
+        "evaluation_mode": "capture_only_cv_UNVERIFIED_SPECIMEN_INDEPENDENCE",
+        "reference_only": true,
+        "scores_are_calibrated": false
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.3159578422339789,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -2.611314815643514
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.41606405235063904,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -4.166480106006887
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.5561510562852611,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -6.562807252081017
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.5928313496361827,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -7.465758537060256
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      }
+    },
+    "classifier_status": {
+      "features": {
+        "shape": "Bar",
+        "area_mm2": 1540.0,
+        "thickness_mm": 4.0,
+        "f1_delta_pct": -2.611314815643514,
+        "f2_delta_pct": -4.166480106006887,
+        "f3_delta_pct": -6.562807252081017,
+        "f4_delta_pct": -7.465758537060256
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.3159578422339789,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -2.611314815643514
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.41606405235063904,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -4.166480106006887
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.5561510562852611,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -6.562807252081017
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.5928313496361827,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -7.465758537060256
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      },
+      "reference_only": true
+    },
+    "classifier_features": {
+      "shape": "Bar",
+      "area_mm2": 1540.0,
+      "thickness_mm": 4.0,
+      "f1_delta_pct": -2.611314815643514,
+      "f2_delta_pct": -4.166480106006887,
+      "f3_delta_pct": -6.562807252081017,
+      "f4_delta_pct": -7.465758537060256
+    },
+    "confidence": "84.01%",
+    "confidence_label": "MEDIUM",
+    "nearest_gap": 0.680192,
+    "acquisition_mode": "signal_service",
+    "daq_correction": {
+      "enabled": true,
+      "version": 1,
+      "ch1_scale": 1.049,
+      "ch1_offset": 0.0,
+      "ch2_scale": 1.112,
+      "ch2_offset": 0.0,
+      "applied_at": "after_rms_before_features"
+    },
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.33144,
+            "rms_raw": 0.315958,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.351345,
+            "rms_raw": 0.315958,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.436451,
+            "rms_raw": 0.416064,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.462663,
+            "rms_raw": 0.416064,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.583402,
+            "rms_raw": 0.556151,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.61844,
+            "rms_raw": 0.556151,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.62188,
+            "rms_raw": 0.592831,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.659228,
+            "rms_raw": 0.592831,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      }
+    ],
+    "reference_signal_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.3159578422339789,
+        "std_v": 1.9158643861816207e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.41606405235063904,
+        "std_v": 0.0003269840386321826,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.5561510562852611,
+        "std_v": 5.11900361665114e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.5928313496361827,
+        "std_v": 0.0005286939243122241,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      }
+    ],
+    "calibration_used": "18 Oct 2026 08:54",
+    "features_used": {
+      "ch1_rms": 0.493293,
+      "ch2_rms": 0.522919,
+      "delta_ch1": -0.029753,
+      "delta_ch2": -0.03154,
+      "delta_ch1_pct": -5.688,
+      "delta_ch2_pct": -5.688,
+      "raw_ratio": 0.943345,
+      "delta_ratio": 0.943342,
+      "delta_ch1_per_g": -0.000955,
+      "delta_ch2_per_g": -0.001012,
+      "weight_g": 31.161,
+      "shape": "Bar",
+      "width_mm": 28.0,
+      "length_mm": 55.0,
+      "thickness_mm": 4.0,
+      "sample_area_mm2": 1540.0,
+      "coil_area_mm2": 3848.451,
+      "contact_area_ratio": 0.400161,
+      "f1_ch1_rms": 0.33144,
+      "f1_ch1_std": 0.0,
+      "f1_ch1_sample_count": 1,
+      "f1_ch1_air_rms": 0.340327,
+      "f1_ch1_delta_pct": -2.611,
+      "f1_ch1_abs_delta_pct": 2.611,
+      "f1_ch2_rms": 0.351345,
+      "f1_ch2_std": 0.0,
+      "f1_ch2_sample_count": 1,
+      "f1_ch2_air_rms": 0.360766,
+      "f1_ch2_delta_pct": -2.611,
+      "f1_ch2_abs_delta_pct": 2.611,
+      "f2_ch1_rms": 0.436451,
+      "f2_ch1_std": 0.0,
+      "f2_ch1_sample_count": 1,
+      "f2_ch1_air_rms": 0.455426,
+      "f2_ch1_delta_pct": -4.166,
+      "f2_ch1_abs_delta_pct": 4.166,
+      "f2_ch2_rms": 0.462663,
+      "f2_ch2_std": 0.0,
+      "f2_ch2_sample_count": 1,
+      "f2_ch2_air_rms": 0.482778,
+      "f2_ch2_delta_pct": -4.167,
+      "f2_ch2_abs_delta_pct": 4.167,
+      "f3_ch1_rms": 0.583402,
+      "f3_ch1_std": 0.0,
+      "f3_ch1_sample_count": 1,
+      "f3_ch1_air_rms": 0.624379,
+      "f3_ch1_delta_pct": -6.563,
+      "f3_ch1_abs_delta_pct": 6.563,
+      "f3_ch2_rms": 0.61844,
+      "f3_ch2_std": 0.0,
+      "f3_ch2_sample_count": 1,
+      "f3_ch2_air_rms": 0.661878,
+      "f3_ch2_delta_pct": -6.563,
+      "f3_ch2_abs_delta_pct": 6.563,
+      "f4_ch1_rms": 0.62188,
+      "f4_ch1_std": 0.0,
+      "f4_ch1_sample_count": 1,
+      "f4_ch1_air_rms": 0.672054,
+      "f4_ch1_delta_pct": -7.466,
+      "f4_ch1_abs_delta_pct": 7.466,
+      "f4_ch2_rms": 0.659228,
+      "f4_ch2_std": 0.0,
+      "f4_ch2_sample_count": 1,
+      "f4_ch2_air_rms": 0.712416,
+      "f4_ch2_delta_pct": -7.466,
+      "f4_ch2_abs_delta_pct": 7.466,
+      "gain_f1": 1.0,
+      "gain_f3": 1.0,
+      "voltage_freq_ratio": 2.513596,
+      "current_freq_ratio": 2.513596
+    },
+    "feature_version": 3,
+    "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+    "confidence_threshold_pct": 80.0,
+    "needs_verification": true,
+    "model_version": "gold_reference_v1:fc348af459bd24db",
+    "gold_prediction": null,
+    "purity_prediction": null,
+    "feature_names": [
+      "f1_delta_pct",
+      "f2_delta_pct",
+      "f3_delta_pct",
+      "f4_delta_pct",
+      "area_mm2",
+      "thickness_mm"
+    ],
+    "feature_vector": [
+      -2.611314815643514,
+      -4.166480106006887,
+      -6.562807252081017,
+      -7.465758537060256,
+      1540.0,
+      4.0
+    ],
+    "measured_frequency_values": null,
+    "calibration_frequency_air": null
+  },
+  {
+    "id": "M-20261018-093447-1cf7767f",
+    "date": "18 Oct 2026",
+    "time": "09:34",
+    "scale_preparation": {
+      "id": "bb17d5462a5440e2a46ed8d5c51e787c",
+      "device": [
+        "WKC6002C 6200.900 g"
+      ],
+      "internal": {
+        "status": "already_completed_this_startup",
+        "command": "TST3",
+        "deviation_raw": "      0.64",
+        "deviation_unit": "device definition units; not assumed g or %",
+        "completed_at": "2026-10-18T01:11:01.391500+00:00"
+      },
+      "recovery_requested": false,
+      "zero_command": "Z",
+      "initial": {
+        "average": 0.032,
+        "std_g": 0.0,
+        "minimum": 0.032,
+        "maximum": 0.032,
+        "range": 0.0,
+        "samples_requested": 5,
+        "samples_valid": 5,
+        "stable_samples": 5,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "residual": {
+        "average": 0.0,
+        "std_g": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "range": 0.0,
+        "samples_requested": 10,
+        "samples_valid": 10,
+        "stable_samples": 10,
+        "dynamic_samples": 0,
+        "discarded_readings": 0,
+        "unit": "g",
+        "source_unit": "g"
+      },
+      "settings": {
+        "empty_limit_g": 0.1,
+        "zero_tolerance_g": 0.01,
+        "max_spread_g": 0.02,
+        "internal_mode": "auto"
+      },
+      "zero_verified": true,
+      "verified_at": "2026-10-18T01:31:26.591630+00:00"
+    },
+    "geometry_evidence": null,
+    "evidence_image": {
+      "capture_id": "035a2ddd4b5f421f93cc8689825b0c54",
+      "storage_id": "e60eac682cfd45e7bd1dc98e568796c6",
+      "captured_at": "2026-10-18T01:34:47.510793+00:00",
+      "capture_phase": "before_frequency_sweep",
+      "annotation_status": "auto_unreviewed",
+      "image_url": "/api/verification/image/IMG-e60eac682cfd45e7bd1dc98e568796c6.jpg",
+      "overlay_url": "/api/verification/image/IMG-e60eac682cfd45e7bd1dc98e568796c6.html",
+      "annotation_url": "/api/verification/image/IMG-e60eac682cfd45e7bd1dc98e568796c6.json",
+      "yolo_segmentation_url": "/api/verification/image/IMG-e60eac682cfd45e7bd1dc98e568796c6.txt",
+      "annotation_warning": null,
+      "vision_detection": {
+        "state": "single_object",
+        "message": "Bar detected",
+        "count": 1,
+        "eligible": true,
+        "label": "bar",
+        "confidence": 0.9361902475357056,
+        "bbox_xywhn": [
+          0.5138864636421203,
+          0.5222810215420193,
+          0.09225375652313232,
+          0.277034060160319
+        ],
+        "revision": "ecc369c283834a82",
+        "roi_xywhn": [
+          0.15,
+          0.15,
+          0.85,
+          0.85
+        ],
+        "inference_ms": 48.1,
+        "scope": "coin/bar model detections within ROI; zero detections do not prove an empty pan",
+        "capture_id": "035a2ddd4b5f421f93cc8689825b0c54",
+        "captured_at": "2026-10-18T01:34:47.510793+00:00",
+        "capture_age_ms": 59.1
+      }
+    },
+    "image_capture_error": null,
+    "result": "999 reference match",
+    "weight": "31.065 g",
+    "shape": "Bar",
+    "width_mm": 28.0,
+    "length_mm": 50.1,
+    "thickness_mm": 3.0,
+    "sample_area_mm2": 1402.8,
+    "coil_area_mm2": 3848.451,
+    "contact_area_ratio": 0.36451,
+    "frequency_hz": 15000.0,
+    "frequency_slot": 3,
+    "vision_measurement": {
+      "depth_reference": "camera_to_object; not tray-relative thickness",
+      "diameter_mm": null,
+      "distance_to_camera_mm": 167.299996,
+      "estimated_depth_mm": 167.299996,
+      "image_url": "/api/vision/image/detected",
+      "length_mm": 99.016,
+      "message": "Vision measurement completed",
+      "ok": true,
+      "service_payload": {
+        "capture_id": "38115a3d00344af38a7251a24f515ae0",
+        "depth_reference": "camera_to_object; not tray-relative thickness",
+        "detected": true,
+        "distance_to_camera_mm": 167.29999577364651,
+        "estimated_depth_mm": 167.29999577364651,
+        "length_mm": 99.01627581342206,
+        "surface_area_mm2": 12360.78222673646,
+        "type": "Bar",
+        "width_mm": 124.83586284368116
+      },
+      "shape": "Bar",
+      "source": "vision_service",
+      "surface_area_mm2": 12360.782,
+      "timestamp": "18 Oct 2026 09:31:56",
+      "vision_type": "bar",
+      "width_mm": 124.836
+    },
+    "status": "999 reference match at uncalibrated score 87.07%. Gold identity and actual purity are not established; review independent evidence.",
+    "ch1_rms": "0.494184 V RMS",
+    "ch2_rms": "0.523863 V RMS",
+    "raw_measurement": {
+      "ch1_rms_raw": 0.4711,
+      "ch2_rms_raw": 0.4711
+    },
+    "ch1_std": "0.116816 V RMS",
+    "ch2_std": "0.123832 V RMS",
+    "ch1_delta": -0.028862,
+    "ch2_delta": -0.030596,
+    "ch1_delta_pct": -5.518,
+    "ch2_delta_pct": -5.518,
+    "f1_ch1_delta_pct": -2.516,
+    "f1_ch2_delta_pct": -2.516,
+    "f2_ch1_delta_pct": -4.079,
+    "f2_ch2_delta_pct": -4.08,
+    "f3_ch1_delta_pct": -6.397,
+    "f3_ch2_delta_pct": -6.397,
+    "ratio": "0.943346",
+    "matched_record_id": null,
+    "match_score": 0.1293281707613151,
+    "top_matches": [
+      {
+        "material": "999 reference match",
+        "match_percent": 87.06718292386849,
+        "distance": 0.1293281707613151,
+        "rank": 1
+      },
+      {
+        "material": "916 reference match",
+        "match_percent": 12.932817076131508,
+        "distance": 0.8706718292386849,
+        "rank": 2
+      }
+    ],
+    "classifier_result": {
+      "prediction": "999 reference match",
+      "nearest_class": "999 reference match",
+      "result_type": "reference_match",
+      "accepted": true,
+      "uncertain": false,
+      "reference_only": true,
+      "gold_identity_verified": false,
+      "scores_are_calibrated": false,
+      "reference_grade": 999,
+      "confidence": 87.06718292386849,
+      "nearest_gap": 0.7413436584773698,
+      "distance": 0.1293281707613151,
+      "threshold": 80.0,
+      "top_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 87.06718292386849,
+          "distance": 0.1293281707613151,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 12.932817076131508,
+          "distance": 0.8706718292386849,
+          "rank": 2
+        }
+      ],
+      "all_matches": [
+        {
+          "material": "999 reference match",
+          "match_percent": 87.06718292386849,
+          "distance": 0.1293281707613151,
+          "rank": 1
+        },
+        {
+          "material": "916 reference match",
+          "match_percent": 12.932817076131508,
+          "distance": 0.8706718292386849,
+          "rank": 2
+        }
+      ],
+      "feature_version": 1,
+      "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+      "decision_message": "999 reference match at uncalibrated score 87.07%. Gold identity and actual purity are not established; review independent evidence.",
+      "gold_prediction": null,
+      "purity_prediction": null,
+      "material_result": "Gold identity not determined",
+      "purity_result": null,
+      "nearest_reference_grade": 999,
+      "score": 0.8706718292386849,
+      "simulation": false,
+      "feature_names": [
+        "f1_delta_pct",
+        "f2_delta_pct",
+        "f3_delta_pct",
+        "f4_delta_pct",
+        "area_mm2",
+        "thickness_mm"
+      ],
+      "categorical_features": {
+        "shape": "Bar"
+      },
+      "input_row": {
+        "shape": "Bar",
+        "area_mm2": 1402.8,
+        "thickness_mm": 3.0,
+        "f1_delta_pct": -2.516138035009842,
+        "f2_delta_pct": -4.07957664289061,
+        "f3_delta_pct": -6.39673991364285,
+        "f4_delta_pct": -7.197364033461172
+      },
+      "feature_vector": [
+        -2.516138035009842,
+        -4.07957664289061,
+        -6.39673991364285,
+        -7.197364033461172,
+        1402.8,
+        3.0
+      ],
+      "model_version": "gold_reference_v1:fc348af459bd24db",
+      "model_metadata": {
+        "adapter": "gold_reference_v1",
+        "model_file": "metal/signal_plus_geometry.joblib",
+        "model_sha256": "fc348af459bd24dbc32edb08b9eaf99e7a739ffaa608090daaaa705fed94ed75",
+        "numeric_features": [
+          "f1_delta_pct",
+          "f2_delta_pct",
+          "f3_delta_pct",
+          "f4_delta_pct",
+          "area_mm2",
+          "thickness_mm"
+        ],
+        "categorical_features": [
+          "shape"
+        ],
+        "labels": [
+          916,
+          999
+        ],
+        "sklearn_version": "1.6.1",
+        "bundle_threshold": 0.8,
+        "evaluation_mode": "capture_only_cv_UNVERIFIED_SPECIMEN_INDEPENDENCE",
+        "reference_only": true,
+        "scores_are_calibrated": false
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.31626662400039113,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -2.516138035009842
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.4164413462981791,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -4.07957664289061
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.557139511984439,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -6.39673991364285
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.5945508501506739,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -7.197364033461172
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      }
+    },
+    "classifier_status": {
+      "features": {
+        "shape": "Bar",
+        "area_mm2": 1402.8,
+        "thickness_mm": 3.0,
+        "f1_delta_pct": -2.516138035009842,
+        "f2_delta_pct": -4.07957664289061,
+        "f3_delta_pct": -6.39673991364285,
+        "f4_delta_pct": -7.197364033461172
+      },
+      "acquisition_evidence": {
+        "simulation": false,
+        "frequencies": [
+          {
+            "slot": "f1",
+            "frequency_hz": 8000,
+            "rms_v": 0.31626662400039113,
+            "air_rms_v": 0.32442972367464623,
+            "delta_pct": -2.516138035009842
+          },
+          {
+            "slot": "f2",
+            "frequency_hz": 10000,
+            "rms_v": 0.4164413462981791,
+            "air_rms_v": 0.4341529485829917,
+            "delta_pct": -4.07957664289061
+          },
+          {
+            "slot": "f3",
+            "frequency_hz": 15000,
+            "rms_v": 0.557139511984439,
+            "air_rms_v": 0.5952137900650355,
+            "delta_pct": -6.39673991364285
+          },
+          {
+            "slot": "f4",
+            "frequency_hz": 20000,
+            "rms_v": 0.5945508501506739,
+            "air_rms_v": 0.6406615975488528,
+            "delta_pct": -7.197364033461172
+          }
+        ],
+        "area_definition": "coin pi*d^2/4; bar width*length; NOT segmentation area"
+      },
+      "reference_only": true
+    },
+    "classifier_features": {
+      "shape": "Bar",
+      "area_mm2": 1402.8,
+      "thickness_mm": 3.0,
+      "f1_delta_pct": -2.516138035009842,
+      "f2_delta_pct": -4.07957664289061,
+      "f3_delta_pct": -6.39673991364285,
+      "f4_delta_pct": -7.197364033461172
+    },
+    "confidence": "87.07%",
+    "confidence_label": "MEDIUM",
+    "nearest_gap": 0.741344,
+    "acquisition_mode": "signal_service",
+    "daq_correction": {
+      "enabled": true,
+      "version": 1,
+      "ch1_scale": 1.049,
+      "ch1_offset": 0.0,
+      "ch2_scale": 1.112,
+      "ch2_offset": 0.0,
+      "applied_at": "after_rms_before_features"
+    },
+    "frequency_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.331764,
+            "rms_raw": 0.316267,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.351689,
+            "rms_raw": 0.316267,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.436847,
+            "rms_raw": 0.416441,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.463082,
+            "rms_raw": 0.416441,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.58444,
+            "rms_raw": 0.55714,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.61954,
+            "rms_raw": 0.55714,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000.0,
+        "settle_seconds": 5.0,
+        "channels": {
+          "ch1": {
+            "rms": 0.623684,
+            "rms_raw": 0.594551,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service",
+            "command": "",
+            "sample_count": 1
+          },
+          "ch2": {
+            "rms": 0.661141,
+            "rms_raw": 0.594551,
+            "std": 0.0,
+            "quality": 1.0,
+            "unit": "V",
+            "source": "signal_service_mirrored",
+            "command": "",
+            "sample_count": 1
+          }
+        }
+      }
+    ],
+    "reference_signal_sequence": [
+      {
+        "frequency_command": "f1",
+        "frequency_hz": 8000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.31626662400039113,
+        "std_v": 3.486439878879596e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f2",
+        "frequency_hz": 10000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.4164413462981791,
+        "std_v": 0.0003223150017025965,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f3",
+        "frequency_hz": 15000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.557139511984439,
+        "std_v": 4.985351351709736e-05,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      },
+      {
+        "frequency_command": "f4",
+        "frequency_hz": 20000,
+        "amplitude_v_peak": 1.0,
+        "simulate": false,
+        "ac_rms_v": 0.5945508501506739,
+        "std_v": 0.00019380774680636306,
+        "sample_size": 10,
+        "source": "adp2230_raw_ac_rms_v"
+      }
+    ],
+    "calibration_used": "18 Oct 2026 08:54",
+    "features_used": {
+      "ch1_rms": 0.494184,
+      "ch2_rms": 0.523863,
+      "delta_ch1": -0.028862,
+      "delta_ch2": -0.030596,
+      "delta_ch1_pct": -5.518,
+      "delta_ch2_pct": -5.518,
+      "raw_ratio": 0.943346,
+      "delta_ratio": 0.943326,
+      "delta_ch1_per_g": -0.000929,
+      "delta_ch2_per_g": -0.000985,
+      "weight_g": 31.065,
+      "shape": "Bar",
+      "width_mm": 28.0,
+      "length_mm": 50.1,
+      "thickness_mm": 3.0,
+      "sample_area_mm2": 1402.8,
+      "coil_area_mm2": 3848.451,
+      "contact_area_ratio": 0.36451,
+      "f1_ch1_rms": 0.331764,
+      "f1_ch1_std": 0.0,
+      "f1_ch1_sample_count": 1,
+      "f1_ch1_air_rms": 0.340327,
+      "f1_ch1_delta_pct": -2.516,
+      "f1_ch1_abs_delta_pct": 2.516,
+      "f1_ch2_rms": 0.351689,
+      "f1_ch2_std": 0.0,
+      "f1_ch2_sample_count": 1,
+      "f1_ch2_air_rms": 0.360766,
+      "f1_ch2_delta_pct": -2.516,
+      "f1_ch2_abs_delta_pct": 2.516,
+      "f2_ch1_rms": 0.436847,
+      "f2_ch1_std": 0.0,
+      "f2_ch1_sample_count": 1,
+      "f2_ch1_air_rms": 0.455426,
+      "f2_ch1_delta_pct": -4.079,
+      "f2_ch1_abs_delta_pct": 4.079,
+      "f2_ch2_rms": 0.463082,
+      "f2_ch2_std": 0.0,
+      "f2_ch2_sample_count": 1,
+      "f2_ch2_air_rms": 0.482778,
+      "f2_ch2_delta_pct": -4.08,
+      "f2_ch2_abs_delta_pct": 4.08,
+      "f3_ch1_rms": 0.58444,
+      "f3_ch1_std": 0.0,
+      "f3_ch1_sample_count": 1,
+      "f3_ch1_air_rms": 0.624379,
+      "f3_ch1_delta_pct": -6.397,
+      "f3_ch1_abs_delta_pct": 6.397,
+      "f3_ch2_rms": 0.61954,
+      "f3_ch2_std": 0.0,
+      "f3_ch2_sample_count": 1,
+      "f3_ch2_air_rms": 0.661878,
+      "f3_ch2_delta_pct": -6.397,
+      "f3_ch2_abs_delta_pct": 6.397,
+      "f4_ch1_rms": 0.623684,
+      "f4_ch1_std": 0.0,
+      "f4_ch1_sample_count": 1,
+      "f4_ch1_air_rms": 0.672054,
+      "f4_ch1_delta_pct": -7.197,
+      "f4_ch1_abs_delta_pct": 7.197,
+      "f4_ch2_rms": 0.661141,
+      "f4_ch2_std": 0.0,
+      "f4_ch2_sample_count": 1,
+      "f4_ch2_air_rms": 0.712416,
+      "f4_ch2_delta_pct": -7.197,
+      "f4_ch2_abs_delta_pct": 7.197,
+      "gain_f1": 1.0,
+      "gain_f3": 1.0,
+      "voltage_freq_ratio": 2.542528,
+      "current_freq_ratio": 2.542528
+    },
+    "feature_version": 3,
+    "classification_method": "Known-gold 916/999 reference matching (uncalibrated score)",
+    "confidence_threshold_pct": 80.0,
+    "needs_verification": true,
+    "model_version": "gold_reference_v1:fc348af459bd24db",
+    "gold_prediction": null,
+    "purity_prediction": null,
+    "feature_names": [
+      "f1_delta_pct",
+      "f2_delta_pct",
+      "f3_delta_pct",
+      "f4_delta_pct",
+      "area_mm2",
+      "thickness_mm"
+    ],
+    "feature_vector": [
+      -2.516138035009842,
+      -4.07957664289061,
+      -6.39673991364285,
+      -7.197364033461172,
+      1402.8,
+      3.0
+    ],
+    "measured_frequency_values": null,
+    "calibration_frequency_air": null
+  }
+]
