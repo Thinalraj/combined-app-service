@@ -123,10 +123,12 @@ class Segmenter:
                 area = int(np.count_nonzero(mask))
                 edge = bool(mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any())
                 accepted = score >= settings["acceptance_confidence"] and area >= 16 and not edge
-                # NUC-03: veto a coin-like prediction with a large visible hole.
-                # This does not relabel it as a scientifically confirmed bangle.
-                hole_ratio = visible_hole_ratio(crop, mask) if label == "coin" else 0.0
-                hole_veto = hole_ratio >= .12
+                # NUC-03: reject a non-coin object with a large visible hole.
+                # A model-confirmed coin keeps its segmentation mask for the
+                # later geometry stages; coin faces can contain strong inner
+                # contours that are not a reason to discard the detection.
+                hole_ratio = visible_hole_ratio(crop, mask) if label != "coin" else 0.0
+                hole_veto = label != "coin" and hole_ratio >= .12
                 accepted = accepted and not hole_veto
                 contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
                 polygons = []

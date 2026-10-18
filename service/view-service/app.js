@@ -208,7 +208,7 @@ async function showScreen(name) {
   currentScreen = name;
   document.body.classList.toggle("engineering-session",engineeringUnlocked);
   clearTimeout(manualDetectionTimer);
-  if(name==="home") {document.getElementById("platformEmptyConfirm").checked=false;updateCustomerStart();}
+  if(name==="home") updateCustomerStart();
   if(name==="place") {
     document.getElementById("manualShapeButton").hidden=true;
     document.getElementById("autoDetectSummary").textContent="Place one item flat and still, then press Detect Shape.";
@@ -371,7 +371,7 @@ function observeYoloDetection(detection) {
   const consistent = acceptable && previous?.eligible && previous.revision === detection.revision
     && performance.now() - visionDetectionReceived + Number(previous.capture_age_ms || 0) < 5000
     && previous.label === detection.label
-    && yoloBoxOverlap(previous.bbox_xywhn, detection.bbox_xywhn) > .5;
+    && yoloBoxOverlap(previous.bbox_xywhn, detection.bbox_xywhn) > .3;
   visionStableFrames = acceptable ? (consistent ? Math.min(3, visionStableFrames + 1) : 1) : 0;
   visionLastDetection = detection;
   visionDetectionReceived = performance.now();
@@ -3283,9 +3283,14 @@ function finishStartupPresence() {
   status.textContent="Startup check complete";
 }
 document.getElementById("startButton").addEventListener("click", () => {
-  if(startupPresenceBusy || !document.getElementById("platformEmptyConfirm").checked)return;
-  if(startupNeedsRemoval)offerStartupManualZero();
-  else zeroMeasurementScaleBeforePlacement();
+  if(startupPresenceBusy)return;
+  if(startupNeedsRemoval) {
+    offerStartupManualZero();
+    return;
+  }
+  // The empty-chamber declaration belongs to the verification preparation
+  // screen, after the customer has explicitly started verification.
+  openScalePreparation("measurement");
 });
 // NUC-03: automatic selection goes directly to mass. Manual is a fallback.
 async function beginManualMeasurement() {
@@ -4069,9 +4074,8 @@ initializeMetalRateRows();
 refreshReferenceRates();
 
 function updateCustomerStart() {
-  document.getElementById("startButton").disabled=startupPresenceBusy || !document.getElementById("platformEmptyConfirm").checked;
+  document.getElementById("startButton").disabled=startupPresenceBusy;
 }
-document.getElementById("platformEmptyConfirm").addEventListener("change",updateCustomerStart);
 
 // Startup inspection only: these GET requests never zero, tare or adjust.
 checkStartupPlatform();
