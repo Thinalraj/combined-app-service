@@ -52,7 +52,7 @@ def write_json(path, value):
 
 def read_json(name, default):
     path = ROOT / name
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else copy.deepcopy(default)
+    return json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else copy.deepcopy(default)
 
 
 def model_selection():

@@ -233,6 +233,7 @@ def build_yolo_frame(payload: dict):
 # REV 2026-10-18 / GEOMETRY-01: share the inference lock with live YOLO; capture
 # pixels, aligned raw depth, intrinsics and scale atomically for every sample.
 from geometry_check import Geometry, sdk_rays_factory, settings as geometry_settings
+from geometry_live import measure_live
 import system_assets as assets
 geometry = Geometry()
 
@@ -247,9 +248,11 @@ def geometry_camera_frame():
 def geometry_status():
     config=geometry_settings()
     reference=assets.read_json("geometry_reference.json",{})
-    return {"settings":config,"reference":{key:reference.get(key) for key in
+    from vision_settings import load_settings as active_vision_settings
+    active_roi=active_vision_settings(assets.ROOT/"vision_settings.json")["roi"]
+    return {"camera_session":geometry.session,"measurement_mode":"live_mask","active_roi":active_roi, "settings":config,"reference":{key:reference.get(key) for key in
             ("reference_id","created_at","samples","plane","roi")},
-            "reference_for_current_session":reference.get("session")==geometry.session}
+            "reference_for_current_session":reference.get("session")==geometry.session and reference.get("roi")==active_roi}
 
 
 @app.post("/geometry/settings")
@@ -280,7 +283,7 @@ def geometry_measure(payload:dict):
         raise HTTPException(503,"Camera inference is busy; retry")
     try:
         vision=validate_yolo_settings(payload.get("settings",{}))
-        return geometry.measure(geometry_camera_frame,lambda report:sdk_rays_factory(rs,report),segmenter,
+        return measure_live(geometry,geometry_camera_frame,lambda report:sdk_rays_factory(rs,report),segmenter,
                                 vision,str(payload.get("shape","")).lower(),payload.get("manual_height_mm"))
     except (ValueError,RuntimeError,OSError,KeyError,AttributeError) as exc:
         raise HTTPException(503,str(exc)) from exc

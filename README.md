@@ -48,3 +48,10 @@ Default Signal mode is hardware; simulation must be explicit. Occupied ports
 are rejected. Read `system_assets/FINAL_TEST_GUIDE.md` before the first hardware
 trial. `python system_check.py` and Engineering > System Readiness run passive
 checks; use an explicit `--only SENSOR --read` for an individual sensor test.
+
+NUC-02 workflow fixes: read `system_assets/NUC_02_FIX_GUIDE.md` for startup-zero
+reuse/skip, manual removal, same-frame mask geometry and the 90% reference gates.
+These instructions supersede the older per-item zero/mandatory empty-reference
+sequence for user verification.
+
+NUC Workflow 03: see [apply order and hardware smoke test](system_assets/NUC_03_FIX_GUIDE.md). Apply after Workflow 02. Customer detection, removal and kiosk Exit changes preserve central model/hardware configuration.

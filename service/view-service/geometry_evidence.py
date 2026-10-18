@@ -10,6 +10,8 @@ def density_check(geometry, weight):
             "reference_g_cm3":geometry["settings"]["pure_gold_density_g_cm3"],
             "tolerance_pct":geometry["settings"]["density_tolerance_pct"],
             "verdict":"unavailable","note":"Pure-gold reference only; does not identify gold or determine 916/999 purity."}
+    if weight.get("zero_verified") is False:
+        result["message"]="Scale zero unverified/skipped; prepare once in Engineering for density";return result
     if not weight.get("ok") or weight.get("stable") is not True:
         result["message"]="Stable averaged mass unavailable";return result
     mass=weight.get("weight_g");volume=geometry.get("volume_mm3")

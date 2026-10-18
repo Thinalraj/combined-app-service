@@ -187,7 +187,7 @@ class Preparation:
                 if abs(initial["average"]) > settings["empty_limit_g"] or initial["range"] > settings["max_spread_g"]:
                     raise RuntimeError("Empty-pan reading is outside the configured limit; remove item or inspect zero offset")
                 mode = settings["internal_mode"]
-                command = ("TST3" if "TST3" in commands else "C3" if "C3" in commands else None) if mode == "auto" else {"test": "TST3", "adjust": "C3", "skip": None}[mode]
+                command = ("TST3" if "TST3" in commands else None) if mode == "auto" else {"test": "TST3", "adjust": "C3", "skip": None}[mode]
                 internal = {"status": "skipped" if mode == "skip" else "unsupported", "command": None}
                 if self.startup_internal and not repeat_internal:
                     internal = {**copy.deepcopy(self.startup_internal), "status": "already_completed_this_startup"}

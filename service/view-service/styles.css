@@ -2434,3 +2434,121 @@ output {
 .removal-panel input { flex: 0 0 auto; width: 22px; height: 22px; }
 .readiness-row pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 #resultScreen .screen-actions { flex-wrap: wrap; }
+
+/* NUC-02: exact values fit; additional notes scroll inside existing bodies. */
+.dimension-field-button strong { font-size: clamp(20px, 2.8vw, 34px); overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.removal-panel label + label { margin-top: 12px; }
+.camera-return-actions { position: sticky; bottom: 0; padding: 8px 0; background: #14191f; z-index: 2; flex-wrap: wrap; }
+#userDimensionCameraHost:empty { display:none; }
+#userDimensionCameraHost .camera-image-frame { max-height: 230px; }
+#userGeometrySummary, #teachingGeometrySummary { max-height: 180px; overflow-y:auto; scrollbar-color: #ff9f1a #14191f; }
+
+/* REV 2026-10-18 / NUC-03: 800x480 kiosk layout, primary autodetection,
+   compact removal, carousel and bounded modal messages. No sensor behaviour. */
+.notice-dialog { width: min(640px,94vw); max-height: 88dvh; padding: 20px;
+  border: 1px solid var(--orange); border-radius: 12px; background: #11161c; color: var(--text); }
+.notice-dialog::backdrop { background: rgba(0,0,0,.8); }
+.notice-dialog h2 { margin: 0 0 12px; font-size: 22px; }
+#noticeMessage { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 53dvh;
+  overflow: auto; line-height: 1.45; font-size: 15px; }
+.notice-dialog .button-row { display: flex; justify-content: flex-end; margin-top: 15px; }
+.notice-dialog button { padding: 10px 18px; }
+[hidden] { display: none !important; }
+.processing-spinner { width: 32px; height: 32px; border: 4px solid #3c4651;
+  border-top-color: var(--green); border-radius: 50%; animation: processing-spin 1s linear infinite; }
+@keyframes processing-spin { to { transform: rotate(360deg); } }
+#placeScreen .instruction-panel { padding: 8px; width: 100%; }
+#placeScreen .instruction-panel h2 { color: var(--green); font-size: 24px; margin: 0 0 4px; }
+#placeScreen .instruction-panel > p { margin: 0 0 5px; font-size: 14px; }
+#placeScreen .screen-body { overflow: hidden; }
+#placeScreen .screen-body > .instruction-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#placeScreen .camera-preview-host { flex: 1; min-height: 0; }
+#placeScreen .camera-image-frame { height: clamp(110px,29dvh,210px); }
+#placeScreen .screen-actions { grid-template-columns: .55fr 1fr 1.7fr; }
+#placeScreen .auto-detect-action { font-size: 18px; color: white; border: 2px solid #55ed9a;
+  background: linear-gradient(#188449,#106136); box-shadow: 0 0 14px #31b66b44; }
+#manualShapeButton { font-size: 12px; }
+.manual-shape-note { margin: 0; font-size: 12px; color: var(--muted); }
+/* The customer camera is read-only: raw evidence is saved automatically.
+   Manual capture and camera-mode tools remain available in Engineering. */
+.user-camera > .label, .user-camera .camera-return-actions,
+.user-camera .button-row, .user-camera #cameraPhotoStatus,
+.user-camera #cameraPhotoDownload, .user-camera #teachingDetectedImageStatus { display: none; }
+.user-camera { padding: 4px !important; gap: 3px; min-height: 0; }
+.user-camera .vision-detection-status { margin: 3px 0; font-size: 12px; line-height: 1.2; }
+.camera-image-frame { min-height: 0; }
+#userDimensionCameraHost, #userMeasureCameraHost { display: none; }
+/* Final screen reserves its action row and places physical confirmation beside
+   the removal preview. Detailed technical text belongs in the Details modal. */
+#resultScreen .screen-body { overflow: hidden; padding: 0; }
+#resultScreen .screen-body > .result-panel { flex: 1; min-height: 0; padding: 8px;
+  display: flex; flex-direction: column; gap: 5px; text-align: left; }
+#resultScreen .result-panel > .eyebrow { margin: 0; font-size: 11px; }
+#resultMaterial { margin: 0; font-size: clamp(20px,3.4vw,28px); line-height: 1.1; }
+#resultScreen .saved-photo-panel, #resultScalePreparation, #resultGeometrySummary,
+#resultReferenceSummary { display: none; }
+.result-removal-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  gap: 12px; flex: 1; min-height: 0; align-items: stretch; }
+.result-removal-row .camera-preview-host { min-height: 0; }
+.result-removal-row .camera-image-frame { height: clamp(85px,26dvh,160px); }
+.result-removal-row .camera-preview-widget { height: 100%; }
+.result-removal-row .vision-detection-status { display: none; }
+.result-removal-row .removal-panel { margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.result-removal-row .removal-panel h3 { margin: 0; font-size: 16px; }
+.result-removal-row .removal-panel p { margin: 0; font-size: 11px; line-height: 1.25; }
+.result-removal-row .removal-panel label { display: flex; gap: 8px; align-items: center; font-size: 14px; line-height: 1.2; }
+.result-removal-row input { width: 26px; height: 26px; flex: 0 0 26px; accent-color: #25bf69; }
+#resultScreen .result-details { margin: 0; padding: 4px 0; display: grid;
+  grid-template-columns: auto auto auto auto; gap: 3px 12px; font-size: 13px; }
+#resultScreen .result-details > :nth-child(5), #resultStatus { display: none; }
+#resultScreen .screen-actions { grid-template-columns: .75fr .75fr 1fr 1.3fr; }
+/* Three-card horizontal carousel. Arrows change the selected quote without
+   fetching the upstream API. Existing daily caching and refresh limits remain. */
+#homeScreen { gap: 6px; }
+#homeScreen .rates-panel { flex: 1; min-height: 0; width: 100%; padding: 8px; overflow: hidden; }
+#homeScreen .rates-status, #homeScreen .rates-note { font-size: 10px; line-height: 1.2; margin: 3px 0; }
+#homeScreen .rates-head { margin: 0; }
+#metalRatesList.rate-carousel { display: block; position: relative; height: 152px; min-height: 0;
+  max-height: none; overflow: hidden; padding: 0; touch-action: manipulation; }
+.rate-carousel .metal-rate-row { position: absolute; left: 50%; top: 4px; width: 48%; height: 140px;
+  margin-left: -24%; padding: 7px; display: none; grid-template-columns: 1fr; gap: 2px;
+  justify-items: center; align-content: center; text-align: center; border-radius: 12px;
+  transition: transform .4s ease, opacity .4s ease; background: #151a21; }
+.rate-carousel .metal-rate-row.active { display: grid; z-index: 3; border-color: #d5ac43;
+  transform: translateX(0) scale(1); opacity: 1; box-shadow: 0 0 15px #d5ac4322; }
+.rate-carousel .metal-rate-row.previous, .rate-carousel .metal-rate-row.next { display: grid;
+  opacity: .38; z-index: 1; transform: translateX(-90%) scale(.78); pointer-events: none; }
+.rate-carousel .metal-rate-row.next { transform: translateX(90%) scale(.78); }
+.rate-carousel .metal-rate-price { font-size: 21px; }
+.rate-carousel .metal-rate-trend { font-size: 12px; }
+.rate-carousel .metal-rate-time { font-size: 9px; line-height: 1.1; }
+ .rate-carousel .object { height: 40px; width: 116px; }
+.rate-carousel .object img { width: 84px; height: 55px; left: 16px; top: -8px; }
+.rate-carousel .object span { scale: .65; transform-origin: center top; }
+.rate-carousel .active .object { animation: bullion-drift 3s ease-in-out infinite; }
+@keyframes bullion-drift { 0%,100% { transform: translateX(-5px); } 50% { transform: translateX(5px); } }
+.carousel-controls { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 2px 0; }
+.carousel-controls button { min-height: 32px; padding: 4px 16px; font-size: 12px; }
+#rateCardPosition { font-size: 12px; color: var(--muted); }
+#homeScreen .primary-action { min-height: 46px; margin: 0; padding: 8px; font-size: 20px; }
+#homeScreen .status-strip { min-height: 22px; margin: 0; font-size: 11px; }
+@media (max-height: 430px) {
+  #metalRatesList.rate-carousel { height: 115px; }
+  .rate-carousel .metal-rate-row { height: 105px; }
+  .rate-carousel .object { height: 23px; }
+  .result-removal-row .camera-image-frame { height: 85px; }
+  .result-removal-row .removal-hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rate-carousel .active .object, .processing-spinner { animation: none; }
+  .rate-carousel .metal-rate-row { transition: none; }
+}
+
+#resultScreen #cameraPreviewWidget::before { content: "Removal preview"; display: block; font-size: 11px; color: var(--muted); }
+#resultScreen .result-panel { width: 100%; max-width: none; }
+#scalePrepareScreen .scale-preparation-actions { grid-template-columns: repeat(4,minmax(0,1fr)); }
+
+#resultScreen #teachingDetectedImageStatus { display: block; font-size: 10px; margin: 2px 0; line-height: 1.15; }
+
+#noticePhotoLinks { font-size: 13px; line-height: 1.6; }
+#noticePhotoLinks a { color: #8ce7b2; }

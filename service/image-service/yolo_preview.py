@@ -16,6 +16,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from vision_settings import validate_settings, revision
 from system_assets import asset_path
+from coin_hole_guard import visible_hole_ratio
 
 
 class VisionError(RuntimeError):
@@ -122,6 +123,11 @@ class Segmenter:
                 area = int(np.count_nonzero(mask))
                 edge = bool(mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any())
                 accepted = score >= settings["acceptance_confidence"] and area >= 16 and not edge
+                # NUC-03: veto a coin-like prediction with a large visible hole.
+                # This does not relabel it as a scientifically confirmed bangle.
+                hole_ratio = visible_hole_ratio(crop, mask) if label == "coin" else 0.0
+                hole_veto = hole_ratio >= .12
+                accepted = accepted and not hole_veto
                 contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
                 polygons = []
                 for j, contour in enumerate(contours):
@@ -143,6 +149,7 @@ class Segmenter:
                     mask_callback(index, mask, (x1, y1))
                 objects.append({"label": label if accepted else "unknown", "predicted_label": label,
                     "confidence": score, "accepted": accepted, "touches_roi_edge": edge,
+                    "visible_hole_ratio": round(hole_ratio,4), "visible_hole_veto": hole_veto,
                     "mask_area_px": area, "model_class_id": model_class,
                     # Canonical export order stays bar=0, coin=1 even if the model's order differs.
                     "class_id": {"bar": 0, "coin": 1}[label] if accepted else None,
@@ -156,6 +163,8 @@ class Segmenter:
                 state, message = "multiple_objects", f"Multiple objects detected ({count}) in ROI"
             elif objects[0]["touches_roi_edge"]:
                 state, message = "roi_edge", "Move the complete item inside the ROI"
+            elif objects[0].get("visible_hole_veto"):
+                state, message = "unknown", "Visible central hole: inspect bangle/ring-like item and choose manually"
             elif not eligible:
                 state, message = "unknown", "Unknown: confidence or mask quality below acceptance limit"
             else:

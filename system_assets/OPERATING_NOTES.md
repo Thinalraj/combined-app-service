@@ -51,3 +51,11 @@ See `FINAL_TEST_GUIDE.md` for normal launcher configuration, removal checks,
 readiness endpoints, modular sensor tests and the final physical test sequence.
 The central `runtime.json` selects hardware/signal-only simulation, Python and
 scale COM port. Internal calibration remains once per Weight-service startup.
+
+## NUC-02 supersedes earlier per-item preparation/reference instructions
+
+Read `NUC_02_FIX_GUIDE.md`. User verification reuses a valid startup scale
+preparation and offers an explicit skip/manual removal path; no automatic new-item
+zero. Coin/bar geometry uses same-frame segmentation and visible support depth;
+a saved empty reference is optional. Both detection and reference score have a
+90% effective floor. Existing model/ROI/profile/config files stay in place.

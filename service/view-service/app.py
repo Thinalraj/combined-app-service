@@ -42,6 +42,22 @@ from brass_classifier import (
 )
 from snapshot_store import save_snapshot, serve_snapshot
 from geometry_evidence import density_check
+from acceptance_policy import combined_eligibility
+from kiosk_control import install_kiosk_exit
+
+# NUC-03: server-issued placement tokens bind saved photos to shape and expiry.
+# Files remain on disk; this small cache only prevents trusting client photo URLs.
+PLACEMENT_PHOTOS = {}
+PLACEMENT_LOCK = threading.Lock()
+def placement_photo(token, shape):
+    with PLACEMENT_LOCK:
+        now = time.monotonic()
+        for key in list(PLACEMENT_PHOTOS):
+            if now - PLACEMENT_PHOTOS[key][0] > 1800:
+                del PLACEMENT_PHOTOS[key]
+        value = PLACEMENT_PHOTOS.get(token) if isinstance(token,str) else None
+        return value[2].copy() if value and value[1] == str(shape).lower() else None
+
 from gold_reference import (ReferenceModel, configuration as reference_configuration,
     feature_row as reference_feature_row, raw_step as reference_raw_step, unavailable as reference_unavailable,
     METHOD as REFERENCE_METHOD, NUMERIC as REFERENCE_NUMERIC)
@@ -255,6 +271,7 @@ DEFAULT_DAQ_OFFSET = {
 }
 
 app = Flask(__name__, static_folder=None)
+install_kiosk_exit(app)
 
 # REV 2026-10-18 / ACCESS-01: protect engineering operations on the server.
 from engineering_auth import install_engineering_auth
@@ -591,6 +608,7 @@ def normalize_weight_service_payload(payload: dict) -> dict:
         "dynamic_sample_count": int(parse_float(payload.get("dynamic_samples"), 0) or 0),
         "raw_response": payload.get("raw", ""),
         "source": "weight_service",
+        "port": payload.get("port", "Weight service configured port"),
         "service_payload": payload,
         "timestamp": datetime.now().strftime("%d %b %Y %H:%M:%S"),
     }
@@ -4690,13 +4708,25 @@ def verify_measurement():
 
     # Keep a photograph even when the signal/classification step fails.
     record_id = "M-" + now.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
-    photo, photo_error = capture_record_photo(shape)
+    # Reuse the automatic placement photograph. A separate fresh inference
+    # still guards acceptance immediately before the frequency sweep.
+    photo = placement_photo(payload.get("placement_capture_id"), shape)
+    photo_error = None
+    fresh_detection = None
+    if photo:
+        try:
+            fresh_detection = request_yolo_frame().get("detection") or {}
+        except (RuntimeError, ValueError, OSError) as exc:
+            fresh_detection = {"eligible":False,"message":str(exc)}
+    else:
+        photo, photo_error = capture_record_photo(shape)
     try:
         yolo_required = current_yolo_settings()["enabled"]
     except (ValueError, OSError):
         yolo_required = True
-    detection = (photo or {}).get("vision_detection") or {}
+    detection = fresh_detection if fresh_detection is not None else (photo or {}).get("vision_detection") or {}
     vision_ok = (detection.get("eligible") is True and detection.get("count") == 1
+                 and detection.get("confidence", 0) >= .90
                  and detection.get("label") == str(shape).strip().lower()
                  and detection.get("capture_age_ms", 999999) <= 5000)
     if yolo_required and not vision_ok:
@@ -4767,6 +4797,7 @@ def verify_measurement():
         shape,
         formula_area_mm2=geometry["sample_area_mm2"],
     )
+    classifier_prediction = combined_eligibility(classifier_prediction, detection, shape)
     top_matches = [
         {
             "rank": index + 1,
@@ -4860,12 +4891,16 @@ def verify_measurement():
         needs_verify=True
         status_text=classifier_prediction["decision_message"] if classifier_prediction else "Reference comparison unavailable"
         score_threshold_pct=classifier_prediction.get("threshold",80.) if classifier_prediction else 80.
+    geometry_evidence = geometry_evidence_for_record(payload, shape)
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        density=(geometry_evidence or {}).get("density_check",{})
+        status_text += (" Density: "+density.get("message","unavailable")+".")
     record = {
         "id": record_id,
         "date": payload.get("date") or now.strftime("%d %b %Y"),
         "time": payload.get("time") or now.strftime("%H:%M"),
         "scale_preparation": scale_preparation_for_record(payload),
-        "geometry_evidence": geometry_evidence_for_record(payload, shape),
+        "geometry_evidence": geometry_evidence,
         "evidence_image": photo,
         "image_capture_error": photo_error,
         "result": result,
@@ -5229,6 +5264,10 @@ def validate_teaching_sample():
     coverage_pct = geometry["contact_area_ratio"] * 100.0
     brass_model = build_brass_surface_model(teaching_records, calibration)
 
+    reference_photo=None;reference_detection={}
+    if selected_classifier_algorithm()=="gold_reference_v1":
+        reference_photo,reference_photo_error=capture_record_photo(shape,teaching=True,detector="yolo")
+        reference_detection=(reference_photo or {}).get("vision_detection") or {}
     if selected_classifier_algorithm()=="gold_reference_v1":
         try:reference_preflight(calibration,shape,geometry)
         except Exception as exc:return jsonify(error="reference_not_ready",message=str(exc)),409
@@ -5265,6 +5304,7 @@ def validate_teaching_sample():
         shape,
         formula_area_mm2=geometry["sample_area_mm2"],
     )
+    classifier_prediction = combined_eligibility(classifier_prediction, reference_detection, shape)
     rule_models = {} if selected_classifier_algorithm()=="gold_reference_v1" else validation_rule_bundle(coverage_pct, geometry["thickness_mm"], validation_features, brass_model)
     primary_rule = rule_models.get("brass_rejection_ch1f1_ch2f1")
     if selected_classifier_algorithm()=="gold_reference_v1":
@@ -5337,6 +5377,7 @@ def validate_teaching_sample():
         validation_result="UNABLE TO DETERMINE" if grade is None else "REFERENCE COMPARISON" if expected is None else "REFERENCE MATCH" if int(expected.group(1))==grade else "REFERENCE MISMATCH"
         status_text=(classifier_prediction or {}).get("decision_message","Reference unavailable")
     record = {
+            "evidence_image":reference_photo,
             "id": payload.get("id") or f"V-{now.strftime('%H%M%S')}",
             "scale_preparation": scale_preparation_for_record(payload),
         "geometry_evidence": geometry_evidence_for_record(payload, shape),
@@ -5680,6 +5721,30 @@ def scale_preparation_status_api():
         return jsonify(error="scale_status_unavailable", message=str(exc)), 503
 
 
+def trusted_scale_preparation(status):
+    result=status.get("result") or {}
+    if status.get("state")!="ready" or result.get("zero_verified") is not True or status.get("needs_recovery"):
+        return False
+    # An observed disconnect clears this in-memory latch even if an old result remains.
+    internal=(result.get("internal") or {}).get("status")
+    return internal not in ("completed","already_completed_this_startup") or bool(status.get("startup_internal"))
+
+
+# NUC-02: verification can reuse startup preparation or explicitly skip it.
+@app.get("/api/load-cell/preparation/reuse")
+def reuse_scale_preparation_api():
+    global LAST_SCALE_PREPARATION
+    try:
+        status=service_json_request("GET",service_base_url("weight"),"/preparation/status",timeout=5.)
+        ready=trusted_scale_preparation(status)
+        if ready:LAST_SCALE_PREPARATION={"id":status["id"],**status["result"]}
+        else:LAST_SCALE_PREPARATION=None
+        return jsonify(reusable=ready,id=status.get("id") if ready else None,state=status.get("state")),200,{"Cache-Control":"no-store"}
+    except (RuntimeError,KeyError) as exc:
+        LAST_SCALE_PREPARATION=None
+        return jsonify(reusable=False,message=str(exc)),200,{"Cache-Control":"no-store"}
+
+
 @app.post("/api/load-cell/zero")
 def zero_load_cell():
     # Old clients must not silently tare an item which is still on the pan.
@@ -5828,14 +5893,18 @@ def geometry_measure_api():
                      "manual_height_mm":body.get("manual_height_mm")},timeout=180)
         if result.get("ok") is not True or result.get("schema")!="thinal-geometry-v1":
             raise ValueError("Image service did not return a valid geometry reading")
-        try:weight=read_weight_service_average(sample_count=5)
+        preview=result.pop("preview",None)
+        try:
+            prep=service_json_request("GET",service_base_url("weight"),"/preparation/status",timeout=5.)
+            weight=read_weight_service_average(sample_count=5)
+            weight["zero_verified"]=trusted_scale_preparation(prep)
         except RuntimeError as exc:weight={"ok":False,"stable":False,"message":str(exc)}
         result["mass_measurement"]=weight
         result["density_check"]=density_check(result,weight)
         result["reading_id"]="G-"+uuid.uuid4().hex
         result["saved_at_epoch"]=time.time()
         assets.write_json(GEOMETRY_READINGS_DIR/(result["reading_id"]+".json"),result)
-        return jsonify(result),201
+        return jsonify({**result,"preview":preview}),201
     except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
         return jsonify(error="geometry_measurement_failed",message=str(exc)),503
 
@@ -5853,8 +5922,14 @@ def geometry_evidence_for_record(payload,shape):
         if result["vision_revision"]!=public_yolo_settings(current_yolo_settings())["revision"]:
             raise ValueError("Vision settings changed; measure geometry again")
         live=service_json_request("GET",service_base_url("vision"),"/geometry/status",timeout=8)
-        if not live.get("reference_for_current_session") or live.get("reference",{}).get("reference_id")!=result["reference_id"]:
+        if result.get("geometry_mode")=="live_mask":
+            if result.get("camera_session")!=live.get("camera_session"):
+                raise ValueError("Camera restarted; measure geometry again")
+        elif not live.get("reference_for_current_session") or live.get("reference",{}).get("reference_id")!=result["reference_id"]:
             raise ValueError("Camera/reference restarted or changed; measure geometry again")
+        for key in ("width_mm","length_mm"):
+            if result.get(key) is not None and abs((parse_float(payload.get(key),0) or 0)-result[key])>.005:
+                raise ValueError("Dimensions changed; measure geometry again")
         requested_thickness=parse_float(payload.get("thickness_mm"))
         if result.get("height_mm") is not None and (requested_thickness is None or abs(requested_thickness-result["height_mm"])>.005):
             raise ValueError("Thickness changed; measure geometry again")
@@ -6089,7 +6164,7 @@ def capture_record_photo(shape, teaching=False, phase="before_frequency_sweep", 
     use_yolo = False
     warning = None
     try:
-        use_yolo = current_yolo_settings()["enabled"] and (not teaching or detector == "yolo")
+        use_yolo = current_yolo_settings()["enabled"] and str(shape).lower() in ("coin","bar")
         if use_yolo:
             try:
                 bundle = request_yolo_frame()
@@ -6146,10 +6221,38 @@ def capture_photo_api():
     if not isinstance(payload, dict):
         return jsonify(ok=False, message="Expected a JSON object"), 400
     teaching = request.path.startswith("/api/teaching/")
-    photo, error = capture_record_photo(payload.get("shape", "unknown"), teaching, "manual_snap", payload.get("detector"))
+    automatic = not teaching and payload.get("phase") == "placement_auto"
+    shape = str(payload.get("shape", "unknown"))[:64]
+    token = None
+    if automatic:
+        try:
+            if current_yolo_settings()["enabled"] and shape.lower() in ("coin","bar") and not payload.get("manual_selection"):
+                bundle = request_yolo_frame()
+                detection = bundle.get("detection") or {}
+                if (detection.get("eligible") is not True or detection.get("count") != 1
+                        or detection.get("label") != shape.lower()
+                        or detection.get("confidence",0) < .90
+                        or detection.get("capture_age_ms",999999) > 5000):
+                    return jsonify(ok=False,message=detection.get("message") or "Detection changed; retry or choose manually"),409
+            else:
+                bundle = service_json_request("GET",service_base_url("vision"),"/image/frame",
+                    query={"type":"unknown","annotations":"false"},timeout=8.0)
+            photo = save_snapshot(bundle,VERIFICATION_IMAGES_DIR,"/api/verification/image","after_detection")
+            photo["vision_detection"] = bundle.get("detection")
+            token = uuid.uuid4().hex
+            with PLACEMENT_LOCK:
+                # Bounded per-process metadata; restarting never trusts stale tokens.
+                while len(PLACEMENT_PHOTOS) >= 64:
+                    del PLACEMENT_PHOTOS[next(iter(PLACEMENT_PHOTOS))]
+                PLACEMENT_PHOTOS[token] = (time.monotonic(),shape.lower(),photo.copy())
+            error = None
+        except (RuntimeError,OSError,ValueError,KeyError,TypeError) as exc:
+            photo,error = None,str(exc)
+    else:
+        photo, error = capture_record_photo(shape, teaching, "manual_snap", payload.get("detector"))
     if not photo:
         return jsonify(ok=False, message=error), 503
-    return jsonify(ok=True, image=photo, warning=error), 201
+    return jsonify(ok=True, image=photo, warning=error, placement_capture_id=token), 201
 
 
 @app.get("/api/verification/image/<path:filename>")

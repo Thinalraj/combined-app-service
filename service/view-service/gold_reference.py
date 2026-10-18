@@ -16,12 +16,13 @@ import warnings
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import system_assets as assets
+from acceptance_policy import MIN_CONFIDENCE
 
 NUMERIC = ["f1_delta_pct","f2_delta_pct","f3_delta_pct","f4_delta_pct","area_mm2","thickness_mm"]
 CATEGORICAL = ["shape"]
 METHOD = "Known-gold 916/999 reference matching (uncalibrated score)"
 DEFAULTS = {"adapter":"gold_reference_v1", "model_path":"metal/signal_plus_geometry.joblib",
-            "min_score":.80,"frequency_hz":[8000,10000,15000,20000],
+            "min_score":.90,"frequency_hz":[8000,10000,15000,20000],
             "amplitude_v_peak":1.,"signal_definition":"raw_ac_rms_v_delta_pct","profile_confirmed":False,"profile_model_sha256":None}
 
 
@@ -42,6 +43,7 @@ def configuration(value=None):
     cfg["min_score"]=finite(cfg["min_score"],"reference threshold")
     if not .8<=cfg["min_score"]<=1:
         raise ValueError("Reference threshold must be between 0.80 and 1.00")
+    cfg["min_score"]=max(MIN_CONFIDENCE,cfg["min_score"])  # NUC-02: retain old profile/hash, raise floor.
     hz=cfg["frequency_hz"]
     if not isinstance(hz,list) or len(hz)!=4 or any(isinstance(v,bool) or v not in (8000,10000,15000,20000) for v in hz) or len(set(hz))!=4:
         raise ValueError("Declare four distinct supported F1-F4 frequencies in Hz")
@@ -164,7 +166,7 @@ class ReferenceModel:
     def validate(self,cfg):
         with self.lock:
             self._load(cfg["model_path"])
-            return {"ok":True,**self.metadata,"effective_threshold":max(.8,cfg["min_score"],self.metadata["bundle_threshold"])}
+            return {"ok":True,**self.metadata,"effective_threshold":max(MIN_CONFIDENCE,cfg["min_score"],self.metadata["bundle_threshold"])}
 
     def predict(self,row,evidence,cfg):
         with self.lock:
@@ -181,7 +183,7 @@ class ReferenceModel:
             if values.shape!=(1,2) or not np.isfinite(values).all() or (values<0).any() or (values>1).any() or not np.isclose(values.sum(),1):
                 raise ValueError("Reference pipeline returned invalid class scores")
             scores=values[0];best=int(np.argmax(scores));grade=[916,999][best];score=float(scores[best])
-            threshold=max(.8,cfg["min_score"],self.metadata["bundle_threshold"])
+            threshold=max(MIN_CONFIDENCE,cfg["min_score"],self.metadata["bundle_threshold"])
             simulation=evidence["simulation"] is True;accepted=score>=threshold and not simulation
             prediction=f"{grade} reference match" if accepted else "Unable to determine"
             if simulation:prediction=f"Simulation only: {grade} reference match"

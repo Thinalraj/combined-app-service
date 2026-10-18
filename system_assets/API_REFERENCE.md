@@ -318,3 +318,21 @@ See `FINAL_TEST_GUIDE.md` for normal launcher configuration, removal checks,
 readiness endpoints, modular sensor tests and the final physical test sequence.
 The central `runtime.json` selects hardware/signal-only simulation, Python and
 scale COM port. Internal calibration remains once per Weight-service startup.
+
+## NUC-02 additive changes
+
+- GET `/api/load-cell/preparation/reuse`: read-only `{reusable,id,state}` from
+  the running Weight service; does not send serial commands.
+- POST `/api/vision/geometry/measure`: same body; returns live-mask dimensions,
+  working area, height/volume when usable, density evidence and transient
+  `preview` (raw JPEG base64 + annotation). Preview is excluded from persisted
+  geometry metadata. `geometry_mode=live_mask`, `camera_session` bind evidence
+  to the live Image process. Missing depth may return successful pixel-mask
+  evidence with physical fields null; this is not a physical measurement.
+- GET Image `/geometry/status`: adds `measurement_mode=live_mask`,
+  `camera_session`, `active_roi`; current empty reference now checks session+ROI.
+- Reference result `eligibility` requires shape and reference gates >=90%;
+  `density_check` remains separate, never overriding a failed confidence gate.
+- Runtime build `NUC-02`; Weight direct launch also reads runtime.json.
+
+See `NUC_02_FIX_GUIDE.md` for interpretation, manual paths and test steps.

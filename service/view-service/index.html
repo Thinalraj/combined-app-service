@@ -39,7 +39,8 @@
             <button id="refreshRatesButton" type="button">Refresh</button>
           </div>
           <p id="metalRatesStatus" class="rates-status" role="status">Loading saved prices...</p>
-          <div id="metalRatesList" class="metal-rates-list app-scroll" role="list" tabindex="0" aria-label="Metal prices, scroll for more"></div>
+          <div id="metalRatesList" class="metal-rates-list rate-carousel" role="list" tabindex="0" aria-label="Metal price carousel"></div>
+          <div class="carousel-controls"><button id="ratesPreviousButton" class="secondary" aria-label="Previous metal" type="button">❮ Previous</button><span id="rateCardPosition" aria-live="polite"></span><button id="ratesNextButton" class="secondary" aria-label="Next metal" type="button">Next ❯</button></div>
           <p class="rates-note">MYR per gram of metal content. Excludes workmanship, dealer margins and fees.</p>
           <p class="rates-note">Gold API + Frankfurter · Auto-update 00:00 MYT · Changes since previous quote</p>
         </section>
@@ -60,9 +61,10 @@
       <section class="screen" id="scalePrepareScreen">
         <div class="scale-preparation-content app-scroll">
           <h2>Remove all items from the pan</h2>
-          <p>Keep the pan empty until preparation finishes. The internal check runs once per Weight-service startup; normal zero is checked for every new item.</p>
+          <p>Keep the pan empty until preparation finishes. The internal check is reused this Weight-service startup. Prepare only when needed; Skip does not zero or adjust the balance. Density requires a verified zero.</p>
           <div class="camera-preview-host" id="scalePreparationCameraHost"></div>
           <label class="scale-empty-confirm"><input id="scalePreparationConfirm" type="checkbox"> I have removed all items</label>
+          <div id="scalePreparationSpinner" class="processing-spinner" role="status" aria-label="Balance preparation in progress" hidden></div>
           <p id="scalePreparationStatus" role="status" aria-live="polite">Ready to prepare</p>
           <p id="scalePreparationInternal"></p>
           <p id="scalePreparationReadings"></p>
@@ -73,7 +75,7 @@
               <label>Empty-pan limit (g)<input id="scaleSetting_empty_limit_g" type="number" min="0.00001" max="5" step="0.001" value="0.1"></label>
               <label>Zero tolerance (g)<input id="scaleSetting_zero_tolerance_g" type="number" min="0.00001" max="5" step="0.001" value="0.01"></label>
               <label>Maximum spread (g)<input id="scaleSetting_max_spread_g" type="number" min="0.00001" max="5" step="0.001" value="0.02"></label>
-              <label>Internal operation<select id="scaleSetting_internal_mode"><option value="auto">Auto: test, otherwise adjustment</option><option value="test">Internal sensitivity test</option><option value="adjust">Internal adjustment</option><option value="skip">Skip (explicitly recorded)</option></select></label>
+              <label>Internal operation<select id="scaleSetting_internal_mode"><option value="auto">Auto: supported internal test</option><option value="test">Internal sensitivity test</option><option value="adjust">Internal adjustment</option><option value="skip">Skip (explicitly recorded)</option></select></label>
             </div>
             <p>Initial software limits: tune to the balance specification. Internal deviation uses the device's reported units, not an assumed gram zero error.</p>
             <button class="secondary" id="scalePreparationSave" type="button">Save settings</button>
@@ -83,6 +85,7 @@
         <div class="button-row scale-preparation-actions">
           <button class="secondary" id="scalePreparationCancel" type="button">Cancel</button>
           <button class="primary" id="scalePreparationStart" type="button">Prepare empty pan</button>
+          <button class="secondary" id="scalePreparationSkip" type="button">Skip preparation / use current scale</button>
           <button class="primary" id="scalePreparationContinue" type="button" disabled>Place item</button>
         </div>
       </section>
@@ -90,14 +93,15 @@
       <section class="screen" id="placeScreen">
         <div class="screen-body app-scroll">
         <div class="instruction-panel">
-          <h2>Place Object</h2>
-          <p>Place the object at the center of the sensing area.</p>
+          <h2>Automatic detection</h2>
+          <p id="autoDetectSummary" role="status">Keep one item flat and still in the frame</p>
           <div class="camera-preview-host" id="userPlaceCameraHost"></div>
         </div>
         </div>
         <div class="screen-actions button-row">
           <button class="secondary" data-back-home type="button">Cancel</button>
-          <button class="primary" id="placeContinueButton" type="button">Continue</button>
+          <button class="secondary" id="manualShapeButton" type="button">Unable / incorrect? Choose manually</button>
+          <button class="primary auto-detect-action" id="placeContinueButton" type="button">Detecting automatically…</button>
         </div>
       </section>
 
@@ -138,9 +142,10 @@
 
       <section class="screen" id="dimensionScreen">
         <div class="screen-body app-scroll">
-<details class="geometry-panel" id="userGeometryPanel" hidden>
-          <summary>Area, height &amp; density estimate (optional)</summary>
-          <p>Keep the item flat and still. Requires an empty-support reference in Engineering.</p>
+<div class="camera-preview-host" id="userDimensionCameraHost"></div>
+<details class="geometry-panel" id="userGeometryPanel" hidden open>
+          <summary>Mask footprint, height &amp; density</summary>
+          <p>Keep the item flat and still. Uses its segmentation mask and visible support depth. If depth is unavailable, enter known dimensions/thickness.</p>
           <div class="button-row">
             <button class="primary geometry-measure" data-kind="user" data-manual="0" type="button">Measure area + depth height</button>
             <button class="secondary geometry-measure" data-kind="user" data-manual="1" type="button">Use entered thickness</button>
@@ -169,8 +174,9 @@
               </button>
             </div>
             <div class="dimension-meta">
-              <span>Formula area <strong id="sampleAreaDisplay">0.00 mm²</strong></span>
-              <span>Contact ratio <strong id="contactRatioDisplay">0.00%</strong></span>
+              <span>Working footprint <strong id="sampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Model formula area <strong id="userFormulaAreaDisplay">0.00 mm²</strong></span>
+              <span>Working area / coil area <strong id="contactRatioDisplay">0.00%</strong></span>
             </div>
           </div>
           <div class="keypad" id="dimensionKeypad">
@@ -197,6 +203,7 @@
 
       <section class="screen" id="shapeScreen">
         <div class="screen-body app-scroll">
+        <p class="manual-shape-note">Manual correction · automatic detection is available using Back. Choosing a shape cannot establish gold identity or bypass model acceptance checks.</p>
         <div class="shape-grid" id="shapeGrid">
           <button class="shape-option" type="button" data-shape="Ring">
             <span class="ring-icon"></span>
@@ -293,12 +300,14 @@
           <p id="resultScalePreparation" class="scale-record-summary" hidden></p>
           <p id="resultGeometrySummary" class="geometry-summary" hidden></p>
           <p id="resultReferenceSummary" class="reference-summary" hidden></p>
-          <div class="camera-preview-host" id="userResultCameraHost"></div>
+          <div class="result-removal-row"><div class="camera-preview-host" id="userResultCameraHost"></div>
           <div class="removal-panel">
             <h3>Please remove the item</h3>
             <p id="resultRemovalStatus" role="status" aria-live="polite">Waiting for live removal checks...</p>
-            <label><input id="resultRemovalConfirm" type="checkbox" disabled> I have visually checked the entire pan is empty.</label>
-          </div>
+            <label><input id="resultRemovalConfirm" type="checkbox"> I have visually checked the entire pan is empty.</label>
+            <input id="resultRemovalManual" type="checkbox" hidden>
+            <p class="removal-hint">Then select Another Item. If checks are unavailable, you can explicitly continue with visual confirmation.</p>
+          </div></div>
           <div class="result-details">
             <span>Weight</span><strong id="resultWeight">0 g</strong>
             <span>Shape</span><strong id="resultShape">Ring</strong>
@@ -307,8 +316,9 @@
         </div>
         </div>
         <div class="screen-actions button-row">
-          <button class="secondary" id="detailsButton" type="button">View History</button>
-          <button class="secondary" id="newMeasurementButton" type="button">Item Removed / Home</button>
+          <button class="secondary" id="resultDetailsButton" type="button">Details</button>
+          <button class="secondary" id="detailsButton" type="button">History</button>
+          <button class="secondary" id="newMeasurementButton" type="button">Home</button>
           <button class="primary" id="resultAnotherButton" type="button">Another Item</button>
         </div>
       </section>
@@ -880,8 +890,8 @@
       <section class="screen" id="teachingDimensionScreen">
         <div class="screen-body app-scroll">
 <details class="geometry-panel" id="teachingGeometryPanel" hidden>
-          <summary>Area, height &amp; density estimate (optional)</summary>
-          <p>Keep the item flat and still. Requires an empty-support reference in Engineering.</p>
+          <summary>Mask footprint, height &amp; density</summary>
+          <p>Keep the item flat and still. Uses its segmentation mask and visible support depth. If depth is unavailable, enter known dimensions/thickness.</p>
           <div class="button-row">
             <button class="primary geometry-measure" data-kind="teaching" data-manual="0" type="button">Measure area + depth height</button>
             <button class="secondary geometry-measure" data-kind="teaching" data-manual="1" type="button">Use entered thickness</button>
@@ -915,8 +925,9 @@
               </button>
             </div>
             <div class="dimension-meta">
-              <span>Formula area <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
-              <span>Contact ratio <strong id="teachingContactRatioDisplay">0.00%</strong></span>
+              <span>Working footprint <strong id="teachingSampleAreaDisplay">0.00 mm²</strong></span>
+              <span>Model formula area <strong id="teachingFormulaAreaDisplay">0.00 mm²</strong></span>
+              <span>Formula area / coil area <strong id="teachingContactRatioDisplay">0.00%</strong></span>
             </div>
           </div>
           <div class="keypad" id="teachingDimensionKeypad">
@@ -944,6 +955,10 @@
               <svg id="cameraAnnotationOverlay" preserveAspectRatio="xMidYMid meet" aria-hidden="true" hidden></svg>
             </div>
             <p id="teachingDetectedImageStatus" class="muted-copy" aria-live="polite">Select Live camera or Captured result.</p>
+            <div class="button-row camera-return-actions">
+              <button class="primary" id="cameraBackToLiveButton" type="button" hidden>Back to live camera</button>
+              <button class="secondary" id="cameraBackToFlowButton" type="button">Back to measurement controls</button>
+            </div>
             <div class="button-row">
               <button class="primary" id="teachingRefreshImageButton" type="button" aria-pressed="true">Live camera</button>
               <button class="secondary" id="teachingCapturedImageButton" type="button" aria-pressed="false">Captured photo</button>
@@ -1018,7 +1033,8 @@
           <div class="removal-panel">
             <h3>Please remove the item</h3>
             <p id="teachingRemovalStatus" role="status" aria-live="polite">Waiting for live removal checks...</p>
-            <label><input id="teachingRemovalConfirm" type="checkbox" disabled> I have visually checked the entire pan is empty.</label>
+            <label><input id="teachingRemovalConfirm" type="checkbox"> I have visually checked the entire pan is empty.</label>
+            <label><input id="teachingRemovalManual" type="checkbox"> Continue using my visual check if sensors cannot confirm removal. No zero command will be sent.</label>
           </div>
         </div>
         </div>
@@ -1271,7 +1287,7 @@
             <label><input id="visionEnabled" type="checkbox"> Use YOLO for user verification</label>
             <label>Coin/bar segmentation model<select id="visionModelPath"><option value="vision/coin_bar_seg.pt">vision/coin_bar_seg.pt (scan to check)</option></select></label>
             <div class="vision-settings-grid">
-              <label>Accept object label (%)<input id="visionAcceptanceConfidence" type="number" min="1" max="100" value="80"></label>
+              <label>Accept object label (%)<input id="visionAcceptanceConfidence" type="number" min="90" max="100" value="90"></label>
               <label>Detection floor for counting (%)<input id="visionDetectionConfidence" type="number" min="1" max="100" value="25"></label>
               <label>ROI left (%)<input id="visionRoiX" type="number" min="0" max="100" value="0"></label>
               <label>ROI top (%)<input id="visionRoiY" type="number" min="0" max="100" value="0"></label>
@@ -1296,7 +1312,7 @@
             <details class="asset-details"><summary>Known-gold 916/999 reference model</summary>
               <p>Uses raw F1–F4 RMS changes, formula area, thickness and shape. This is reference matching only; it cannot identify non-gold.</p>
               <label>Reference pipeline (.joblib)<select id="referenceModelPath"></select></label>
-              <label>Minimum uncalibrated score (%)<input id="referenceMinScore" type="number" min="80" max="100" value="80"></label>
+              <label>Minimum uncalibrated score (%)<input id="referenceMinScore" type="number" min="90" max="100" value="90"></label>
               <p id="referenceProfile"></p>
               <label><input id="referenceProfileConfirmed" type="checkbox"> I confirm this acquisition profile matches the model's training data.</label>
               <div class="button-row">
@@ -1389,6 +1405,11 @@
       </section>
     </main>
 
+    <dialog id="noticeDialog" class="notice-dialog" aria-labelledby="noticeTitle">
+      <h2 id="noticeTitle">Please check</h2><p id="noticeMessage"></p>
+      <p id="noticePhotoLinks" hidden><a id="noticeRawPhoto" download>Download original photograph</a> · <a id="noticeOverlayPhoto" target="_blank" rel="noopener">Open photo / annotations</a></p>
+      <div class="button-row"><button id="noticeCancel" class="secondary" type="button" hidden>Cancel</button><button id="noticeAccept" class="primary" type="button">OK</button></div>
+    </dialog>
     <script src="app.js"></script>
   </body>
 </html>

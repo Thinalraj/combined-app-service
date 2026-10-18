@@ -78,8 +78,8 @@ def build_report(only="all", include_view=True, view_url="http://127.0.0.1:8080"
             add("Camera process","pass" if value.get("camera_running") is True else "fail","Camera opened; no new image acquired by this check",value.get("metadata"))
             try:
                 geometry=fetch(services["vision"].rstrip("/")+"/geometry/status")
-                add("Empty support reference","pass" if geometry.get("reference_for_current_session") is True else "fail",
-                    "Reference belongs to current camera session; recapture if the camera/tray moved" if geometry.get("reference_for_current_session") is True else "Capture an empty-support reference in Engineering",geometry.get("reference"))
+                add("Geometry reference/mode","pass" if geometry.get("measurement_mode")=="live_mask" or geometry.get("reference_for_current_session") is True else "fail",
+                    "Live visible-support plane mode; physical quality is checked on each measurement" if geometry.get("measurement_mode")=="live_mask" else "Reference belongs to current camera session; recapture if moved" if geometry.get("reference_for_current_session") is True else "Capture an empty-support reference in Engineering",geometry.get("reference"))
             except Exception as exc:add("Empty support reference","fail",str(exc))
         elif name=="view":
             add("HMI acquisition","pass" if value.get("acquisition_mode")=="daq" else "fail","DAQ mode required for the real reference workflow",{"acquisition_mode":value.get("acquisition_mode")})
@@ -88,7 +88,7 @@ def build_report(only="all", include_view=True, view_url="http://127.0.0.1:8080"
             vision=read_json(assets.ROOT/"vision_settings.json",{})
             path=assets.asset_path(vision.get("model_path","vision/coin_bar_seg.pt"),".pt")
             good=vision.get("enabled") is True and path.is_file()
-            add("Segmentation asset","pass" if good else "fail","Selected local file present; validate/test in Engineering" if good else "Copy .pt into system_assets/vision, scan, validate and enable YOLO",{"model_path":vision.get("model_path"),"enabled":vision.get("enabled"),"accept_confidence":vision.get("acceptance_confidence")})
+            add("Segmentation asset","pass" if good else "fail","Selected local file present; validate/test in Engineering" if good else "Copy .pt into system_assets/vision, scan, validate and enable YOLO",{"model_path":vision.get("model_path"),"enabled":vision.get("enabled"),"accept_confidence":max(.9,vision.get("acceptance_confidence",.9))})
             for package in ("torch","ultralytics"):
                 add(package,"pass" if importlib.util.find_spec(package) is not None else "fail","Module present; inference compatibility untested" if importlib.util.find_spec(package) is not None else "Install in the service Python before testing the .pt")
         except Exception as exc:add("Segmentation asset","fail",str(exc))
@@ -96,7 +96,7 @@ def build_report(only="all", include_view=True, view_url="http://127.0.0.1:8080"
             cfg=read_json(assets.ROOT/"reference_model.json",{})
             path=assets.asset_path(cfg.get("model_path","metal/signal_plus_geometry.joblib"),".joblib",True)
             good=cfg.get("profile_confirmed") is True and cfg.get("profile_model_sha256")==hashlib.sha256(path.read_bytes()).hexdigest()
-            add("Reference asset/profile","pass" if good else "fail","File matches previously validated/confirmed model hash" if good else "Validate/select the joblib and confirm its acquisition profile",{"model_path":cfg.get("model_path"),"threshold":cfg.get("min_score")})
+            add("Reference asset/profile","pass" if good else "fail","File matches previously validated/confirmed model hash" if good else "Validate/select the joblib and confirm its acquisition profile",{"model_path":cfg.get("model_path"),"threshold":max(.9,cfg.get("min_score",.9))})
             version=importlib.metadata.version("scikit-learn")
             add("Reference dependencies","pass" if version=="1.6.1" else "fail","scikit-learn "+version+"; supplied model requires 1.6.1")
             for package in ("pandas","joblib"):

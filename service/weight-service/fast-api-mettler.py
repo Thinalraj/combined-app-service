@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
 from runtime_status import identity
+from system_assets import read_json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -17,8 +18,10 @@ from scale_preparation import Preparation, stable_average, grams, validate_setti
 # CONFIGURATION
 # ============================================================
 
-PORT = os.environ.get("AFIS_WEIGHT_PORT", "COM5")
-BAUDRATE = int(os.environ.get("AFIS_WEIGHT_BAUD", "9600"))
+# NUC-02: direct launches also read central configuration; retain env overrides.
+_RUNTIME = read_json("runtime.json", {})
+PORT = os.environ.get("AFIS_WEIGHT_PORT", _RUNTIME.get("weight_port", "COM5"))
+BAUDRATE = int(os.environ.get("AFIS_WEIGHT_BAUD", str(_RUNTIME.get("weight_baudrate", 9600))))
 
 READ_COMMAND = b"SI\r\n"
 TARE_COMMAND = b"TI\r\n"
@@ -225,6 +228,7 @@ def get_weight():
 
                 return {
                     "success": True,
+                    "port": PORT,
                     **result
                 }
 
@@ -265,6 +269,7 @@ def get_average_weight(samples: int = NUM_READINGS):
 
                 return {
                     "success": True,
+                    "port": PORT,
                     **result
                 }
 
@@ -305,6 +310,7 @@ def tare():
 
                 return {
                     "success": True,
+                    "port": PORT,
                     "command": "TI",
                     "response": response
                 }
@@ -348,6 +354,7 @@ def tare_and_average():
 
                 return {
                     "success": True,
+                    "port": PORT,
                     "tare_response": tare_response,
                     **result
                 }

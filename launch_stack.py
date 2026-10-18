@@ -22,7 +22,7 @@ MODULES={"signal":["fastapi","uvicorn","numpy","tkinter"],"weight":["serial","fa
 
 
 def runtime():
-    cfg=json.loads((ROOT/"system_assets/runtime.json").read_text(encoding="utf-8"))
+    cfg=json.loads((ROOT/"system_assets/runtime.json").read_text(encoding="utf-8-sig"))
     if not isinstance(cfg,dict) or set(cfg)!={"signal_mode","python_executable","weight_port","weight_baudrate"}:
         raise ValueError("runtime.json needs signal_mode, python_executable, weight_port and weight_baudrate")
     if cfg["signal_mode"] not in ("hardware","simulate"):raise ValueError("signal_mode must be hardware or simulate")
@@ -88,13 +88,9 @@ for name,port in [('signal',8001),('weight',8002),('vision',8003),('view',8080)]
 
 def chrome(target):
     if not re.fullmatch(r"[A-Za-z0-9.-]+",target):raise ValueError("Target must be a hostname or IPv4 address")
-    candidates=[Path(os.environ.get(key,""))/suffix for key,suffix in
-        (("ProgramFiles","Google/Chrome/Application/chrome.exe"),("ProgramFiles(x86)","Google/Chrome/Application/chrome.exe"),("LOCALAPPDATA","Google/Chrome/Application/chrome.exe"))]
-    executable=next((p for p in candidates if p.is_file()),None)
-    if executable is None:
-        print("Chrome not found. Open http://"+target+":8080 manually.");return
-    profile=Path(os.environ.get("LOCALAPPDATA",str(ROOT)))/"CombinedAppKioskProfile"
-    subprocess.Popen([str(executable),"--kiosk","--start-fullscreen","--new-window","--no-first-run","--disable-session-crashed-bubble","--user-data-dir="+str(profile),"http://"+target+":8080"])
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS if os.name == "nt" else 0
+    subprocess.Popen([sys.executable,str(ROOT/"launch_kiosk.py"),"--target",target],
+                     cwd=ROOT,creationflags=flags)
 
 
 def main():

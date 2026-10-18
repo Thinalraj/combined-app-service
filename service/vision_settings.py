@@ -6,8 +6,10 @@ import os
 from pathlib import Path
 import tempfile
 
+from acceptance_policy import MIN_CONFIDENCE
+
 DEFAULTS = {"enabled": False, "model_path": "vision/coin_bar_seg.pt",
-            "detection_confidence": .25, "acceptance_confidence": .80,
+            "detection_confidence": .25, "acceptance_confidence": .90,
             "roi": [0., 0., 1., 1.], "imgsz": 640}
 
 
@@ -31,6 +33,8 @@ def validate_settings(values):
         if not math.isfinite(value) or not .01 <= value <= 1:
             raise ValueError(key + " must be between 0.01 and 1")
         result[key] = value
+    # NUC-02: old saved 80% settings are raised in memory; retain the ROI/file.
+    result["acceptance_confidence"]=max(MIN_CONFIDENCE,result["acceptance_confidence"])
     if result["detection_confidence"] > result["acceptance_confidence"]:
         raise ValueError("Detection floor must not exceed acceptance confidence")
     roi = result["roi"]
@@ -52,7 +56,7 @@ def revision(settings):
 
 def load_settings(path):
     path = Path(path)
-    return validate_settings(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else validate_settings({})
+    return validate_settings(json.loads(path.read_text(encoding="utf-8-sig"))) if path.exists() else validate_settings({})
 
 
 def save_settings(path, values):
